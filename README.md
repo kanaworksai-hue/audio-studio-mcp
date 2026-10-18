@@ -8,13 +8,14 @@
   <a href="https://modelcontextprotocol.io"><img alt="MCP server" src="https://img.shields.io/badge/MCP-server-19b8d6?style=flat-square"></a>
   <img alt="Python 3.10 to 3.13" src="https://img.shields.io/badge/python-3.10–3.13-3776ab?style=flat-square&logo=python&logoColor=white">
   <a href="https://github.com/kanaworksai-hue/audio-studio-mcp/actions/workflows/tests.yml"><img alt="Tests" src="https://img.shields.io/github/actions/workflow/status/kanaworksai-hue/audio-studio-mcp/tests.yml?style=flat-square&label=tests"></a>
+  <a href="https://github.com/kanaworksai-hue/audio-studio-mcp/stargazers"><img alt="GitHub stars" src="https://img.shields.io/github/stars/kanaworksai-hue/audio-studio-mcp?style=flat-square&logo=github&label=stars&color=f5c518"></a>
 </p>
 
 <p><a href="https://github.com/kanaworksai-hue"><img src="docs/brand/kanaworks-mark.png" height="22" alt="" align="absmiddle"></a>&nbsp;<a href="https://github.com/kanaworksai-hue"><b>A KanaWorks_AI project</b></a></p>
 
 **English** | [简体中文](README.zh-CN.md) | [日本語](README.ja.md)
 
-[🎧 Listen to samples](https://kanaworksai-hue.github.io/audio-studio-mcp/) · [Quick start](#-quick-start) · [Tools](#-tools) · [FAQ](#-faq)
+[🎧 Listen to samples](https://kanaworksai-hue.github.io/audio-studio-mcp/) · [Quick start](#-quick-start) · [Tools](#-tools) · [FAQ](#-faq) · [⭐ Star](#-like-it-star-it)
 
 </div>
 
@@ -244,6 +245,15 @@ Use WAV or OGG for loops. MP3 adds padding at the start and end, so it can't loo
 
 Issues and pull requests are welcome.
 
+## ⭐ Like it? Star it
+
+If Audio Studio made a sound you ended up using, please click **⭐ Star** at the top of the [repository page](https://github.com/kanaworksai-hue/audio-studio-mcp). It's free, takes one second, and helps more than it looks:
+
+- **More people find it.** Stars make the project easier to discover on GitHub, so more game developers and video makers get to use it.
+- **It keeps updates coming.** Every star tells me someone finds this useful. That's what keeps me working on the next update, like the Windows backend and LoRA support.
+
+Other ways to help: [open an issue](https://github.com/kanaworksai-hue/audio-studio-mcp/issues) for a bug or an idea, or share a sound you made on X and tag [@KanaWorks_AI](https://x.com/KanaWorks_AI).
+
 ## 🛠️ Development
 
 ```bash
@@ -280,6 +290,6 @@ This is an independent project. It is not affiliated with or endorsed by Stabili
 
 <p><b>Made with ♥ by <a href="https://x.com/KanaWorks_AI">KanaWorks_AI</a></b></p>
 
-<p><sub>If Audio Studio saves you time, a ⭐ helps others find it. More projects: <a href="https://github.com/kanaworksai-hue">github.com/kanaworksai-hue</a></sub></p>
+<p><sub>If Audio Studio saves you time, a ⭐ keeps the updates coming and helps others find it. More projects: <a href="https://github.com/kanaworksai-hue">github.com/kanaworksai-hue</a></sub></p>
 
 </div>

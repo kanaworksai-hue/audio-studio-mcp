@@ -8,13 +8,14 @@
   <a href="https://modelcontextprotocol.io"><img alt="MCP server" src="https://img.shields.io/badge/MCP-server-19b8d6?style=flat-square"></a>
   <img alt="Python 3.10 to 3.13" src="https://img.shields.io/badge/python-3.10–3.13-3776ab?style=flat-square&logo=python&logoColor=white">
   <a href="https://github.com/kanaworksai-hue/audio-studio-mcp/actions/workflows/tests.yml"><img alt="Tests" src="https://img.shields.io/github/actions/workflow/status/kanaworksai-hue/audio-studio-mcp/tests.yml?style=flat-square&label=tests"></a>
+  <a href="https://github.com/kanaworksai-hue/audio-studio-mcp/stargazers"><img alt="GitHub stars" src="https://img.shields.io/github/stars/kanaworksai-hue/audio-studio-mcp?style=flat-square&logo=github&label=stars&color=f5c518"></a>
 </p>
 
 <p><a href="https://github.com/kanaworksai-hue"><img src="docs/brand/kanaworks-mark.png" height="22" alt="" align="absmiddle"></a>&nbsp;<a href="https://github.com/kanaworksai-hue"><b>KanaWorks_AI のプロジェクト</b></a></p>
 
 [English](README.md) | [简体中文](README.zh-CN.md) | **日本語**
 
-[🎧 サンプルを聴く](https://kanaworksai-hue.github.io/audio-studio-mcp/) · [クイックスタート](#-クイックスタート) · [ツール](#-ツール) · [FAQ](#-faq)
+[🎧 サンプルを聴く](https://kanaworksai-hue.github.io/audio-studio-mcp/) · [クイックスタート](#-クイックスタート) · [ツール](#-ツール) · [FAQ](#-faq) · [⭐ Star で応援](#-star-で応援する)
 
 </div>
 
@@ -251,6 +252,15 @@ M1 Mac 16 GB、medium モデル：
 
 Issue やプルリクエストを歓迎します。
 
+## ⭐ Star で応援する
+
+Audio Studio で作った音を実際に使ってもらえたなら、[リポジトリページ](https://github.com/kanaworksai-hue/audio-studio-mcp)上部の **⭐ Star** を押してもらえるとうれしいです。無料で 1 秒で終わりますが、効果は見た目以上です：
+
+- **もっと多くの人に届きます。** Star が増えるほど GitHub 上で見つけてもらいやすくなり、ゲームや動画を作る人に広がります。
+- **更新の励みになります。** Star は「使っている人がいる」という何よりのサインです。次のアップデート（Windows バックエンドや LoRA 対応など）を進める力になります。
+
+ほかの応援方法：不具合やアイデアは [Issue](https://github.com/kanaworksai-hue/audio-studio-mcp/issues) へどうぞ。作った音を X でシェアして [@KanaWorks_AI](https://x.com/KanaWorks_AI) を付けてもらえるのも大歓迎です。
+
 ## 🛠️ 開発
 
 ```bash
@@ -287,6 +297,6 @@ src/audio_studio_mcp/
 
 <p><b><a href="https://x.com/KanaWorks_AI">KanaWorks_AI</a> が ♥ を込めて制作</b></p>
 
-<p><sub>Audio Studio が役に立ったら、⭐ を付けてもらえると他の人にも見つけてもらいやすくなります。ほかのプロジェクト：<a href="https://github.com/kanaworksai-hue">github.com/kanaworksai-hue</a></sub></p>
+<p><sub>Audio Studio が役に立ったら ⭐ で応援してください。更新の励みになり、他の人にも見つけてもらいやすくなります。ほかのプロジェクト：<a href="https://github.com/kanaworksai-hue">github.com/kanaworksai-hue</a></sub></p>
 
 </div>

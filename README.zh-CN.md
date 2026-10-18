@@ -8,13 +8,14 @@
   <a href="https://modelcontextprotocol.io"><img alt="MCP server" src="https://img.shields.io/badge/MCP-server-19b8d6?style=flat-square"></a>
   <img alt="Python 3.10 to 3.13" src="https://img.shields.io/badge/python-3.10–3.13-3776ab?style=flat-square&logo=python&logoColor=white">
   <a href="https://github.com/kanaworksai-hue/audio-studio-mcp/actions/workflows/tests.yml"><img alt="Tests" src="https://img.shields.io/github/actions/workflow/status/kanaworksai-hue/audio-studio-mcp/tests.yml?style=flat-square&label=tests"></a>
+  <a href="https://github.com/kanaworksai-hue/audio-studio-mcp/stargazers"><img alt="GitHub stars" src="https://img.shields.io/github/stars/kanaworksai-hue/audio-studio-mcp?style=flat-square&logo=github&label=stars&color=f5c518"></a>
 </p>
 
 <p><a href="https://github.com/kanaworksai-hue"><img src="docs/brand/kanaworks-mark.png" height="22" alt="" align="absmiddle"></a>&nbsp;<a href="https://github.com/kanaworksai-hue"><b>KanaWorks_AI 出品</b></a></p>
 
 [English](README.md) | **简体中文** | [日本語](README.ja.md)
 
-[🎧 试听样例](https://kanaworksai-hue.github.io/audio-studio-mcp/) · [快速开始](#-快速开始) · [工具](#-工具) · [常见问题](#-常见问题)
+[🎧 试听样例](https://kanaworksai-hue.github.io/audio-studio-mcp/) · [快速开始](#-快速开始) · [工具](#-工具) · [常见问题](#-常见问题) · [⭐ 点个 Star](#-点个-star-支持一下)
 
 </div>
 
@@ -251,6 +252,15 @@ M1 Mac 16 GB，medium 模型：
 
 欢迎提 Issue 和 Pull Request。
 
+## ⭐ 点个 Star 支持一下
+
+如果 Audio Studio 帮你做出了真正用上的声音，请在[仓库页面](https://github.com/kanaworksai-hue/audio-studio-mcp)顶部点一下 **⭐ Star**。免费，只要一秒，作用却不小：
+
+- **让更多人发现它。** Star 越多，项目在 GitHub 上越容易被看到，更多做游戏、做视频的人就能用上。
+- **让更新更有动力。** 每一个 Star 都在告诉我“这个东西有人在用”。这就是我继续做下一版（比如 Windows 后端和 LoRA 支持）的动力。
+
+其他支持方式：遇到问题或有新想法，欢迎[提 Issue](https://github.com/kanaworksai-hue/audio-studio-mcp/issues)；也欢迎在 X 上分享你做的声音，并 @[KanaWorks_AI](https://x.com/KanaWorks_AI)。
+
 ## 🛠️ 开发
 
 ```bash
@@ -287,6 +297,6 @@ src/audio_studio_mcp/
 
 <p><b><a href="https://x.com/KanaWorks_AI">KanaWorks_AI</a> 用 ♥ 制作</b></p>
 
-<p><sub>如果 Audio Studio 帮你省了时间，点个 ⭐ 能让更多人看到它。更多项目：<a href="https://github.com/kanaworksai-hue">github.com/kanaworksai-hue</a></sub></p>
+<p><sub>如果 Audio Studio 帮你省了时间，点个 ⭐ 就是对更新最好的鼓励，也能让更多人看到它。更多项目：<a href="https://github.com/kanaworksai-hue">github.com/kanaworksai-hue</a></sub></p>
 
 </div>

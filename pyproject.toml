@@ -7,10 +7,12 @@ license = "MIT"
 license-files = ["LICENSE"]
 authors = [{ name = "kanaworksai-hue" }]
 requires-python = ">=3.10"
-keywords = ["mcp", "stable-audio", "audio-generation", "sound-effects", "bgm", "mlx"]
+keywords = ["mcp", "stable-audio", "audio-generation", "sound-effects", "bgm", "mlx", "pytorch", "cuda"]
 classifiers = [
     "Programming Language :: Python :: 3",
     "Operating System :: MacOS",
+    "Operating System :: Microsoft :: Windows",
+    "Operating System :: POSIX :: Linux",
     "Topic :: Multimedia :: Sound/Audio",
 ]
 dependencies = [
@@ -27,6 +29,12 @@ mlx = [
     "sentencepiece>=0.2",
     "huggingface_hub>=0.20",
     "pillow>=10.0",
+]
+# Stable Audio 3 on Windows / Linux with an NVIDIA GPU (the official PyTorch
+# runtime, cloned into vendor/). See src/audio_studio_mcp/backends/sa3_torch.py.
+torch = [
+    "torch>=2.4",
+    "huggingface_hub>=0.20",
 ]
 
 [project.scripts]

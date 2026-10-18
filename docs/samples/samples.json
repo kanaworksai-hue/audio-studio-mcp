@@ -1,0 +1,193 @@
+[
+  {
+    "name": "lofi_cafe",
+    "category": "music",
+    "seconds": 30.0,
+    "kind": "generate",
+    "audio_type": "music",
+    "prompt": "Lo-fi hip-hop chill track with mellow electric piano, soft vinyl crackle, low-pass filtered drums and soft plucked bass for a relaxed, dreamy vibe",
+    "bpm": 85,
+    "seed": 3000,
+    "model": "medium + same-l",
+    "prompt_used": "TrackType: Music, VocalType: Instrumental, Lo-fi hip-hop chill track with mellow electric piano, soft vinyl crackle, low-pass filtered drums and soft plucked bass for a relaxed, dreamy vibe. BPM: 85."
+  },
+  {
+    "name": "epic_orchestral",
+    "category": "music",
+    "seconds": 30.0,
+    "kind": "generate",
+    "audio_type": "music",
+    "prompt": "Epic cinematic orchestral trailer music with thundering taiko drums, soaring French horns and driving string ostinato, heroic and intense",
+    "seed": 202,
+    "model": "medium + same-l",
+    "prompt_used": "TrackType: Music, VocalType: Instrumental, Epic cinematic orchestral trailer music with thundering taiko drums, soaring French horns and driving string ostinato, heroic and intense."
+  },
+  {
+    "name": "chiptune_adventure",
+    "category": "music",
+    "seconds": 20.0,
+    "kind": "generate",
+    "audio_type": "music",
+    "prompt": "Upbeat 8-bit chiptune adventure theme with a bright square wave lead, bubbly arpeggiated bass and crisp noise drums, playful and energetic",
+    "bpm": 150,
+    "seed": 303,
+    "model": "medium + same-l",
+    "prompt_used": "TrackType: Music, VocalType: Instrumental, Upbeat 8-bit chiptune adventure theme with a bright square wave lead, bubbly arpeggiated bass and crisp noise drums, playful and energetic. BPM: 150."
+  },
+  {
+    "name": "casual_ukulele",
+    "category": "music",
+    "seconds": 30.0,
+    "kind": "generate",
+    "audio_type": "music",
+    "prompt": "Light-hearted casual acoustic pop instrumental with bouncy ukulele strums, a playful glockenspiel melody, soft hand claps and gentle upright bass, sunny and carefree",
+    "bpm": 110,
+    "seed": 1200,
+    "model": "medium + same-l",
+    "prompt_used": "TrackType: Music, VocalType: Instrumental, Light-hearted casual acoustic pop instrumental with bouncy ukulele strums, a playful glockenspiel melody, soft hand claps and gentle upright bass, sunny and carefree. BPM: 110."
+  },
+  {
+    "name": "drum_loop_seamless",
+    "category": "loop",
+    "seconds": 7.94,
+    "kind": "generate",
+    "audio_type": "instrument",
+    "prompt": "Drum loop with deep muffled kick on beat one, snappy rimshot snare on beats two and four, and tight closed hi-hats",
+    "bpm": 120,
+    "seed": 505,
+    "model": "medium + same-l",
+    "prompt_used": "TrackType: Instrument, Drum loop with deep muffled kick on beat one, snappy rimshot snare on beats two and four, and tight closed hi-hats. BPM: 120.",
+    "process": [
+      "resample 44100→48000",
+      "loop xfade 60.0 ms",
+      "peak normalize -1.0 dBFS (-0.00 dB)"
+    ]
+  },
+  {
+    "name": "glass_shatter",
+    "category": "sfx",
+    "seconds": 3.0,
+    "kind": "generate",
+    "audio_type": "sfx",
+    "sound_fields": {
+      "source": "glass bottle",
+      "action": "shattering on impact, fragments scattering",
+      "material": "thick green glass, sharp bright transient",
+      "space": "concrete floor, close-up, dry"
+    },
+    "seed": 606,
+    "model": "medium + same-l",
+    "prompt_used": "TrackType: SFX, glass bottle, shattering on impact, fragments scattering, thick green glass, sharp bright transient, concrete floor, close-up, dry."
+  },
+  {
+    "name": "door_creak",
+    "category": "sfx",
+    "seconds": 4.0,
+    "kind": "generate",
+    "audio_type": "sfx",
+    "sound_fields": {
+      "source": "old wooden door",
+      "action": "slowly creaking open with long squeaky hinge groans, then a soft thud",
+      "material": "dry aged oak, rusty iron hinges",
+      "space": "small dry room, close mic"
+    },
+    "seed": 1001,
+    "model": "medium + same-l",
+    "prompt_used": "TrackType: SFX, old wooden door, slowly creaking open with long squeaky hinge groans, then a soft thud, dry aged oak, rusty iron hinges, small dry room, close mic."
+  },
+  {
+    "name": "laser_blaster",
+    "category": "sfx",
+    "seconds": 1.5,
+    "kind": "generate",
+    "audio_type": "sfx",
+    "sound_fields": {
+      "source": "sci-fi laser gun",
+      "action": "single quick shot, sharp attack with a fast descending pitch zap",
+      "material": "bright electric zap, synthetic",
+      "space": "dry, close-up"
+    },
+    "seed": 2000,
+    "model": "medium + same-l",
+    "prompt_used": "TrackType: SFX, sci-fi laser gun, single quick shot, sharp attack with a fast descending pitch zap, bright electric zap, synthetic, dry, close-up."
+  },
+  {
+    "name": "rain_thunder",
+    "category": "sfx",
+    "seconds": 12.0,
+    "kind": "generate",
+    "audio_type": "sfx",
+    "sound_fields": {
+      "source": "heavy rain and distant thunder",
+      "action": "steady downpour with a slow rolling thunder rumble",
+      "material": "dense water droplets on leaves and roof",
+      "space": "outdoor forest at night, wide stereo"
+    },
+    "seed": 808,
+    "model": "medium + same-l",
+    "prompt_used": "TrackType: SFX, heavy rain and distant thunder, steady downpour with a slow rolling thunder rumble, dense water droplets on leaves and roof, outdoor forest at night, wide stereo."
+  },
+  {
+    "name": "coin_pickup",
+    "category": "sfx",
+    "seconds": 1.5,
+    "kind": "generate",
+    "audio_type": "sfx",
+    "sound_fields": {
+      "source": "game coin pickup",
+      "action": "quick bright two-note chime",
+      "material": "sparkly metallic bell tone",
+      "space": "dry, close-up"
+    },
+    "seed": 909,
+    "model": "medium + same-l",
+    "prompt_used": "TrackType: SFX, game coin pickup, quick bright two-note chime, sparkly metallic bell tone, dry, close-up."
+  },
+  {
+    "name": "synthwave_drive",
+    "category": "edit",
+    "seconds": 20.0,
+    "kind": "generate",
+    "audio_type": "music",
+    "prompt": "Synthwave track with warm analog pads, punchy gated drums and a shimmering arpeggiated lead, nostalgic and driving",
+    "bpm": 100,
+    "seed": 42,
+    "model": "medium + same-l",
+    "prompt_used": "TrackType: Music, VocalType: Instrumental, Synthwave track with warm analog pads, punchy gated drums and a shimmering arpeggiated lead, nostalgic and driving. BPM: 100."
+  },
+  {
+    "name": "synthwave_drive_extended",
+    "category": "edit",
+    "seconds": 40.0,
+    "kind": "edit:continue",
+    "audio_type": "music",
+    "prompt": "Synthwave track with warm analog pads, punchy gated drums and a shimmering arpeggiated lead, building to a soaring outro",
+    "bpm": 100,
+    "seed": 43,
+    "model": "medium + same-l",
+    "prompt_used": "TrackType: Music, VocalType: Instrumental, Synthwave track with warm analog pads, punchy gated drums and a shimmering arpeggiated lead, building to a soaring outro. BPM: 100.",
+    "edit": {
+      "region": [
+        18.26,
+        40.0
+      ]
+    },
+    "edit_source": "synthwave_drive"
+  },
+  {
+    "name": "lofi_cafe_bossa",
+    "category": "edit",
+    "seconds": 30.0,
+    "kind": "edit:variation",
+    "audio_type": "music",
+    "prompt": "Bossa nova jazz version with nylon guitar, brushed drums and upright bass, warm and relaxed",
+    "bpm": 85,
+    "seed": 44,
+    "model": "medium + same-l",
+    "prompt_used": "TrackType: Music, VocalType: Instrumental, Bossa nova jazz version with nylon guitar, brushed drums and upright bass, warm and relaxed. BPM: 85.",
+    "edit": {
+      "strength": 0.5
+    },
+    "edit_source": "lofi_cafe"
+  }
+]

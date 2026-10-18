@@ -1,0 +1,30 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+build/
+dist/
+.venv/
+.pytest_cache/
+.ruff_cache/
+
+# Upstream runtime and weights (fetched by install.sh)
+vendor/
+
+# Generated audio
+outputs/
+*.wav
+*.ogg
+*.flac
+*.mp3
+
+# Local config / tooling
+.env
+.env.*
+.claude/
+.idea/
+.vscode/
+.DS_Store
+
+# Showcase samples for the GitHub Pages demo
+!docs/samples/*.mp3

@@ -155,8 +155,9 @@ def to_mono(audio: np.ndarray) -> np.ndarray:
 def _ffmpeg(args: list[str]) -> str:
     exe = os.environ.get("AUDIO_STUDIO_FFMPEG") or shutil.which("ffmpeg")
     if not exe:
-        raise RuntimeError("ffmpeg not found: install it (macOS: brew install ffmpeg) "
-                           "or set AUDIO_STUDIO_FFMPEG. Needed for resampling and loudness.")
+        raise RuntimeError("ffmpeg not found: install it (macOS: brew install ffmpeg, "
+                           "Windows: winget install ffmpeg) or set AUDIO_STUDIO_FFMPEG. "
+                           "Needed for resampling and loudness.")
     r = subprocess.run([exe, "-hide_banner", "-nostdin", "-y", *args],
                        capture_output=True, text=True)
     if r.returncode != 0:

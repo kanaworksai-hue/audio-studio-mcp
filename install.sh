@@ -55,7 +55,7 @@ done
 
 # ── platform ─────────────────────────────────────────────────────────────────
 if [[ "$(uname -s)" != "Darwin" || "$(uname -m)" != "arm64" ]]; then
-    die "this installer supports Apple Silicon macOS only for now (detected $(uname -s)/$(uname -m))."
+    die "this installer supports Apple Silicon macOS (on Windows with an NVIDIA GPU use install.ps1; detected $(uname -s)/$(uname -m))."
 fi
 
 # ── uv ───────────────────────────────────────────────────────────────────────

@@ -24,7 +24,9 @@ class _Inner:
     sample_rate = 44100
 
 class StableAudioModel:
-    def __init__(self): self.model = _Inner()
+    def __init__(self):
+        self.model = _Inner()
+        self.model_config = {"sample_size": 16777216}
 
     @staticmethod
     def from_pretrained(model_name, device=None):
@@ -99,6 +101,7 @@ def test_text_to_audio_one_call_per_seed(backend, capsys):
     r2 = backend._generate([7], GenerationRequest(prompt="p", seconds=3, cfg=4.0, negative_prompt="noise"))
     assert [c["seed"] for c in calls] == [5, 6, 7]
     assert calls[0]["steps"] == 8 and calls[0]["cfg_scale"] == 1.0 and calls[0]["apg_scale"] == 1.0
+    assert calls[0]["sample_size"] == 16777216, "upstream's 120 s default would cut long tracks"
     assert "negative_prompt" not in calls[0], "negative prompt only applies with CFG"
     assert calls[2]["negative_prompt"] == "noise" and calls[2]["cfg_scale"] == 4.0
     assert "init_audio" not in calls[0] and "inpaint_audio" not in calls[0]

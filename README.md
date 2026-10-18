@@ -5,6 +5,7 @@
 <p>
   <a href="LICENSE"><img alt="License: MIT" src="https://img.shields.io/badge/license-MIT-6b4dff?style=flat-square"></a>
   <img alt="macOS Apple Silicon" src="https://img.shields.io/badge/macOS-Apple_Silicon-111?style=flat-square&logo=apple">
+  <img alt="Windows NVIDIA GPU" src="https://img.shields.io/badge/Windows-NVIDIA_GPU-76b900?style=flat-square&logo=nvidia&logoColor=white">
   <a href="https://modelcontextprotocol.io"><img alt="MCP server" src="https://img.shields.io/badge/MCP-server-19b8d6?style=flat-square"></a>
   <img alt="Python 3.10 to 3.13" src="https://img.shields.io/badge/python-3.10–3.13-3776ab?style=flat-square&logo=python&logoColor=white">
   <a href="https://github.com/kanaworksai-hue/audio-studio-mcp/actions/workflows/tests.yml"><img alt="Tests" src="https://img.shields.io/github/actions/workflow/status/kanaworksai-hue/audio-studio-mcp/tests.yml?style=flat-square&label=tests"></a>
@@ -19,7 +20,7 @@
 
 </div>
 
-**Audio Studio MCP** gives Claude Code, Claude Desktop, Cursor and any other [MCP](https://modelcontextprotocol.io) client a sound studio that runs on your own Mac. Ask for background music or a sound effect in plain language; the model generates it locally with [Stable Audio 3](https://github.com/Stability-AI/stable-audio-3). Then it can loop it, normalize the loudness and export it for your game engine or video editor. There is no cloud service and no API key, and generating doesn't cost anything.
+**Audio Studio MCP** gives Claude Code, Claude Desktop, Cursor and any other [MCP](https://modelcontextprotocol.io) client a sound studio that runs on your own Mac or Windows PC. Ask for background music or a sound effect in plain language; the model generates it locally with [Stable Audio 3](https://github.com/Stability-AI/stable-audio-3). Then it can loop it, normalize the loudness and export it for your game engine or video editor. There is no cloud service and no API key, and generating doesn't cost anything.
 
 <p align="center">
   <img src="docs/assets/demo-en.png" alt="A real Claude Code session: one request produces two lo-fi BGM candidates and a seamless OGG loop for Godot" width="820">
@@ -33,13 +34,13 @@
 <td align="center" width="25%"><img src="docs/assets/icon-generate.png" width="72" alt=""><br><b>Generate</b><br><sub>BGM, instrument loops and sound effects from one sentence, 1–4 candidates per call</sub></td>
 <td align="center" width="25%"><img src="docs/assets/icon-edit.png" width="72" alt=""><br><b>Edit</b><br><sub>Re-style a whole clip, regenerate a time range, or extend a track</sub></td>
 <td align="center" width="25%"><img src="docs/assets/icon-process.png" width="72" alt=""><br><b>Finish</b><br><sub>Seamless loops, fades, loudness (LUFS), 48 kHz WAV / OGG / FLAC</sub></td>
-<td align="center" width="25%"><img src="docs/assets/icon-local.png" width="72" alt=""><br><b>Local</b><br><sub>Runs on Apple Silicon with MLX. No account or upload needed</sub></td>
+<td align="center" width="25%"><img src="docs/assets/icon-local.png" width="72" alt=""><br><b>Local</b><br><sub>Runs on Apple Silicon (MLX) or an NVIDIA GPU (PyTorch). Nothing is uploaded</sub></td>
 </tr>
 </table>
 
 - **Reproducible:** every file gets a `.json` sidecar with its prompt, seed and settings.
 - **Prompting built in:** the server teaches the client the official Stable Audio 3 prompt format, so a request like "make it sound like a creaky door" becomes a prompt the model understands.
-- **Same output as upstream:** for the same seed, results are bit-for-bit identical to the official `sa3` CLI.
+- **Same output as upstream:** on a Mac, results for the same seed are bit-for-bit identical to the official `sa3` CLI. On Windows it calls the official Stable Audio 3 PyTorch API.
 
 ## 🎧 Hear it
 
@@ -62,11 +63,13 @@ MP3s are in [`docs/samples/`](docs/samples), with prompts and seeds in [`samples
 flowchart LR
     U["You<br/>“make a cozy cafe BGM”"] --> C["Claude Code · Desktop<br/>Cursor · any MCP client"]
     C -- "MCP" --> S["audio-studio-mcp<br/>generate · edit · process"]
-    S --> M["Stable Audio 3<br/>MLX on Apple Silicon"]
+    S --> M["Stable Audio 3<br/>MLX on Apple Silicon<br/>PyTorch on NVIDIA GPUs"]
     M --> F["WAV / OGG / FLAC + .json<br/>ready for game & video"]
 ```
 
 ## 🚀 Quick start
+
+### macOS (Apple Silicon)
 
 **Requirements:**
 
@@ -86,6 +89,29 @@ The installer sets up [`uv`](https://docs.astral.sh/uv/) if needed, clones the o
 claude mcp add --scope user audio-studio -- /path/to/audio-studio-mcp/.venv/bin/audio-studio-mcp
 ```
 
+### Windows (NVIDIA GPU)
+
+**Requirements:**
+
+- 64-bit Windows 10 or 11 with an NVIDIA GPU (8 GB of VRAM or more) and a current driver. Tested on an RTX 3060 12 GB
+- About 14 GB of disk for the model and PyTorch
+- `git` (`winget install Git.Git`) and [`ffmpeg`](https://ffmpeg.org) (`winget install Gyan.FFmpeg`)
+- A free [Hugging Face](https://huggingface.co) account. The PyTorch weights are gated: open [stabilityai/stable-audio-3-medium](https://huggingface.co/stabilityai/stable-audio-3-medium) and accept the license once
+
+```powershell
+git clone https://github.com/kanaworksai-hue/audio-studio-mcp.git
+cd audio-studio-mcp
+powershell -ExecutionPolicy Bypass -File install.ps1
+```
+
+The installer does the same steps as on macOS, but installs PyTorch with CUDA and downloads the official PyTorch checkpoint of the **medium** model (~10.4 GB). If you aren't logged in to Hugging Face yet, it asks for an access token with read permission ([create one here](https://huggingface.co/settings/tokens)). It finishes by printing the command to register the server:
+
+```powershell
+claude mcp add --scope user audio-studio -- "C:\path\to\audio-studio-mcp\.venv\Scripts\audio-studio-mcp.exe"
+```
+
+Flash Attention is not needed. Without it, the runtime falls back to PyTorch's built-in attention.
+
 <details>
 <summary><b>Claude Desktop, Cursor and other clients</b></summary>
 
@@ -100,18 +126,20 @@ Add this to `claude_desktop_config.json`, `.cursor/mcp.json` or your client's MC
   }
 }
 ```
+
+On Windows the command is `C:\\path\\to\\audio-studio-mcp\\.venv\\Scripts\\audio-studio-mcp.exe` (backslashes doubled in JSON).
 </details>
 
 <details>
 <summary><b>Installer options</b></summary>
 
-| Option | Effect |
-|---|---|
-| `--model all` | Also download the small, fast `sm-music` and `sm-sfx` models (+2.6 GB) |
-| `--skip-weights` | Don't download now; the first generation downloads them |
-| `-y` | Install `uv` without asking |
+| macOS | Windows | Effect |
+|---|---|---|
+| `--model all` | `-Model all` | Also download the small, fast `sm-music` and `sm-sfx` models (+2.6 GB on macOS, +7 GB on Windows) |
+| `--skip-weights` | `-SkipWeights` | Don't download now; the first generation downloads them |
+| `-y` | `-Yes` | Install `uv` without asking |
 
-Downloads are anonymous. Logging in with `hf auth login` raises Hugging Face's rate limit.
+On macOS, downloads are anonymous; logging in with `hf auth login` raises Hugging Face's rate limit. On Windows, the PyTorch weights are gated: accept the license on each model page you download ([medium](https://huggingface.co/stabilityai/stable-audio-3-medium), [small-music](https://huggingface.co/stabilityai/stable-audio-3-small-music), [small-sfx](https://huggingface.co/stabilityai/stable-audio-3-small-sfx)) and log in.
 </details>
 
 > [!TIP]
@@ -155,9 +183,10 @@ Generated files are 44.1 kHz 24-bit stereo WAV, written to `outputs/` in this fo
 | `AUDIO_STUDIO_OUTPUT_DIR` | `<repo>/outputs` | Where audio files are written |
 | `AUDIO_STUDIO_IDLE_UNLOAD_MIN` | `10` | Free the models after this many idle minutes (`0` = never) |
 | `AUDIO_STUDIO_SA3_MODEL` | `medium` | `medium` (best quality, up to 380 s), `sm-music` or `sm-sfx` (small and fast, up to 120 s) |
-| `AUDIO_STUDIO_MLX_CACHE_GB` | `1` | Cap on MLX's buffer cache. Without it, a long generation can leave ~6 GB cached |
+| `AUDIO_STUDIO_MLX_CACHE_GB` | `1` | macOS: cap on MLX's buffer cache. Without it, a long generation can leave ~6 GB cached |
+| `AUDIO_STUDIO_DEVICE` | `cuda` if available | Windows/Linux: PyTorch device, e.g. `cuda`, `cuda:1` or `cpu` |
 | `AUDIO_STUDIO_SA3_DIR` | `<repo>/vendor/stable-audio-3` | Use another stable-audio-3 checkout |
-| `AUDIO_STUDIO_BACKEND` | `auto` | `auto` or `sa3-mlx` |
+| `AUDIO_STUDIO_BACKEND` | `auto` | `auto`, `sa3-mlx` (Apple Silicon) or `sa3-torch` (PyTorch, NVIDIA) |
 | `AUDIO_STUDIO_FFMPEG` | `ffmpeg` on `PATH` | Path to ffmpeg |
 
 Pass them with `claude mcp add ... -e NAME=value` or in the `env` block of your client config.
@@ -172,6 +201,8 @@ Each client session normally starts its own server process. Models load on the f
 .venv/bin/audio-studio-mcp --http 8765 --preload
 claude mcp add --scope user --transport http audio-studio http://127.0.0.1:8765/mcp
 ```
+
+On Windows, start it with `.venv\Scripts\audio-studio-mcp.exe --http 8765 --preload`.
 </details>
 
 ## ⚡ Performance
@@ -185,7 +216,17 @@ Medium model on an M1 Mac with 16 GB:
 | Continue to 35 s, incl. loading the encoder | ~27 s |
 | 15 s of music with `sm-music`, warm | ~1 s |
 
-Loaded models use about 5–7 GB of memory. They are freed after the idle timeout or by `unload_models`.
+Medium model on Windows with an RTX 3060 12 GB:
+
+| Task | Time |
+|---|---|
+| Two 3 s sound effects, cold start (incl. ~20 s model load) | ~25 s |
+| 20 s of music, warm | ~1.3 s |
+| Continue to 30 s, warm | ~2.2 s |
+| 380 s of music (the maximum), warm | ~15 s |
+| 15 s of music with `sm-music`, warm | ~0.7 s |
+
+On a Mac, loaded models use about 5–7 GB of memory. On the RTX 3060, the medium model peaked at about 5.3 GB of VRAM. Models are freed after the idle timeout or by `unload_models`.
 
 ## 📝 Prompting tips
 
@@ -210,7 +251,11 @@ The full guide is also sent to the client as the server's instructions.
 <details>
 <summary><b>Does it run on Windows, Linux or Intel Macs?</b></summary>
 
-Not yet. It needs an Apple Silicon Mac today. The model runtime sits behind a backend interface, and a Windows backend for NVIDIA GPUs is planned.
+**Windows:** yes, with an NVIDIA GPU. See [Quick start](#windows-nvidia-gpu).
+
+**Linux:** with an NVIDIA GPU it uses the same PyTorch backend and should work, but it is untested and has no installer yet. Clone the upstream runtime into `vendor/stable-audio-3` at the commit pinned in `install.sh`, then run `uv sync --extra cuda` and `hf auth login`.
+
+**Intel Macs and AMD GPUs** are not supported.
 </details>
 
 <details>
@@ -240,7 +285,7 @@ Use WAV or OGG for loops. MP3 adds padding at the start and end, so it can't loo
 ## 🗺️ Roadmap
 
 - [x] Apple Silicon backend (Stable Audio 3, MLX)
-- [ ] Windows backend for NVIDIA GPUs
+- [x] Windows backend for NVIDIA GPUs (Stable Audio 3, PyTorch)
 - [ ] LoRA support (the upstream runtime already has it)
 
 Issues and pull requests are welcome.
@@ -250,7 +295,7 @@ Issues and pull requests are welcome.
 If Audio Studio made a sound you ended up using, please click **⭐ Star** at the top of the [repository page](https://github.com/kanaworksai-hue/audio-studio-mcp). It's free, takes one second, and helps more than it looks:
 
 - **More people find it.** Stars make the project easier to discover on GitHub, so more game developers and video makers get to use it.
-- **It keeps updates coming.** Every star tells me someone finds this useful. That's what keeps me working on the next update, like the Windows backend and LoRA support.
+- **It keeps updates coming.** Every star tells me someone finds this useful. That's what keeps me working on the next update, like LoRA support.
 
 Other ways to help: [open an issue](https://github.com/kanaworksai-hue/audio-studio-mcp/issues) for a bug or an idea, or share a sound you made on X and tag [@KanaWorks_AI](https://x.com/KanaWorks_AI).
 
@@ -258,8 +303,10 @@ Other ways to help: [open an issue](https://github.com/kanaworksai-hue/audio-stu
 
 ```bash
 uv run pytest                              # offline tests, no model needed
-.venv/bin/python scripts/smoke_test.py     # end-to-end with the real model (~30 s)
+.venv/bin/python scripts/smoke_test.py     # end-to-end with the real model (~30 s on an M1)
 ```
+
+On Windows: `.venv\Scripts\python scripts\smoke_test.py` (~45 s on an RTX 3060, including model loading).
 
 ```
 src/audio_studio_mcp/
@@ -267,7 +314,8 @@ src/audio_studio_mcp/
   prompts.py           prompt building and the instructions sent to clients
   post.py              post-processing and export
   backends/base.py     backend interface
-  backends/sa3_mlx.py  Stable Audio 3 on Apple Silicon
+  backends/sa3_mlx.py  Stable Audio 3 on Apple Silicon (MLX)
+  backends/sa3_torch.py  Stable Audio 3 on NVIDIA GPUs (PyTorch)
 ```
 
 A new platform is added as another backend in `backends/`.
@@ -276,11 +324,11 @@ A new platform is added as another backend in `backends/`.
 
 - **This project:** [MIT](LICENSE).
 - **Stable Audio 3 runtime:** downloaded into `vendor/` at install time. It is © Stability AI and MIT-licensed.
-- **Model weights:** licensed under the [Stability AI Community License](https://huggingface.co/stabilityai/stable-audio-3-optimized). They are downloaded from Hugging Face, not distributed here.
+- **Model weights:** licensed under the [Stability AI Community License](https://huggingface.co/stabilityai/stable-audio-3-optimized). They are downloaded from Hugging Face (macOS: `stable-audio-3-optimized`; Windows: `stable-audio-3-medium` and the small models), not distributed here.
 - **Brand:** the KanaWorks_AI name, logo and the Kana character are © KanaWorks_AI and are **not** covered by the MIT license. See [docs/brand](docs/brand/README.md).
-- **Built on:** [Stable Audio 3](https://github.com/Stability-AI/stable-audio-3), [MLX](https://github.com/ml-explore/mlx) and the [Model Context Protocol](https://modelcontextprotocol.io).
+- **Built on:** [Stable Audio 3](https://github.com/Stability-AI/stable-audio-3), [MLX](https://github.com/ml-explore/mlx), [PyTorch](https://pytorch.org) and the [Model Context Protocol](https://modelcontextprotocol.io).
 
-This is an independent project. It is not affiliated with or endorsed by Stability AI, Apple or Anthropic.
+This is an independent project. It is not affiliated with or endorsed by Stability AI, Apple, NVIDIA or Anthropic.
 
 <br>
 

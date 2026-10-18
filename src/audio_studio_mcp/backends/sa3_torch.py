@@ -117,8 +117,11 @@ class SA3TorchBackend(Backend):
         with contextlib.redirect_stdout(sys.stderr):
             t0 = time.time()
             res.included_model_load = self._load()
+            # generate() defaults sample_size to 120 s of audio and clamps to it;
+            # use the model's own maximum (380 s for medium).
             kw = dict(prompt=req.prompt, duration=req.seconds, steps=req.steps,
-                      cfg_scale=req.cfg, apg_scale=1.0)
+                      cfg_scale=req.cfg, apg_scale=1.0,
+                      sample_size=int(self._model.model_config["sample_size"]))
             # Like the MLX backend: the negative prompt only matters with CFG.
             if req.cfg != 1.0 and req.negative_prompt.strip():
                 kw["negative_prompt"] = req.negative_prompt.strip()

@@ -7,10 +7,11 @@ license = "MIT"
 license-files = ["LICENSE"]
 authors = [{ name = "kanaworksai-hue" }]
 requires-python = ">=3.10"
-keywords = ["mcp", "stable-audio", "audio-generation", "sound-effects", "bgm", "mlx"]
+keywords = ["mcp", "stable-audio", "audio-generation", "sound-effects", "bgm", "mlx", "cuda"]
 classifiers = [
     "Programming Language :: Python :: 3",
     "Operating System :: MacOS",
+    "Operating System :: Microsoft :: Windows",
     "Topic :: Multimedia :: Sound/Audio",
 ]
 dependencies = [

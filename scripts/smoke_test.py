@@ -1,10 +1,12 @@
 """End-to-end test against the real model, over stdio like an MCP client.
 
 Usage: .venv/bin/python scripts/smoke_test.py [--out DIR]
+       (Windows: .venv\Scripts\python scripts\smoke_test.py)
 
 Runs every tool once (generate, edit: variation/inpaint/continue, process,
 unload). Writes into a temporary folder unless --out is given. Takes about
-30 seconds on an M1 once the weights are downloaded.
+30 seconds on an M1 (about 45 on an RTX 3060, including model loading) once
+the weights are downloaded.
 """
 from __future__ import annotations
 

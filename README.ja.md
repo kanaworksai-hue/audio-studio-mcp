@@ -111,7 +111,7 @@ cd audio-studio-mcp
 powershell -ExecutionPolicy Bypass -File install.ps1
 ```
 
-インストーラーの流れは macOS と同じですが、CUDA 版の PyTorch を導入し、**medium** モデルの公式 PyTorch 版の重み（約 10.4 GB）をダウンロードします。Hugging Face にまだログインしていない場合は、read 権限のアクセストークンを貼り付けるよう求められます（[ここで作成](https://huggingface.co/settings/tokens)）。最後に登録用のコマンドが表示されます：
+インストーラーの流れは macOS と同じですが、CUDA 版の PyTorch を導入し、**medium** モデルの公式 PyTorch 版の重み（約 10.4 GB）をダウンロードします。Hugging Face にまだログインしていない場合は、read 権限のアクセストークンを貼り付けるよう求められます（[ここで作成](https://huggingface.co/settings/tokens)）。コンソールのない環境（AI エージェントが実行した場合など）では入力を求めず、ログイン手順を表示して止まるので、ログインしてからもう一度実行してください。最後に登録用のコマンドが表示されます：
 
 ```powershell
 claude mcp add --scope user audio-studio -- "C:\path\to\audio-studio-mcp\.venv\Scripts\audio-studio-mcp.exe"
@@ -151,7 +151,12 @@ macOS ではダウンロードにログインは不要で、`hf auth login` で�
 
 > [!TIP]
 > **エージェントにインストールを任せる。** Claude Code に次の文を貼り付けてください：
-> *「https://github.com/kanaworksai-hue/audio-studio-mcp の README に従ってインストールし、MCP サーバーとして登録して。」*
+> *「https://github.com/kanaworksai-hue/audio-studio-mcp の README（AI エージェント向けの注意も含めて）に従ってインストールし、MCP サーバーとして登録して。」*
+>
+> **AI エージェント向けの注意（Windows のみ。macOS はログイン不要）：** 重みは利用規約への同意が必要で、ユーザー本人の Hugging Face ログインが要ります。
+> - 重みをダウンロードする前に `hf auth whoami` でログイン状態を確認してください（インストーラーを一度実行した後は `.venv\Scripts\hf.exe auth whoami`）。`install.ps1` も確認し、未ログインなら `ACTION NEEDED` を表示して止まります。
+> - 未ログイン、またはダウンロードが 401/403 で失敗した（ライセンス未同意、または別のアカウントで同意した）場合は作業を止め、インストーラーが表示した手順をユーザーに伝えてください：無料アカウントを作る、各モデルのページでライセンスに同意する、ユーザー自身のターミナルで `hf auth login` を実行する。終わったと言われてから、インストーラーを再実行します。
+> - トークンをチャットに貼るようユーザーに頼まないでください。`-SkipWeights` で回避するのも不可です（後で生成するときに同じエラーで失敗します）。
 
 あとは普通に頼むだけです：
 

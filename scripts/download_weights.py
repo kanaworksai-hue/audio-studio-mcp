@@ -53,9 +53,60 @@ def download_mlx(names: list[str]) -> int:
     return 0
 
 
+def hf_account() -> str | None:
+    """The Hugging Face user this machine is logged in as (like `hf auth whoami`)."""
+    from huggingface_hub import whoami
+    try:
+        return whoami()["name"]
+    except Exception:
+        return None
+
+
+def gated_help(repos: list[str], account: str | None) -> str:
+    """Why a gated download failed and what the user has to do, worded so an AI
+    agent running the installer can pass it on as is."""
+    hf = Path(sys.executable).with_name("hf.exe" if os.name == "nt" else "hf")
+    pages = "".join(f"\n       https://huggingface.co/{r}" for r in repos)
+    if account:
+        head = (f"error: the Hugging Face account '{account}' (hf auth whoami) has no access to\n"
+                "these gated model repos yet. Either the license was not accepted on them, or it\n"
+                "was accepted with a different account.\n\n"
+                f"  1. Log in on huggingface.co as '{account}', open each page and accept the\n"
+                f"     Stability AI Community License (fill in the short form and submit):{pages}\n"
+                "     To use another account instead, log in with it in your own terminal:\n"
+                f"       \"{hf}\" auth login\n")
+    else:
+        head = ("error: not logged in to Hugging Face, so these gated model repos cannot be\n"
+                "downloaded.\n\n"
+                "  1. Create a free account (https://huggingface.co/join), log in on huggingface.co,\n"
+                "     open each page and accept the Stability AI Community License:"
+                f"{pages}\n"
+                "     Then create a Read token (https://huggingface.co/settings/tokens) and, in your\n"
+                "     own terminal (not in a chat), run this and paste the token:\n"
+                f"       \"{hf}\" auth login\n")
+    return (head +
+            "  2. Run the installer again; finished downloads are kept.\n\n"
+            "AI agents: pass these steps on to the user and wait until they are done. Do not ask\n"
+            "for the token in the chat, and do not skip the weights to get past this.")
+
+
 def download_torch(names: list[str]) -> int:
-    from huggingface_hub import snapshot_download
+    from huggingface_hub import auth_check, snapshot_download
     from huggingface_hub.errors import GatedRepoError
+
+    # Check every repo first, so the user can accept all the licenses in one go.
+    gated = []
+    for name in names:
+        repo = TORCH_REPOS[name][0]
+        try:
+            auth_check(repo)
+        except GatedRepoError:
+            gated.append(repo)
+        except Exception:
+            pass  # offline etc.: let snapshot_download decide
+    if gated:
+        print(gated_help(gated, hf_account()), file=sys.stderr)
+        return 2
 
     for name in names:
         repo, size = TORCH_REPOS[name]
@@ -63,10 +114,7 @@ def download_torch(names: list[str]) -> int:
         try:
             path = snapshot_download(repo, allow_patterns=TORCH_FILES)
         except GatedRepoError:
-            print(f"\nerror: {repo} is gated. Open this page, log in and accept the\n"
-                  f"Stability AI Community License:\n  https://huggingface.co/{repo}\n"
-                  "then log in here once (hf auth login, with a read token) and re-run.",
-                  file=sys.stderr)
+            print(gated_help([repo], hf_account()), file=sys.stderr)
             return 2
         print(f"  ✓ {path}")
     return 0

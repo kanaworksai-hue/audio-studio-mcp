@@ -104,7 +104,7 @@ cd audio-studio-mcp
 powershell -ExecutionPolicy Bypass -File install.ps1
 ```
 
-The installer does the same steps as on macOS, but installs PyTorch with CUDA and downloads the official PyTorch checkpoint of the **medium** model (~10.4 GB). If you aren't logged in to Hugging Face yet, it asks for an access token with read permission ([create one here](https://huggingface.co/settings/tokens)). It finishes by printing the command to register the server:
+The installer does the same steps as on macOS, but installs PyTorch with CUDA and downloads the official PyTorch checkpoint of the **medium** model (~10.4 GB). If you aren't logged in to Hugging Face yet, it asks for an access token with read permission ([create one here](https://huggingface.co/settings/tokens)). When it runs without a console (for example, started by an AI agent), it never asks: it prints the steps to log in and stops, and you re-run it after logging in. It finishes by printing the command to register the server:
 
 ```powershell
 claude mcp add --scope user audio-studio -- "C:\path\to\audio-studio-mcp\.venv\Scripts\audio-studio-mcp.exe"
@@ -144,7 +144,12 @@ On macOS, downloads are anonymous; logging in with `hf auth login` raises Huggin
 
 > [!TIP]
 > **Let your agent install it.** Paste this into Claude Code:
-> *"Install https://github.com/kanaworksai-hue/audio-studio-mcp by following its README, then register it as an MCP server."*
+> *"Install https://github.com/kanaworksai-hue/audio-studio-mcp by following its README, including the notes for AI agents, then register it as an MCP server."*
+>
+> **Notes for AI agents (Windows only; macOS needs no login):** the weights are gated and need the user's own Hugging Face login.
+> - Before downloading weights, check the login with `hf auth whoami` (after the first installer run: `.venv\Scripts\hf.exe auth whoami`). `install.ps1` checks it too and stops with `ACTION NEEDED` when nobody is logged in.
+> - If the user is not logged in, or the download fails with 401/403 (license not accepted, or accepted with another account), stop and pass the steps the installer printed on to the user: create a free account, accept the license on each model page, then run `hf auth login` in their own terminal. Wait until they say they are done, then re-run the installer.
+> - Never ask the user to paste their token into the chat, and don't use `-SkipWeights` to get past this: generation would fail later with the same error.
 
 Then just ask:
 

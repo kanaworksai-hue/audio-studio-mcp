@@ -5,7 +5,7 @@ description = "Local AI BGM and sound-effect generation (Stable Audio 3) as an M
 readme = "README.md"
 license = "MIT"
 license-files = ["LICENSE"]
-authors = [{ name = "kanaworksai-hue" }]
+authors = [{ name = "東京AI映像合同会社" }]
 requires-python = ">=3.10"
 keywords = ["mcp", "stable-audio", "audio-generation", "sound-effects", "bgm", "mlx", "cuda"]
 classifiers = [

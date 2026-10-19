@@ -4,7 +4,8 @@
 #
 #   1. checks for uv (offers to install it) and ffmpeg
 #   2. clones the official Stable Audio 3 runtime into vendor/ at a pinned commit
-#   3. creates .venv/ and installs dependencies (uv sync --extra mlx)
+#   3. creates .venv/ with a native arm64 Python and installs dependencies
+#      (uv sync --extra mlx), then checks that mlx imports
 #   4. downloads model weights from Hugging Face (medium: ~5.9 GB)
 #   5. prints the command that registers the server with Claude Code
 #
@@ -54,6 +55,10 @@ for m in ${MODEL//,/ }; do
 done
 
 # ── platform ─────────────────────────────────────────────────────────────────
+if [[ "$(uname -s)" == "Darwin" && "$(uname -m)" != "arm64" \
+      && "$(sysctl -n hw.optional.arm64 2>/dev/null || true)" == "1" ]]; then
+    die "this shell runs under Rosetta (x86_64) on an Apple Silicon Mac. Run the installer natively: arch -arm64 ./install.sh"
+fi
 if [[ "$(uname -s)" != "Darwin" || "$(uname -m)" != "arm64" ]]; then
     die "this installer supports Apple Silicon macOS (on Windows with an NVIDIA GPU use install.ps1; detected $(uname -s)/$(uname -m))."
 fi
@@ -112,8 +117,36 @@ ok "$UPSTREAM_DIR @ ${UPSTREAM_COMMIT:0:7}"
 
 # ── Python environment ───────────────────────────────────────────────────────
 step "Installing Python dependencies into .venv"
-(cd "$REPO_DIR" && uv sync --extra mlx)
-ok ".venv ready"
+# Ask uv for an arm64 Python explicitly: otherwise it may pick an x86_64 one
+# (e.g. an old Intel Homebrew under /usr/local), which runs under Rosetta and
+# silently skips mlx. A UV_PYTHON set by the user wins.
+if [[ -n "${UV_PYTHON:-}" ]]; then
+    (cd "$REPO_DIR" && uv sync --extra mlx)
+else
+    if [[ -e "$REPO_DIR/.venv" ]] \
+          && [[ "$("$REPO_DIR/.venv/bin/python" -c 'import platform; print(platform.machine())' 2>/dev/null || true)" != "arm64" ]]; then
+        warn "the existing .venv is not a native arm64 Python environment; recreating it."
+        rm -rf "$REPO_DIR/.venv"
+    fi
+    PY_VERSION="$(tr -d '[:space:]' < "$REPO_DIR/.python-version" 2>/dev/null || true)"
+    (cd "$REPO_DIR" && uv sync --extra mlx --python "cpython-${PY_VERSION:-3.11}-macos-aarch64")
+fi
+VENV_PY="$REPO_DIR/.venv/bin/python"
+VENV_ARCH="$("$VENV_PY" -c 'import platform; print(platform.machine())' 2>/dev/null || true)"
+if [[ "$VENV_ARCH" != "arm64" ]]; then
+    printf '%serror%s: .venv uses an %s Python (%s), but MLX needs a native arm64 Python.\n' \
+        "$R" "$N" "${VENV_ARCH:-unknown}" "$("$VENV_PY" -c 'import sys; print(sys.base_prefix)' 2>/dev/null || echo "$VENV_PY")" >&2
+    if [[ -n "${UV_PYTHON:-}" ]]; then
+        printf '  UV_PYTHON=%s selects it. Unset UV_PYTHON (or set it to cpython-3.11-macos-aarch64)\n' "$UV_PYTHON" >&2
+        printf '  and re-run ./install.sh.\n' >&2
+    else
+        printf '  Re-run with an arm64 Python: UV_PYTHON=cpython-3.11-macos-aarch64 ./install.sh\n' >&2
+    fi
+    exit 1
+fi
+"$VENV_PY" -c 'import mlx.core' 2>/dev/null \
+    || die "mlx failed to import in .venv. Remove .venv and re-run ./install.sh."
+ok ".venv ready (arm64, mlx)"
 
 # ── weights ──────────────────────────────────────────────────────────────────
 if [[ "$SKIP_WEIGHTS" -eq 1 ]]; then

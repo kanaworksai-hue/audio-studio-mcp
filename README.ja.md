@@ -271,6 +271,12 @@ Mac ではモデルを読み込んでいる間、約 5〜7 GB のメモリを使
 </details>
 
 <details>
+<summary><b>Apple Silicon の Mac なのに「Intel Macs are not supported」と出ます</b></summary>
+
+Rosetta で動く x86_64 版の Python（たとえば `/usr/local` にある Intel 版 Homebrew の Python）で環境が作られ、MLX がインストールされなかったのが原因です。現在の `install.sh` は uv に arm64 の Python を指定し、そうした `.venv` は作り直すので、`./install.sh` を実行し直せば直ります。`UV_PYTHON` を自分で設定している場合は arm64 版を指定してください：`UV_PYTHON=cpython-3.11-macos-aarch64 ./install.sh`
+</details>
+
+<details>
 <summary><b>歌入りの曲は作れますか？</b></summary>
 
 作れません。Stable Audio 3 が生成するのはインストと効果音だけで、聞き取れる歌詞は歌えません。

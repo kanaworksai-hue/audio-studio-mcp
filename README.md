@@ -264,6 +264,12 @@ The full guide is also sent to the client as the server's instructions.
 </details>
 
 <details>
+<summary><b>"Intel Macs are not supported" on an Apple Silicon Mac?</b></summary>
+
+The environment was built with an x86_64 Python (for example an old Intel Homebrew under `/usr/local`) that runs under Rosetta, so MLX was skipped. `install.sh` now asks uv for an arm64 Python and recreates such a `.venv`, so re-running `./install.sh` fixes it. If you set `UV_PYTHON` yourself, point it at an arm64 build: `UV_PYTHON=cpython-3.11-macos-aarch64 ./install.sh`.
+</details>
+
+<details>
 <summary><b>Can it make songs with vocals?</b></summary>
 
 No. Stable Audio 3 generates instrumental music and sound effects. It cannot produce intelligible singing or lyrics.

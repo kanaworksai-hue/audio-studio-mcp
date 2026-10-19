@@ -73,6 +73,8 @@ def download_torch(names: list[str]) -> int:
 
 
 def main(argv: list[str]) -> int:
+    # Windows consoles and pipes may use a legacy code page; never crash on ✓ / →.
+    sys.stdout.reconfigure(errors="replace")
     names = argv or ["medium"]
     if "all" in names:
         names = list(MODELS)

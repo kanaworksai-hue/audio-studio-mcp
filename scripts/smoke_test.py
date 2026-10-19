@@ -82,6 +82,8 @@ async def run(out_dir: Path) -> None:
 
 
 def main() -> None:
+    # Windows consoles and pipes may use a legacy code page; never crash on ✓ / →.
+    sys.stdout.reconfigure(errors="replace")
     ap = argparse.ArgumentParser(description=__doc__.split("\n")[0])
     ap.add_argument("--out", type=Path, help="keep outputs in this folder")
     args = ap.parse_args()

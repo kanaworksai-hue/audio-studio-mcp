@@ -125,7 +125,7 @@ def _audio_seconds(path: Path) -> float:
 def _load_sidecar(path: Path) -> dict | None:
     p = path.with_suffix(path.suffix + ".json")
     try:
-        return json.loads(p.read_text())
+        return json.loads(p.read_text(encoding="utf-8"))
     except Exception:
         return None
 

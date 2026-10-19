@@ -74,7 +74,7 @@ def write(path: Path, audio: np.ndarray, sr: int, fmt: str, ogg_quality: float =
 
 def write_sidecar(audio_path: Path, meta: dict) -> Path:
     p = audio_path.with_suffix(audio_path.suffix + ".json")
-    p.write_text(json.dumps(meta, ensure_ascii=False, indent=2))
+    p.write_text(json.dumps(meta, ensure_ascii=False, indent=2), encoding="utf-8")
     return p
 
 

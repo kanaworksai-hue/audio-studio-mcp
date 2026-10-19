@@ -41,7 +41,7 @@ async def test_generate_writes_wav_and_sidecar(fake):
         audio, sr = post.read(path)
         assert sr == 44100 and audio.shape == (2, 44100)
         assert c["raw_peak_dbfs"] > 0 and c["peak_dbfs"] == pytest.approx(-1.0, abs=0.01)
-        meta = json.loads(Path(c["metadata"]).read_text())
+        meta = json.loads(Path(c["metadata"]).read_text(encoding="utf-8"))
         assert meta["original_idea"] == "ドアがバタンと閉まる"
         assert meta["backend"] == "fake" and meta["model"] == "fake-model"
 
@@ -101,7 +101,7 @@ async def test_process_keeps_source_metadata(fake, tmp_path):
                                      "format": "flac", "sample_rate": 44100})
     assert r["channels"] == 1 and r["format"] == "flac" and r["seconds"] == pytest.approx(1.9, abs=0.01)
     assert r["peak_dbfs"] == pytest.approx(-1.0, abs=0.01)
-    meta = json.loads(Path(r["metadata"]).read_text())
+    meta = json.loads(Path(r["metadata"]).read_text(encoding="utf-8"))
     assert meta["source"]["seed"] == 3
 
 
@@ -205,3 +205,16 @@ async def test_continue_skips_trailing_silence(fake, tmp_path):
     start = fake.requests[-1][1].inpaint_range[0]
     assert 3.4 < start < 3.6, start  # 4 s of sound - 0.5 s overlap, not the 5 s file end
     assert r["region"][0] == round(start, 2)
+
+
+async def test_sidecars_are_utf8_whatever_the_locale(fake):
+    # Windows defaults to a legacy code page (cp1252, cp932, ...) that can't
+    # encode every character a prompt or a processing step may contain.
+    idea = "café ☕ ドアが閉まる — 100 %"
+    r = await call("generate_audio", {"prompt": "door", "duration_seconds": 1, "seed": 1,
+                                      "title": "utf8", "original_idea": idea})
+    gen = Path(r["candidates"][0]["metadata"])
+    assert json.loads(gen.read_bytes().decode("utf-8"))["original_idea"] == idea
+    p = await call("process_audio", {"input_audio": r["candidates"][0]["path"], "sample_rate": 48000})
+    meta = json.loads(Path(p["metadata"]).read_bytes().decode("utf-8"))
+    assert meta["source"]["original_idea"] == idea and any("→" in s for s in meta["steps"])

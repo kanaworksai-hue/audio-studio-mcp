@@ -271,6 +271,12 @@ Windows + RTX 3060 12 GB，medium 模型：
 </details>
 
 <details>
+<summary><b>明明是 Apple Silicon Mac，却提示「Intel Macs are not supported」？</b></summary>
+
+环境是用 Rosetta 下运行的 x86_64 版 Python（例如 `/usr/local` 里旧的 Intel 版 Homebrew）建的，所以没有装上 MLX。现在的 `install.sh` 会让 uv 使用 arm64 的 Python，并重建这样的 `.venv`，重新运行 `./install.sh` 即可。如果你自己设置了 `UV_PYTHON`，请改成 arm64 版：`UV_PYTHON=cpython-3.11-macos-aarch64 ./install.sh`。
+</details>
+
+<details>
 <summary><b>能生成带人声的歌吗？</b></summary>
 
 不能。Stable Audio 3 只生成纯音乐和音效，唱不出能听清的歌词。

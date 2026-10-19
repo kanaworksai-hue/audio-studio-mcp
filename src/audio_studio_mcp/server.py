@@ -4,8 +4,8 @@ Tools: generate_audio, edit_audio (variation / inpaint / continue),
 process_audio (trim, loop, fades, normalize, 48 kHz WAV/OGG/FLAC export; see
 post.py) and unload_models. Every output gets a .json metadata sidecar.
 
-The model runtime is a pluggable backend (backends/); today that is Stable
-Audio 3 on Apple Silicon via MLX. Models load lazily on the first call and are
+The model runtime is a pluggable backend (backends/): Stable Audio 3 on Apple
+Silicon via MLX, or on NVIDIA GPUs (Windows / Linux) via PyTorch. Models load lazily on the first call and are
 freed after AUDIO_STUDIO_IDLE_UNLOAD_MIN minutes without a request (each MCP
 client session spawns its own stdio server, so keeping ~5 GB resident per
 process forever is not an option on a 16 GB Mac).
@@ -125,7 +125,7 @@ def _audio_seconds(path: Path) -> float:
 def _load_sidecar(path: Path) -> dict | None:
     p = path.with_suffix(path.suffix + ".json")
     try:
-        return json.loads(p.read_text())
+        return json.loads(p.read_text(encoding="utf-8"))
     except Exception:
         return None
 

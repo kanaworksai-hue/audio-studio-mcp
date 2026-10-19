@@ -5,6 +5,7 @@
 <p>
   <a href="LICENSE"><img alt="License: MIT" src="https://img.shields.io/badge/license-MIT-6b4dff?style=flat-square"></a>
   <img alt="macOS Apple Silicon" src="https://img.shields.io/badge/macOS-Apple_Silicon-111?style=flat-square&logo=apple">
+  <img alt="Windows NVIDIA GPU" src="https://img.shields.io/badge/Windows-NVIDIA_GPU-76b900?style=flat-square&logo=nvidia&logoColor=white">
   <a href="https://modelcontextprotocol.io"><img alt="MCP server" src="https://img.shields.io/badge/MCP-server-19b8d6?style=flat-square"></a>
   <img alt="Python 3.10 to 3.13" src="https://img.shields.io/badge/python-3.10–3.13-3776ab?style=flat-square&logo=python&logoColor=white">
   <a href="https://github.com/kanaworksai-hue/audio-studio-mcp/actions/workflows/tests.yml"><img alt="Tests" src="https://img.shields.io/github/actions/workflow/status/kanaworksai-hue/audio-studio-mcp/tests.yml?style=flat-square&label=tests"></a>
@@ -19,7 +20,7 @@
 
 </div>
 
-**Audio Studio MCP** は、Claude Code、Claude Desktop、Cursor など任意の [MCP](https://modelcontextprotocol.io) クライアントに、自分の Mac で動くサウンドスタジオを追加します。BGM や効果音を普通の言葉で頼むと、[Stable Audio 3](https://github.com/Stability-AI/stable-audio-3) がローカルで生成します。さらにループ化やラウドネス調整をして、ゲームエンジンや動画編集ソフト向けに書き出せます。クラウドサービスも API キーも不要で、生成にお金はかかりません。
+**Audio Studio MCP** は、Claude Code、Claude Desktop、Cursor など任意の [MCP](https://modelcontextprotocol.io) クライアントに、自分の Mac や Windows PC で動くサウンドスタジオを追加します。BGM や効果音を普通の言葉で頼むと、[Stable Audio 3](https://github.com/Stability-AI/stable-audio-3) がローカルで生成します。さらにループ化やラウドネス調整をして、ゲームエンジンや動画編集ソフト向けに書き出せます。クラウドサービスも API キーも不要で、生成にお金はかかりません。
 
 <p align="center">
   <img src="docs/assets/demo-ja.png" alt="実際の Claude Code セッション：1 回の依頼で lo-fi BGM を 2 候補作り、Godot 用のシームレスループ OGG を書き出す" width="820">
@@ -33,13 +34,13 @@
 <td align="center" width="25%"><img src="docs/assets/icon-generate.png" width="72" alt=""><br><b>生成</b><br><sub>1 文から BGM、楽器ループ、効果音を生成。1 回で 1〜4 候補</sub></td>
 <td align="center" width="25%"><img src="docs/assets/icon-edit.png" width="72" alt=""><br><b>編集</b><br><sub>全体のスタイル変換、指定区間の再生成、曲の延長</sub></td>
 <td align="center" width="25%"><img src="docs/assets/icon-process.png" width="72" alt=""><br><b>仕上げ</b><br><sub>シームレスループ、フェード、ラウドネス（LUFS）、48 kHz WAV / OGG / FLAC</sub></td>
-<td align="center" width="25%"><img src="docs/assets/icon-local.png" width="72" alt=""><br><b>ローカル</b><br><sub>Apple Silicon 上で MLX により動作。アカウント登録もアップロードも不要</sub></td>
+<td align="center" width="25%"><img src="docs/assets/icon-local.png" width="72" alt=""><br><b>ローカル</b><br><sub>Apple Silicon（MLX）または NVIDIA GPU（PyTorch）で動作。何もアップロードしません</sub></td>
 </tr>
 </table>
 
 - **再現できる：** すべてのファイルに、プロンプト・シード・設定を記録した `.json` が付きます。
 - **プロンプト作りも任せられる：** サーバーが公式の Stable Audio 3 プロンプト形式をクライアントに伝えるので、「きしむドアの音」のような頼み方でも、モデルが理解できるプロンプトに書き換えられます。
-- **公式と同じ出力：** 同じシードなら、公式の `sa3` CLI とビット単位で同じ結果になります。
+- **公式と同じ出力：** Mac では、同じシードなら公式の `sa3` CLI とビット単位で同じ結果になります。Windows では公式の Stable Audio 3 PyTorch API をそのまま呼び出します。
 
 ## 🎧 サンプル
 
@@ -62,11 +63,13 @@ MP3 は [`docs/samples/`](docs/samples) に、プロンプトとシードは [`s
 flowchart LR
     U["あなた<br/>「カフェの BGM を作って」"] --> C["Claude Code · Desktop<br/>Cursor · 任意の MCP クライアント"]
     C -- "MCP" --> S["audio-studio-mcp<br/>生成 · 編集 · 仕上げ"]
-    S --> M["Stable Audio 3<br/>Apple Silicon 上の MLX"]
+    S --> M["Stable Audio 3<br/>Apple Silicon 上の MLX<br/>NVIDIA GPU 上の PyTorch"]
     M --> F["WAV / OGG / FLAC + .json<br/>ゲームや動画にそのまま"]
 ```
 
 ## 🚀 クイックスタート
+
+### macOS（Apple Silicon）
 
 **動作要件：**
 
@@ -93,6 +96,29 @@ cd audio-studio-mcp
 claude mcp add --scope user audio-studio -- /path/to/audio-studio-mcp/.venv/bin/audio-studio-mcp
 ```
 
+### Windows（NVIDIA GPU）
+
+**動作要件：**
+
+- 64 ビット版 Windows 10 / 11、NVIDIA GPU（VRAM 8 GB 以上）と新しめのドライバー。RTX 3060 12 GB で動作確認済み
+- モデルと PyTorch 用に約 14 GB のディスク容量
+- `git`（`winget install Git.Git`）と [`ffmpeg`](https://ffmpeg.org)（`winget install Gyan.FFmpeg`）
+- 無料の [Hugging Face](https://huggingface.co) アカウント。PyTorch 版の重みは利用規約への同意が必要です。[stabilityai/stable-audio-3-medium](https://huggingface.co/stabilityai/stable-audio-3-medium) を開き、一度ライセンスに同意してください
+
+```powershell
+git clone https://github.com/kanaworksai-hue/audio-studio-mcp.git
+cd audio-studio-mcp
+powershell -ExecutionPolicy Bypass -File install.ps1
+```
+
+インストーラーの流れは macOS と同じですが、CUDA 版の PyTorch を導入し、**medium** モデルの公式 PyTorch 版の重み（約 10.4 GB）をダウンロードします。Hugging Face にまだログインしていない場合は、read 権限のアクセストークンを貼り付けるよう求められます（[ここで作成](https://huggingface.co/settings/tokens)）。最後に登録用のコマンドが表示されます：
+
+```powershell
+claude mcp add --scope user audio-studio -- "C:\path\to\audio-studio-mcp\.venv\Scripts\audio-studio-mcp.exe"
+```
+
+Flash Attention は不要です。入っていない場合、ランタイムは PyTorch 標準のアテンションを使います。
+
 <details>
 <summary><b>Claude Desktop、Cursor などのクライアント</b></summary>
 
@@ -107,18 +133,20 @@ claude mcp add --scope user audio-studio -- /path/to/audio-studio-mcp/.venv/bin/
   }
 }
 ```
+
+Windows では command を `C:\\path\\to\\audio-studio-mcp\\.venv\\Scripts\\audio-studio-mcp.exe` にします（JSON ではバックスラッシュを 2 つ重ねます）。
 </details>
 
 <details>
 <summary><b>インストーラーのオプション</b></summary>
 
-| オプション | 内容 |
-|---|---|
-| `--model all` | 小型で高速な `sm-music` と `sm-sfx` モデルも取得（+2.6 GB） |
-| `--skip-weights` | 今はダウンロードせず、最初の生成時にダウンロード |
-| `-y` | 確認なしで `uv` を導入 |
+| macOS | Windows | 内容 |
+|---|---|---|
+| `--model all` | `-Model all` | 小型で高速な `sm-music` と `sm-sfx` モデルも取得（macOS は +2.6 GB、Windows は +7 GB） |
+| `--skip-weights` | `-SkipWeights` | 今はダウンロードせず、最初の生成時にダウンロード |
+| `-y` | `-Yes` | 確認なしで `uv` を導入 |
 
-ダウンロードにログインは不要です。`hf auth login` でログインすると、Hugging Face の速度制限が緩くなります。
+macOS ではダウンロードにログインは不要で、`hf auth login` でログインすると Hugging Face の速度制限が緩くなります。Windows の PyTorch 版の重みは、ダウンロードするモデルごとにページでライセンスに同意し（[medium](https://huggingface.co/stabilityai/stable-audio-3-medium)、[small-music](https://huggingface.co/stabilityai/stable-audio-3-small-music)、[small-sfx](https://huggingface.co/stabilityai/stable-audio-3-small-sfx)）、ログインしておく必要があります。
 </details>
 
 > [!TIP]
@@ -162,9 +190,10 @@ claude mcp add --scope user audio-studio -- /path/to/audio-studio-mcp/.venv/bin/
 | `AUDIO_STUDIO_OUTPUT_DIR` | `<repo>/outputs` | 音声の出力先 |
 | `AUDIO_STUDIO_IDLE_UNLOAD_MIN` | `10` | 何分使われなかったらモデルを解放するか（`0` = 解放しない） |
 | `AUDIO_STUDIO_SA3_MODEL` | `medium` | `medium`（最高品質、最長 380 秒）、`sm-music` または `sm-sfx`（小型・高速、最長 120 秒） |
-| `AUDIO_STUDIO_MLX_CACHE_GB` | `1` | MLX のバッファキャッシュ上限。設定しないと、長い曲の生成後に約 6 GB 余分に残ることがあります |
+| `AUDIO_STUDIO_MLX_CACHE_GB` | `1` | macOS：MLX のバッファキャッシュ上限。設定しないと、長い曲の生成後に約 6 GB 余分に残ることがあります |
+| `AUDIO_STUDIO_DEVICE` | CUDA があれば `cuda` | Windows/Linux：PyTorch のデバイス。`cuda`、`cuda:1`、`cpu` など |
 | `AUDIO_STUDIO_SA3_DIR` | `<repo>/vendor/stable-audio-3` | 別の stable-audio-3 チェックアウトを使う |
-| `AUDIO_STUDIO_BACKEND` | `auto` | `auto` または `sa3-mlx` |
+| `AUDIO_STUDIO_BACKEND` | `auto` | `auto`、`sa3-mlx`（Apple Silicon）、`sa3-torch`（PyTorch、NVIDIA） |
 | `AUDIO_STUDIO_FFMPEG` | `PATH` 上の `ffmpeg` | ffmpeg のパス |
 
 `claude mcp add ... -e 名前=値` で渡すか、クライアント設定の `env` に書きます。
@@ -179,6 +208,8 @@ claude mcp add --scope user audio-studio -- /path/to/audio-studio-mcp/.venv/bin/
 .venv/bin/audio-studio-mcp --http 8765 --preload
 claude mcp add --scope user --transport http audio-studio http://127.0.0.1:8765/mcp
 ```
+
+Windows では `.venv\Scripts\audio-studio-mcp.exe --http 8765 --preload` で起動します。
 </details>
 
 ## ⚡ パフォーマンス
@@ -192,7 +223,17 @@ M1 Mac 16 GB、medium モデル：
 | 35 秒まで延長（エンコーダーの初回読み込みを含む） | 約 27 秒 |
 | `sm-music` でウォーム、15 秒の音楽 | 約 1 秒 |
 
-モデルを読み込んでいる間は約 5〜7 GB のメモリを使います。アイドル時間の経過、または `unload_models` で解放されます。
+Windows + RTX 3060 12 GB、medium モデル：
+
+| 内容 | 所要時間 |
+|---|---|
+| コールドスタート、3 秒の効果音 × 2（約 20 秒のモデル読み込みを含む） | 約 25 秒 |
+| ウォーム、20 秒の音楽 | 約 1.3 秒 |
+| ウォーム、30 秒まで延長 | 約 2.2 秒 |
+| ウォーム、380 秒の音楽（最大） | 約 15 秒 |
+| `sm-music` でウォーム、15 秒の音楽 | 約 0.7 秒 |
+
+Mac ではモデルを読み込んでいる間、約 5〜7 GB のメモリを使います。RTX 3060 では medium モデルの VRAM 使用量のピークが約 5.3 GB でした。アイドル時間の経過、または `unload_models` で解放されます。
 
 ## 📝 プロンプトのコツ
 
@@ -217,7 +258,11 @@ M1 Mac 16 GB、medium モデル：
 <details>
 <summary><b>Windows、Linux、Intel Mac で動きますか？</b></summary>
 
-まだ動きません。現在は Apple Silicon Mac が必要です。モデルの実行部分はバックエンドとして分離してあり、NVIDIA GPU 向けの Windows バックエンドを予定しています。
+**Windows：** NVIDIA GPU があれば動きます。[クイックスタート](#windowsnvidia-gpu)を参照してください。
+
+**Linux：** NVIDIA GPU なら同じ PyTorch バックエンドで動くはずですが、未テストで、インストーラーもまだありません。上流のランタイムを `vendor/stable-audio-3` に（`install.sh` で固定しているコミットで）clone し、`uv sync --extra cuda` と `hf auth login` を実行してください。
+
+**Intel Mac と AMD GPU** には対応していません。
 </details>
 
 <details>
@@ -247,7 +292,7 @@ M1 Mac 16 GB、medium モデル：
 ## 🗺️ ロードマップ
 
 - [x] Apple Silicon バックエンド（Stable Audio 3、MLX）
-- [ ] NVIDIA GPU 向けの Windows バックエンド
+- [x] NVIDIA GPU 向けの Windows バックエンド（Stable Audio 3、PyTorch）
 - [ ] LoRA 対応（上流のランタイムは対応済み）
 
 Issue やプルリクエストを歓迎します。
@@ -257,7 +302,7 @@ Issue やプルリクエストを歓迎します。
 Audio Studio で作った音を実際に使ってもらえたなら、[リポジトリページ](https://github.com/kanaworksai-hue/audio-studio-mcp)上部の **⭐ Star** を押してもらえるとうれしいです。無料で 1 秒で終わりますが、効果は見た目以上です：
 
 - **もっと多くの人に届きます。** Star が増えるほど GitHub 上で見つけてもらいやすくなり、ゲームや動画を作る人に広がります。
-- **更新の励みになります。** Star は「使っている人がいる」という何よりのサインです。次のアップデート（Windows バックエンドや LoRA 対応など）を進める力になります。
+- **更新の励みになります。** Star は「使っている人がいる」という何よりのサインです。次のアップデート（LoRA 対応など）を進める力になります。
 
 ほかの応援方法：不具合やアイデアは [Issue](https://github.com/kanaworksai-hue/audio-studio-mcp/issues) へどうぞ。作った音を X でシェアして [@KanaWorks_AI](https://x.com/KanaWorks_AI) を付けてもらえるのも大歓迎です。
 
@@ -265,8 +310,10 @@ Audio Studio で作った音を実際に使ってもらえたなら、[リポジ
 
 ```bash
 uv run pytest                              # オフラインテスト（モデル不要）
-.venv/bin/python scripts/smoke_test.py     # 実モデルでのエンドツーエンドテスト（約 30 秒）
+.venv/bin/python scripts/smoke_test.py     # 実モデルでのエンドツーエンドテスト（M1 で約 30 秒）
 ```
+
+Windows では `.venv\Scripts\python scripts\smoke_test.py`（RTX 3060 で約 45 秒、モデル読み込みを含む）。
 
 ```
 src/audio_studio_mcp/
@@ -274,7 +321,8 @@ src/audio_studio_mcp/
   prompts.py           プロンプトの組み立てと、クライアントに送る説明
   post.py              後処理と書き出し
   backends/base.py     バックエンドのインターフェース
-  backends/sa3_mlx.py  Apple Silicon 上の Stable Audio 3
+  backends/sa3_mlx.py  Apple Silicon 上の Stable Audio 3（MLX）
+  backends/sa3_torch.py  NVIDIA GPU 上の Stable Audio 3（PyTorch）
 ```
 
 新しいプラットフォームは、`backends/` にバックエンドとして追加します。
@@ -283,11 +331,11 @@ src/audio_studio_mcp/
 
 - **このプロジェクト：** [MIT](LICENSE)
 - **Stable Audio 3 ランタイム：** インストール時に `vendor/` へダウンロードされます。© Stability AI、MIT ライセンスです。
-- **モデルの重み：** [Stability AI Community License](https://huggingface.co/stabilityai/stable-audio-3-optimized) が適用されます。重みは Hugging Face からダウンロードされ、本プロジェクトでは配布していません。
+- **モデルの重み：** [Stability AI Community License](https://huggingface.co/stabilityai/stable-audio-3-optimized) が適用されます。重みは Hugging Face からダウンロードされ（macOS：`stable-audio-3-optimized`、Windows：`stable-audio-3-medium` と小型モデル）、本プロジェクトでは配布していません。
 - **ブランド：** KanaWorks_AI の名称、ロゴ、Kana のキャラクターの権利は KanaWorks_AI に帰属し、MIT ライセンスの対象**外**です。詳しくは [docs/brand](docs/brand/README.md) を参照してください。
-- **使用している技術：** [Stable Audio 3](https://github.com/Stability-AI/stable-audio-3)、[MLX](https://github.com/ml-explore/mlx)、[Model Context Protocol](https://modelcontextprotocol.io)
+- **使用している技術：** [Stable Audio 3](https://github.com/Stability-AI/stable-audio-3)、[MLX](https://github.com/ml-explore/mlx)、[PyTorch](https://pytorch.org)、[Model Context Protocol](https://modelcontextprotocol.io)
 
-本プロジェクトは独立したプロジェクトであり、Stability AI、Apple、Anthropic とは関係がなく、その承認も受けていません。
+本プロジェクトは独立したプロジェクトであり、Stability AI、Apple、NVIDIA、Anthropic とは関係がなく、その承認も受けていません。
 
 <br>
 

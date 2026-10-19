@@ -7,10 +7,11 @@ license = "MIT"
 license-files = ["LICENSE"]
 authors = [{ name = "kanaworksai-hue" }]
 requires-python = ">=3.10"
-keywords = ["mcp", "stable-audio", "audio-generation", "sound-effects", "bgm", "mlx"]
+keywords = ["mcp", "stable-audio", "audio-generation", "sound-effects", "bgm", "mlx", "cuda"]
 classifiers = [
     "Programming Language :: Python :: 3",
     "Operating System :: MacOS",
+    "Operating System :: Microsoft :: Windows",
     "Topic :: Multimedia :: Sound/Audio",
 ]
 dependencies = [
@@ -28,6 +29,19 @@ mlx = [
     "huggingface_hub>=0.20",
     "pillow>=10.0",
 ]
+# Stable Audio 3 on Windows / Linux with an NVIDIA GPU (the official PyTorch
+# runtime, cloned by install.ps1 / install.sh). Versions follow upstream's pins.
+cuda = [
+    "torch==2.7.1; sys_platform != 'darwin'",
+    "torchaudio==2.7.1; sys_platform != 'darwin'",
+    "einops>=0.8.2; sys_platform != 'darwin'",
+    "einops-exts>=0.0.4; sys_platform != 'darwin'",
+    "packaging>=24; sys_platform != 'darwin'",
+    "safetensors>=0.7.0; sys_platform != 'darwin'",
+    "tqdm>=4.67; sys_platform != 'darwin'",
+    "huggingface-hub>=1.7.1; sys_platform != 'darwin'",
+    "transformers>=5.8.0; sys_platform != 'darwin'",
+]
 
 [project.scripts]
 audio-studio-mcp = "audio_studio_mcp.server:main"
@@ -35,6 +49,16 @@ audio-studio-mcp = "audio_studio_mcp.server:main"
 [project.urls]
 Homepage = "https://github.com/kanaworksai-hue/audio-studio-mcp"
 Issues = "https://github.com/kanaworksai-hue/audio-studio-mcp/issues"
+
+# CUDA 12.6 wheels of torch (upstream's default). macOS never installs them.
+[[tool.uv.index]]
+name = "pytorch-cu126"
+url = "https://download.pytorch.org/whl/cu126"
+explicit = true
+
+[tool.uv.sources]
+torch = [{ index = "pytorch-cu126", marker = "sys_platform == 'win32' or (sys_platform == 'linux' and platform_machine == 'x86_64')" }]
+torchaudio = [{ index = "pytorch-cu126", marker = "sys_platform == 'win32' or (sys_platform == 'linux' and platform_machine == 'x86_64')" }]
 
 [dependency-groups]
 dev = ["pytest>=8"]

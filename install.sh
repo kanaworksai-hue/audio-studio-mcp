@@ -121,7 +121,8 @@ step "Installing Python dependencies into .venv"
 # (e.g. an old Intel Homebrew under /usr/local), which runs under Rosetta and
 # silently skips mlx. A UV_PYTHON set by the user wins.
 if [[ -n "${UV_PYTHON:-}" ]]; then
-    (cd "$REPO_DIR" && uv sync --extra mlx)
+    (cd "$REPO_DIR" && uv sync --extra mlx) \
+        || die "uv sync failed with UV_PYTHON=$UV_PYTHON. On Apple Silicon this must be an arm64 Python: unset UV_PYTHON or set it to cpython-3.11-macos-aarch64, then re-run ./install.sh."
 else
     if [[ -e "$REPO_DIR/.venv" ]] \
           && [[ "$("$REPO_DIR/.venv/bin/python" -c 'import platform; print(platform.machine())' 2>/dev/null || true)" != "arm64" ]]; then

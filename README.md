@@ -267,7 +267,7 @@ No. Stable Audio 3 generates instrumental music and sound effects. It cannot pro
 <details>
 <summary><b>Can I use the generated audio commercially?</b></summary>
 
-The code here is MIT. The model weights are under the [Stability AI Community License](https://huggingface.co/stabilityai/stable-audio-3-optimized), which sets the terms for the model and what it generates. Read it before commercial use. At the time of writing it allows commercial use for individuals and organizations with less than US$1M in annual revenue.
+The code here is MIT. The model weights are under the [Stability AI Community License](https://huggingface.co/stabilityai/stable-audio-3-optimized), which sets the terms for the model and what it generates. Read it before commercial use. At the time of writing it allows commercial use for individuals and organizations with less than US$1M in total annual revenue.
 </details>
 
 <details>
@@ -325,7 +325,7 @@ A new platform is added as another backend in `backends/`.
 - **This project:** [MIT](LICENSE).
 - **Stable Audio 3 runtime:** downloaded into `vendor/` at install time. It is © Stability AI and MIT-licensed.
 - **Model weights:** licensed under the [Stability AI Community License](https://huggingface.co/stabilityai/stable-audio-3-optimized). They are downloaded from Hugging Face (macOS: `stable-audio-3-optimized`; Windows: `stable-audio-3-medium` and the small models), not distributed here.
-- **Brand:** the KanaWorks_AI name, logo and the Kana character are © KanaWorks_AI and are **not** covered by the MIT license. See [docs/brand](docs/brand/README.md).
+- **Brand:** the KanaWorks_AI name, logo and the Kana character are © 東京AI映像合同会社 (Tokyo AI Visuals LLC) and are **not** covered by the MIT license. See [docs/brand](docs/brand/README.md).
 - **Built on:** [Stable Audio 3](https://github.com/Stability-AI/stable-audio-3), [MLX](https://github.com/ml-explore/mlx), [PyTorch](https://pytorch.org) and the [Model Context Protocol](https://modelcontextprotocol.io).
 
 This is an independent project. It is not affiliated with or endorsed by Stability AI, Apple, NVIDIA or Anthropic.

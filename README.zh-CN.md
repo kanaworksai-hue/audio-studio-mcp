@@ -274,7 +274,7 @@ Windows + RTX 3060 12 GB，medium 模型：
 <details>
 <summary><b>生成的音频可以商用吗？</b></summary>
 
-本项目代码是 MIT 协议。模型权重适用 [Stability AI Community License](https://huggingface.co/stabilityai/stable-audio-3-optimized)，模型和生成内容的使用条件由它规定，商用前请先阅读。截至本文撰写时，该许可证允许个人和年收入低于 100 万美元的组织商用。
+本项目代码是 MIT 协议。模型权重适用 [Stability AI Community License](https://huggingface.co/stabilityai/stable-audio-3-optimized)，模型和生成内容的使用条件由它规定，商用前请先阅读。截至本文撰写时，该许可证允许年收入低于 100 万美元的个人和组织商用。
 </details>
 
 <details>
@@ -332,7 +332,7 @@ src/audio_studio_mcp/
 - **本项目：** [MIT](LICENSE)。
 - **Stable Audio 3 运行时：** 安装时下载到 `vendor/`，© Stability AI，MIT 协议。
 - **模型权重：** 适用 [Stability AI Community License](https://huggingface.co/stabilityai/stable-audio-3-optimized)。权重从 Hugging Face 下载（macOS：`stable-audio-3-optimized`；Windows：`stable-audio-3-medium` 及小模型），本项目不分发。
-- **品牌：** KanaWorks_AI 名称、logo 和 Kana 形象版权归 KanaWorks_AI 所有，**不在** MIT 授权范围内。详见 [docs/brand](docs/brand/README.md)。
+- **品牌：** KanaWorks_AI 名称、logo 和 Kana 形象版权归东京AI映像合同会社所有，**不在** MIT 授权范围内。详见 [docs/brand](docs/brand/README.md)。
 - **基于：** [Stable Audio 3](https://github.com/Stability-AI/stable-audio-3)、[MLX](https://github.com/ml-explore/mlx)、[PyTorch](https://pytorch.org) 和 [Model Context Protocol](https://modelcontextprotocol.io)。
 
 本项目是独立项目，与 Stability AI、Apple、NVIDIA、Anthropic 都没有关联，也未获其背书。

@@ -274,7 +274,7 @@ Mac ではモデルを読み込んでいる間、約 5〜7 GB のメモリを使
 <details>
 <summary><b>生成した音声は商用利用できますか？</b></summary>
 
-このプロジェクトのコードは MIT ライセンスです。モデルの重みには [Stability AI Community License](https://huggingface.co/stabilityai/stable-audio-3-optimized) が適用され、モデルと生成物の利用条件はこのライセンスで決まります。商用利用の前に必ず確認してください。執筆時点では、個人および年間売上 100 万米ドル未満の組織による商用利用が認められています。
+このプロジェクトのコードは MIT ライセンスです。モデルの重みには [Stability AI Community License](https://huggingface.co/stabilityai/stable-audio-3-optimized) が適用され、モデルと生成物の利用条件はこのライセンスで決まります。商用利用の前に必ず確認してください。執筆時点では、年間収益 100 万米ドル未満の個人・組織による商用利用が認められています。
 </details>
 
 <details>
@@ -332,7 +332,7 @@ src/audio_studio_mcp/
 - **このプロジェクト：** [MIT](LICENSE)
 - **Stable Audio 3 ランタイム：** インストール時に `vendor/` へダウンロードされます。© Stability AI、MIT ライセンスです。
 - **モデルの重み：** [Stability AI Community License](https://huggingface.co/stabilityai/stable-audio-3-optimized) が適用されます。重みは Hugging Face からダウンロードされ（macOS：`stable-audio-3-optimized`、Windows：`stable-audio-3-medium` と小型モデル）、本プロジェクトでは配布していません。
-- **ブランド：** KanaWorks_AI の名称、ロゴ、Kana のキャラクターの権利は KanaWorks_AI に帰属し、MIT ライセンスの対象**外**です。詳しくは [docs/brand](docs/brand/README.md) を参照してください。
+- **ブランド：** KanaWorks_AI の名称、ロゴ、Kana のキャラクターの権利は東京AI映像合同会社に帰属し、MIT ライセンスの対象**外**です。詳しくは [docs/brand](docs/brand/README.md) を参照してください。
 - **使用している技術：** [Stable Audio 3](https://github.com/Stability-AI/stable-audio-3)、[MLX](https://github.com/ml-explore/mlx)、[PyTorch](https://pytorch.org)、[Model Context Protocol](https://modelcontextprotocol.io)
 
 本プロジェクトは独立したプロジェクトであり、Stability AI、Apple、NVIDIA、Anthropic とは関係がなく、その承認も受けていません。

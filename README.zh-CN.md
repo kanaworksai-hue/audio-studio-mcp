@@ -111,7 +111,7 @@ cd audio-studio-mcp
 powershell -ExecutionPolicy Bypass -File install.ps1
 ```
 
-安装脚本的步骤和 macOS 相同，区别是会安装带 CUDA 的 PyTorch，并下载 **medium** 模型的官方 PyTorch 权重（约 10.4 GB）。如果还没登录 Hugging Face，它会让你粘贴一个 read 权限的 access token（[在这里创建](https://huggingface.co/settings/tokens)）。最后同样会打印注册命令：
+安装脚本的步骤和 macOS 相同，区别是会安装带 CUDA 的 PyTorch，并下载 **medium** 模型的官方 PyTorch 权重（约 10.4 GB）。如果还没登录 Hugging Face，它会让你粘贴一个 read 权限的 access token（[在这里创建](https://huggingface.co/settings/tokens)）。在没有控制台的环境里（例如由 AI agent 运行），它不会等待输入，而是打印登录步骤后停止；登录后重新运行即可。最后同样会打印注册命令：
 
 ```powershell
 claude mcp add --scope user audio-studio -- "C:\path\to\audio-studio-mcp\.venv\Scripts\audio-studio-mcp.exe"
@@ -151,7 +151,12 @@ macOS 上下载不需要登录，用 `hf auth login` 登录后 Hugging Face 的�
 
 > [!TIP]
 > **让 AI 帮你装。** 把这句话贴给 Claude Code：
-> *“按照 https://github.com/kanaworksai-hue/audio-studio-mcp 的 README 安装它，并注册成 MCP 服务器。”*
+> *“按照 https://github.com/kanaworksai-hue/audio-studio-mcp 的 README（包括写给 AI agent 的说明）安装它，并注册成 MCP 服务器。”*
+>
+> **写给 AI agent 的说明（仅 Windows；macOS 不需要登录）：** 权重需要同意许可，必须用用户本人的 Hugging Face 账号登录。
+> - 下载权重前先用 `hf auth whoami` 检查登录状态（安装脚本运行过一次后用 `.venv\Scripts\hf.exe auth whoami`）。`install.ps1` 也会检查，未登录时会打印 `ACTION NEEDED` 并停止。
+> - 如果未登录，或下载因 401/403 失败（没同意许可，或用别的账号同意的），请停下来，把安装脚本打印的步骤转告用户：注册免费账号、在每个模型页面同意许可、在用户自己的终端里运行 `hf auth login`。等用户说完成后，再重新运行安装脚本。
+> - 不要让用户把 token 贴到聊天里，也不要用 `-SkipWeights` 绕过去：之后生成时会因为同样的错误失败。
 
 然后直接提要求就行：
 

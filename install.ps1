@@ -6,6 +6,8 @@ Audio Studio MCP installer (Windows + NVIDIA GPU).
   3. creates .venv\ and installs dependencies (uv sync --extra cuda)
   4. downloads model weights from Hugging Face (medium: ~10.4 GB). The model
      repos are gated: accept the license on the model page and log in once.
+     Without a console (e.g. run by an AI agent) it never asks for a token:
+     it prints the steps for the user and stops until they have logged in.
   5. prints the command that registers the server with Claude Code
 
 Usage (from the repo folder):
@@ -13,12 +15,14 @@ Usage (from the repo folder):
   powershell -ExecutionPolicy Bypass -File install.ps1 -Model all      # medium + sm-music + sm-sfx
   powershell -ExecutionPolicy Bypass -File install.ps1 -SkipWeights    # weights download on first use instead
   powershell -ExecutionPolicy Bypass -File install.ps1 -Yes            # don't ask before installing uv
+  powershell -ExecutionPolicy Bypass -File install.ps1 -NonInteractive # never prompt (or AUDIO_STUDIO_NONINTERACTIVE=1)
 #>
 [CmdletBinding()]
 param(
     [string]$Model = "medium",
     [switch]$SkipWeights,
     [Alias("y")][switch]$Yes,
+    [switch]$NonInteractive,
     [switch]$Help
 )
 
@@ -46,6 +50,10 @@ function Die($msg)  { Write-Host "error: " -ForegroundColor Red -NoNewline; Writ
 function Have($cmd) { return [bool](Get-Command $cmd -ErrorAction SilentlyContinue) }
 # Stop if the last native command failed.
 function Check($what) { if ($LASTEXITCODE -ne 0) { Die "$what failed (exit code $LASTEXITCODE)" } }
+
+# Nobody can type a token when stdin is redirected (an AI agent's shell, CI, a pipe).
+$Interactive = -not ($NonInteractive -or $env:AUDIO_STUDIO_NONINTERACTIVE -or
+    [Console]::IsInputRedirected -or -not [Environment]::UserInteractive)
 
 $Models = @($Model -split "[,\s]+" | Where-Object { $_ })
 foreach ($m in $Models) {
@@ -139,23 +147,61 @@ if ($cuda) { Ok ".venv ready (CUDA: $cuda)" } else { Ok ".venv ready"; Warn "PyT
 # -- weights ------------------------------------------------------------------
 $env:PYTHONIOENCODING = "utf-8"
 $Hf = Join-Path $RepoDir ".venv\Scripts\hf.exe"
+$repos = @{ "medium" = "stable-audio-3-medium"; "sm-music" = "stable-audio-3-small-music"; "sm-sfx" = "stable-audio-3-small-sfx" }
+if ($Models -contains "all") { $names = @("medium", "sm-music", "sm-sfx") } else { $names = $Models }
+
+# The one-time Hugging Face setup, worded so an AI agent can pass it on as is.
+function HfSteps {
+    Write-Host "  1. Create a free Hugging Face account (skip if you have one):"
+    Write-Host "       https://huggingface.co/join"
+    Write-Host "  2. Log in on huggingface.co, open each model page below and accept the"
+    Write-Host "     Stability AI Community License (fill in the short form and submit):"
+    foreach ($n in $names) { Write-Host "       https://huggingface.co/stabilityai/$($repos[$n])" }
+    Write-Host "  3. Create an access token with Read permission:"
+    Write-Host "       https://huggingface.co/settings/tokens"
+    Write-Host "     Then, in your own PowerShell window (not in a chat), run this and paste the token:"
+    Write-Host "       & `"$Hf`" auth login"
+    Write-Host "     Use the same account as in step 2. Never paste the token into a chat."
+    Write-Host "  4. Run the installer again; it picks up where it stopped:"
+    Write-Host "       powershell -ExecutionPolicy Bypass -File `"$PSCommandPath`""
+}
+
 if ($SkipWeights) {
     Step "Skipping weights"
     Warn "the first generation will download them (medium: ~10.4 GB) and can take a long time."
-    Warn "The model repos are gated: accept the license and run '$Hf auth login' first."
+    Warn "The model repos are gated: generation fails with 401/403 until you have done this once:"
+    HfSteps
 } else {
-    $repos = @{ "medium" = "stable-audio-3-medium"; "sm-music" = "stable-audio-3-small-music"; "sm-sfx" = "stable-audio-3-small-sfx" }
-    if ($Models -contains "all") { $names = @("medium", "sm-music", "sm-sfx") } else { $names = $Models }
     Step "Downloading model weights: $($names -join ', ')"
     Write-Host "  The weights are licensed under the Stability AI Community License and the repos are"
     Write-Host "  gated. If you have not yet, open each page, log in and accept the license:"
     foreach ($n in $names) { Write-Host "    https://huggingface.co/stabilityai/$($repos[$n])" }
     & $Hf auth whoami *> $null
     if ($LASTEXITCODE -ne 0) {
+        if (-not $Interactive) {
+            Write-Host ""
+            Write-Host "ACTION NEEDED: log in to Hugging Face" -ForegroundColor Yellow
+            Write-Host "  The installer is running without a console (for example, an AI agent started it)"
+            Write-Host "  and this computer is not logged in to Hugging Face, so it cannot download the"
+            Write-Host "  model weights. Do this once:"
+            Write-Host ""
+            HfSteps
+            Write-Host ""
+            Write-Host "  AI agents: stop here and pass these steps on to the user. Wait until they say"
+            Write-Host "  they have logged in, check with  & `"$Hf`" auth whoami  and re-run the installer."
+            Write-Host "  Do not ask for the token in the chat, and do not re-run with -SkipWeights to get"
+            Write-Host "  past this: generation would then fail with the same error."
+            Write-Host ""
+            Die "not logged in to Hugging Face (see the steps above)."
+        }
         Write-Host "  Then paste a Hugging Face access token (read) below:"
         Write-Host "    https://huggingface.co/settings/tokens"
         & $Hf auth login
-        if ($LASTEXITCODE -ne 0) { Die "Hugging Face login failed; re-run the installer or use -SkipWeights." }
+        if ($LASTEXITCODE -ne 0) {
+            Write-Host ""
+            HfSteps
+            Die "Hugging Face login failed (see the steps above)."
+        }
     }
     $env:AUDIO_STUDIO_SA3_DIR = $UpstreamDir
     & $Py (Join-Path $RepoDir "scripts\download_weights.py") @names

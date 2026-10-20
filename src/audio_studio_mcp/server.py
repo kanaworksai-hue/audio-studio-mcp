@@ -31,7 +31,7 @@ from typing import Annotated, Literal
 import numpy as np
 from mcp.server.mcpserver import MCPServer
 from mcp.server.mcpserver.exceptions import ToolError
-from pydantic import Field
+from pydantic import AliasChoices, Field
 
 from . import post
 from .backends import Backend, GenerationRequest, create_backend
@@ -192,13 +192,15 @@ _Seed = Annotated[int | None, Field(ge=-1, le=2**31 - 5, description="Base seed 
 _Title = Annotated[str | None, Field(description="Short name; used as the file name and stored in metadata. Auto-named if omitted.")]
 _Idea = Annotated[str, Field(description="The user's original request, verbatim and in their language. Stored in metadata only.")]
 _Ceiling = Annotated[float | None, Field(ge=-24, le=0, description="Safety ceiling in dBFS: a louder peak is turned down to this, quieter audio is untouched. null disables.")]
+# Clients sometimes send "seconds" (the name used in results and sidecars); accept it as well.
+_SECONDS_ALIASES = AliasChoices("duration_seconds", "seconds")
 
 
 @_tool
 async def generate_audio(
     prompt: Annotated[str, Field(description="English description (see server instructions). Optional for sfx when the sound_* fields are given.")] = "",
     audio_type: Annotated[AudioType, Field(description="music = BGM / full instrumental track; instrument = solo instrument, stem or loop; sfx = sound effect, ambience or one-shot; raw = no prefix (prompt used verbatim)")] = "music",
-    duration_seconds: Annotated[float | None, Field(ge=0.5, le=380, description="Length in seconds. Default: music 60, instrument 12, sfx 5, raw 30.")] = None,
+    duration_seconds: Annotated[float | None, Field(ge=0.5, le=380, validation_alias=_SECONDS_ALIASES, description="Length in seconds. Default: music 60, instrument 12, sfx 5, raw 30.")] = None,
     variations: Annotated[int, Field(ge=1, le=4, description="Number of candidates (different seeds) to generate in one call.")] = 1,
     bpm: Annotated[int | None, Field(ge=30, le=300, description="Tempo for music/instrument; appended as 'BPM: N.'")] = None,
     sound_source: Annotated[str, Field(description="SFX: what makes the sound (object, instrument, creature, machine).")] = "",
@@ -247,7 +249,7 @@ async def edit_audio(
     strength: Annotated[float, Field(ge=0.05, le=1.0, description="variation only: init noise level. ~0.4 keeps melody/rhythm (timbre transfer), ~0.6 style transfer, 0.8+ loose.")] = 0.6,
     start_seconds: Annotated[float | None, Field(ge=0, description="inpaint only: region start.")] = None,
     end_seconds: Annotated[float | None, Field(ge=0, description="inpaint only: region end.")] = None,
-    duration_seconds: Annotated[float | None, Field(ge=0.5, le=380, description="Output length. variation/inpaint default = input length; continue = required total length (> input length).")] = None,
+    duration_seconds: Annotated[float | None, Field(ge=0.5, le=380, validation_alias=_SECONDS_ALIASES, description="Output length. variation/inpaint default = input length; continue = required total length (> input length).")] = None,
     overlap_seconds: Annotated[float, Field(ge=0, le=10, description="continue only: start regenerating this many seconds before the end of the audible content, so a trailing fade or silence is replaced and the join is smooth.")] = 1.0,
     variations: Annotated[int, Field(ge=1, le=4, description="Number of candidates (different seeds).")] = 1,
     bpm: Annotated[int | None, Field(ge=30, le=300)] = None,

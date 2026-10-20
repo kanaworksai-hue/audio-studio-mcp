@@ -51,6 +51,18 @@ async def test_generate_clamps_to_backend_max(fake):
     assert r["seconds"] == fake.max_seconds
 
 
+async def test_seconds_is_accepted_as_alias(fake):
+    # Issue #7: "seconds" used to be dropped silently and the default length was used.
+    a = await call("generate_audio", {"prompt": "x", "seconds": 2, "seed": 1})
+    b = await call("generate_audio", {"prompt": "x", "duration_seconds": 3, "seed": 1})
+    assert (a["seconds"], b["seconds"]) == (2.0, 3.0)
+    async with Client(server.server) as c:
+        tools = {t.name: t for t in (await c.list_tools()).tools}
+    for name in ("generate_audio", "edit_audio"):
+        props = tools[name].input_schema["properties"]
+        assert "duration_seconds" in props and "seconds" not in props
+
+
 async def test_duplicate_titles_get_suffix(fake):
     a = await call("generate_audio", {"prompt": "x", "duration_seconds": 1, "title": "same"})
     b = await call("generate_audio", {"prompt": "x", "duration_seconds": 1, "title": "same"})

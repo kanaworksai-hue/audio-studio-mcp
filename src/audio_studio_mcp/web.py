@@ -22,12 +22,14 @@ import json
 import os
 import secrets
 import stat
+import threading
 import time
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 from urllib.parse import urlsplit
 
+import numpy as np
 from mcp.server.mcpserver.exceptions import ToolError
 from pydantic import ValidationError
 from starlette.applications import Starlette
@@ -36,15 +38,17 @@ from starlette.responses import FileResponse, JSONResponse, Response
 from starlette.routing import Mount, Route
 from starlette.staticfiles import StaticFiles
 
-from . import __version__, server
+from . import __version__, post, server
 from .prompts import DEFAULT_SECONDS
 
 STATIC_DIR = Path(__file__).with_name("static")
 AUDIO_EXTS = {".wav": "audio/wav", ".ogg": "audio/ogg", ".flac": "audio/flac", ".mp3": "audio/mpeg"}
-# Tools the page may queue. edit/process take arbitrary input paths; they come
-# with the editing page (W2) and an input check limited to OUTPUT_DIR.
-JOB_TOOLS = {"generate_audio"}
+# Tools the page may queue. edit/process read `input_audio`; from the page that
+# must be an audio file directly inside OUTPUT_DIR (see resolve_input).
+JOB_TOOLS = {"generate_audio", "edit_audio", "process_audio"}
+INPUT_TOOLS = {"edit_audio", "process_audio"}
 MAX_FINISHED_JOBS = 200
+MAX_PEAKS = 20000
 
 
 # ── jobs ─────────────────────────────────────────────────────────────────────
@@ -54,7 +58,7 @@ class Job:
     tool: str
     arguments: dict
     seq: int
-    status: str = "queued"  # queued | running | done | error
+    status: str = "queued"  # queued | running | done | error | cancelled
     created: float = field(default_factory=time.time)
     started: float | None = None
     finished: float | None = None
@@ -124,12 +128,19 @@ class JobQueue:
     def view(self, job: Job) -> dict:
         return job.view(self.position(job))
 
+    def cancel(self, job: Job) -> bool:
+        """Drop a job that has not started yet (a running model call cannot stop)."""
+        if job.status != "queued":
+            return False
+        job.status, job.finished = "cancelled", time.time()
+        return True
+
     def counts(self) -> dict:
         st = [j.status for j in self.jobs.values()]
         return {"queued": st.count("queued"), "running": st.count("running")}
 
     def _prune(self) -> None:
-        done = [j for j in self.jobs.values() if j.status in ("done", "error")]
+        done = [j for j in self.jobs.values() if j.status in ("done", "error", "cancelled")]
         for j in sorted(done, key=lambda j: j.seq)[:max(0, len(done) - MAX_FINISHED_JOBS)]:
             del self.jobs[j.id]
 
@@ -138,6 +149,9 @@ class JobQueue:
         assert queue is not None
         while True:
             job = await queue.get()
+            if job.status == "cancelled":
+                queue.task_done()
+                continue
             job.status, job.started = "running", time.time()
             try:
                 job.result = _tool_result(await server.server.call_tool(job.tool, job.arguments))
@@ -189,6 +203,30 @@ def _safe_audio_path(name: str) -> Path | None:
     if resolved.parent != root or not resolved.is_file():
         return None
     return resolved
+
+
+def resolve_input(value: Any) -> Path | None:
+    """`input_audio` from the page: a file name in OUTPUT_DIR, or an absolute
+    path whose folder is OUTPUT_DIR (what the library and results show).
+    Anything else (other folders, traversal, symlinks out) is None."""
+    if not isinstance(value, str) or not value:
+        return None
+    name = value
+    if "/" in value or "\\" in value:
+        p = Path(value)
+        if not p.is_absolute():
+            return None
+        try:
+            if p.parent.resolve(strict=True) != _output_dir().resolve():
+                return None
+        except (OSError, RuntimeError):
+            return None
+        name = p.name
+    path = _safe_audio_path(name)
+    try:
+        return path if path is not None and path.stat().st_size > 0 else None
+    except OSError:
+        return None
 
 
 def _read_meta(side: Path) -> dict | None:
@@ -262,6 +300,48 @@ def list_library(query: str = "", offset: int = 0, limit: int = 100) -> dict:
     entries = [e for e in (_entry(p, st) for p, st in files)
                if all(w in _search_text(e) for w in words)]
     return {"output_dir": str(root), "total": len(entries), "items": entries[offset:offset + limit]}
+
+
+# ── waveform peaks ───────────────────────────────────────────────────────────
+# Decoded on the server so every format the tools read draws in every browser
+# (Safari cannot decode OGG Vorbis). A few decoded clips are kept for zooming.
+_decoded: dict[tuple, tuple] = {}
+_decoded_lock = threading.Lock()
+_DECODED_KEEP = 4
+
+
+def _decode(path: Path) -> tuple:
+    st = path.stat()
+    key = (str(path), st.st_mtime_ns, st.st_size)
+    with _decoded_lock:
+        hit = _decoded.pop(key, None)
+    if hit is None:
+        hit = post.read(path)
+    with _decoded_lock:
+        _decoded[key] = hit  # most recent last
+        while len(_decoded) > _DECODED_KEEP:
+            del _decoded[next(iter(_decoded))]
+    return hit
+
+
+def peaks(path: Path, n: int, start: float | None = None, end: float | None = None) -> dict:
+    """Min/max of all channels in n equal buckets over [start, end] seconds."""
+    audio, sr = _decode(path)
+    total = audio.shape[-1]
+    seconds = total / sr
+    s = 0 if start is None else min(total, max(0, int(start * sr)))
+    e = total if end is None else min(total, max(s, int(end * sr)))
+    seg = audio[:, s:e]
+    lo = hi = np.zeros(0, dtype=np.float32)
+    if seg.shape[-1] and n:
+        # reduceat over bucket starts; a bucket narrower than one sample
+        # (zoomed past sample level) repeats the sample it starts on
+        idx = (np.arange(n) * seg.shape[-1]) // n
+        lo = np.minimum.reduceat(seg.min(axis=0), idx)
+        hi = np.maximum.reduceat(seg.max(axis=0), idx)
+    return {"seconds": round(seconds, 4), "sample_rate": sr, "channels": int(audio.shape[0]),
+            "start": round(s / sr, 4), "end": round(e / sr, 4),
+            "min": [round(float(v), 4) for v in lo], "max": [round(float(v), 4) for v in hi]}
 
 
 # ── HTTP ─────────────────────────────────────────────────────────────────────
@@ -359,6 +439,12 @@ async def api_jobs_create(request: Request) -> Response:
         return _err(400, f"tool not available from the web UI: {tool!r}")
     if not isinstance(arguments, dict):
         return _err(400, "arguments must be an object")
+    if tool in INPUT_TOOLS:
+        src = resolve_input(arguments.get("input_audio"))
+        if src is None:
+            return _err(422, "input_audio must be an audio file in the output folder",
+                        fields=[{"field": "input_audio", "message": "not a file in the output folder"}])
+        arguments = {**arguments, "input_audio": str(src)}
     errors = validate_arguments(tool, arguments)
     if errors:
         msg = "; ".join(f"{e['field']}: {e['message']}" for e in errors)
@@ -369,7 +455,18 @@ async def api_jobs_create(request: Request) -> Response:
 
 async def api_jobs_list(_: Request) -> Response:
     items = sorted(jobs.jobs.values(), key=lambda j: j.seq, reverse=True)
-    return JSONResponse({"items": [jobs.view(j) for j in items], **jobs.counts()})
+    # `loaded` lets the page tell "loading the model" from "generating"
+    return JSONResponse({"items": [jobs.view(j) for j in items], **jobs.counts(),
+                         "loaded": bool(server.get_backend().loaded())})
+
+
+async def api_job_cancel(request: Request) -> Response:
+    job = jobs.jobs.get(request.path_params["job_id"])
+    if job is None:
+        return _err(404, "no such job")
+    if not jobs.cancel(job):
+        return _err(409, f"job is {job.status}, only waiting jobs can be cancelled")
+    return JSONResponse(jobs.view(job))
 
 
 async def api_job(request: Request) -> Response:
@@ -389,6 +486,13 @@ async def api_library(request: Request) -> Response:
     return JSONResponse(await asyncio.to_thread(list_library, q.get("q", ""), offset, limit))
 
 
+async def api_library_item(request: Request) -> Response:
+    path = _safe_audio_path(request.path_params["name"])
+    if path is None:
+        return _err(404, "not found")
+    return JSONResponse(await asyncio.to_thread(lambda: _entry(path, path.stat())))
+
+
 async def api_audio(request: Request) -> Response:
     path = _safe_audio_path(request.path_params["name"])
     if path is None:
@@ -398,6 +502,23 @@ async def api_audio(request: Request) -> Response:
                         filename=path.name if download else None,
                         content_disposition_type="attachment" if download else "inline",
                         headers={"Cache-Control": "no-cache"})
+
+
+async def api_peaks(request: Request) -> Response:
+    path = _safe_audio_path(request.path_params["name"])
+    if path is None:
+        return _err(404, "not found")
+    q = request.query_params
+    try:
+        n = min(MAX_PEAKS, max(1, int(q.get("n", 2000))))
+        start = float(q["start"]) if q.get("start") else None
+        end = float(q["end"]) if q.get("end") else None
+    except ValueError:
+        return _err(400, "n/start/end must be numbers")
+    try:
+        return JSONResponse(await asyncio.to_thread(peaks, path, n, start, end))
+    except Exception as e:  # unreadable or truncated file
+        return _err(422, f"cannot read audio: {e}")
 
 
 async def index(_: Request) -> Response:
@@ -410,8 +531,11 @@ API_ROUTES = [
     Route("/api/jobs", api_jobs_create, methods=["POST"]),
     Route("/api/jobs", api_jobs_list, methods=["GET"]),
     Route("/api/jobs/{job_id}", api_job, methods=["GET"]),
+    Route("/api/jobs/{job_id}/cancel", api_job_cancel, methods=["POST"]),
     Route("/api/library", api_library, methods=["GET"]),
+    Route("/api/library/{name:path}", api_library_item, methods=["GET"]),
     Route("/api/audio/{name:path}", api_audio, methods=["GET", "HEAD"]),
+    Route("/api/peaks/{name:path}", api_peaks, methods=["GET"]),
 ]
 
 
@@ -430,7 +554,6 @@ def create_app(port: int | None = None) -> Starlette:
 
 
 def serve(port: int, open_browser: bool = True) -> None:
-    import threading
     import webbrowser
 
     import uvicorn

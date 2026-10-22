@@ -107,11 +107,107 @@ def test_error_text_identical_to_mcp(client, fake):
 
 
 def test_only_whitelisted_tools(client, tmp_path):
-    for tool in ("process_audio", "edit_audio", "unload_models", "nope"):
-        r = client.post("/api/jobs", json={"tool": tool, "arguments": {"input_audio": str(tmp_path)}})
+    for tool in ("unload_models", "nope"):
+        r = client.post("/api/jobs", json={"tool": tool, "arguments": {}})
         assert r.status_code == 400, tool
     assert client.post("/api/jobs", json={"arguments": []}).status_code == 400
     assert client.post("/api/jobs", content=b"{", headers={"Content-Type": "application/json"}).status_code == 400
+
+
+def _input_cases(out: Path) -> list:
+    """input_audio values the page must not be able to use, plus setup."""
+    secret = out.parent / "secret.wav"
+    post.write(secret, sine(0.1), 44100, "wav")
+    (out / "sub").mkdir()
+    post.write(out / "sub" / "x.wav", sine(0.1), 44100, "wav")
+    cases = [str(secret), "../secret.wav", "..\\secret.wav", "sub/x.wav", str(out / "sub" / "x.wav"),
+             str(out / ".." / "secret.wav"), "notes.txt", str(out / "notes.txt"), "a.wav.json",
+             "missing.wav", "reserved.wav", "", ".", "..", "secret.wav", "/etc/passwd", None, 3, ["a.wav"]]
+    try:
+        (out / "link.wav").symlink_to(secret)
+        (out.parent / "linkdir").symlink_to(out.parent, target_is_directory=True)
+        cases += ["link.wav", str(out.parent / "linkdir" / "secret.wav")]
+    except OSError:  # Windows without symlink privilege
+        pass
+    return cases
+
+
+@pytest.mark.parametrize("tool", ["edit_audio", "process_audio"])
+def test_input_audio_must_be_in_the_output_folder(client, fake, tool):
+    out = _make_library(fake)
+    for value in _input_cases(out):
+        args = {"input_audio": value, "mode": "variation"}
+        r = client.post("/api/jobs", json={"tool": tool, "arguments": args})
+        assert r.status_code == 422, (value, r.status_code)
+        assert r.json()["fields"][0]["field"] == "input_audio"
+    assert client.get("/api/jobs").json()["items"] == []
+    assert fake.requests == []
+
+
+def test_edit_job_from_the_library(client, fake):
+    out = _make_library(fake)
+    for value in ("a.wav", str(out / "a.wav")):  # name or the path the library shows
+        r = client.post("/api/jobs", json={"tool": "edit_audio", "arguments": {
+            "input_audio": value, "mode": "inpaint", "prompt": "thunder", "audio_type": "sfx",
+            "start_seconds": 0.25, "end_seconds": 0.5, "variations": 2, "seed": 5}})
+        assert r.status_code == 202, r.json()
+        assert r.json()["arguments"]["input_audio"] == str(out / "a.wav")
+        job = wait_job(client, r.json()["id"])
+        assert job["status"] == "done", job
+        assert job["result"]["mode"] == "inpaint" and job["result"]["region"] == [0.25, 0.5]
+        assert [c["seed"] for c in job["result"]["candidates"]] == [5, 6]
+    req = fake.requests[-1][1]
+    assert req.inpaint_audio == str(out / "a.wav") and req.inpaint_range == (0.25, 0.5)
+    names = {i["file"] for i in client.get("/api/library?q=inpaint").json()["items"]}
+    assert len(names) == 4 and all(n.startswith("a_inpaint") for n in names)
+
+
+def test_process_job_exports_into_the_library(client, fake):
+    _make_library(fake)
+    r = client.post("/api/jobs", json={"tool": "process_audio", "arguments": {
+        "input_audio": "a.wav", "start_seconds": 0.2, "end_seconds": 0.8, "mono": True,
+        "fade_out_ms": 50, "format": "flac", "sample_rate": 44100, "title": "cut"}})
+    assert r.status_code == 202, r.json()
+    job = wait_job(client, r.json()["id"])
+    assert job["status"] == "done", job
+    res = job["result"]
+    assert res["format"] == "flac" and res["channels"] == 1 and res["seconds"] == pytest.approx(0.6, abs=0.01)
+    item = client.get("/api/library?q=cut").json()["items"][0]
+    assert item["file"] == "cut.flac" and item["meta"]["kind"] == "process"
+    assert fake.requests == []  # no model involved
+
+
+def test_edit_arguments_validated_before_queueing(client, fake):
+    _make_library(fake)
+    r = client.post("/api/jobs", json={"tool": "edit_audio", "arguments": {
+        "input_audio": "a.wav", "mode": "remix", "strength": 2}})
+    assert r.status_code == 422
+    assert {f["field"] for f in r.json()["fields"]} == {"mode", "strength"}
+
+
+def test_peaks(client, fake):
+    out = _make_library(fake)
+    audio = sine(1.0, freq=5.0, amp=0.5)
+    audio[1] *= -0.5  # channels differ: peaks cover both
+    post.write(out / "p.wav", audio, 44100, "wav")
+    r = client.get("/api/peaks/p.wav?n=100").json()
+    assert r["channels"] == 2 and r["sample_rate"] == 44100
+    assert r["seconds"] == pytest.approx(1.0) and (r["start"], r["end"]) == (0, 1.0)
+    assert len(r["min"]) == len(r["max"]) == 100
+    assert max(r["max"]) == pytest.approx(0.5, abs=1e-3) and min(r["min"]) == pytest.approx(-0.5, abs=1e-3)
+    assert all(lo <= hi for lo, hi in zip(r["min"], r["max"]))
+    # a zoomed window narrower than n samples still returns n buckets
+    z = client.get("/api/peaks/p.wav?n=500&start=0.5&end=0.501").json()
+    assert len(z["min"]) == 500 and z["start"] == 0.5 and z["end"] == pytest.approx(0.501, abs=1e-4)
+    # out-of-range windows are clamped, not errors
+    e = client.get("/api/peaks/p.wav?n=10&start=5&end=9").json()
+    assert e["min"] == [] and e["start"] == e["end"] == 1.0
+    assert client.get("/api/peaks/p.wav?n=x").status_code == 400
+    assert client.get("/api/peaks/b.flac?n=10").json()["seconds"] == pytest.approx(0.5, abs=0.01)
+    for bad in ("../secret.wav", "notes.txt", "missing.wav"):
+        assert client.get(f"/api/peaks/{bad}").status_code == 404
+    (out / "broken.wav").write_bytes(b"RIFF....not audio")
+    assert client.get("/api/peaks/broken.wav").status_code == 422
 
 
 def test_queue_runs_in_order_with_positions(client, fake):
@@ -141,6 +237,35 @@ def test_queue_runs_in_order_with_positions(client, fake):
     assert [r[1].prompt for r in fake.requests] == [f"TrackType: Music, VocalType: Instrumental, p{i}." for i in range(3)]
     listed = client.get("/api/jobs").json()["items"]
     assert [j["id"] for j in listed] == ids[::-1]
+
+
+def test_cancel_waiting_job(client, fake):
+    gate = threading.Event()
+    orig = fake._generate
+    fake._generate = lambda seeds, req: (gate.wait(10), orig(seeds, req))[1]
+    a, b, c = (client.post("/api/jobs", json={"arguments": {"prompt": f"p{i}", "duration_seconds": 1}}).json()["id"]
+               for i in range(3))
+    end = time.time() + 5
+    while client.get(f"/api/jobs/{a}").json()["status"] != "running" and time.time() < end:
+        time.sleep(0.02)
+    assert client.post(f"/api/jobs/{a}/cancel", json={}).status_code == 409  # running
+    r = client.post(f"/api/jobs/{b}/cancel", json={})
+    assert r.status_code == 200 and r.json()["status"] == "cancelled"
+    assert client.get(f"/api/jobs/{c}").json()["position"] == 1
+    assert client.post("/api/jobs/nope/cancel", json={}).status_code == 404
+    gate.set()
+    assert wait_job(client, c)["status"] == "done"
+    assert client.get(f"/api/jobs/{b}").json()["status"] == "cancelled"
+    assert [r[1].prompt for r in fake.requests] == [f"TrackType: Music, VocalType: Instrumental, p{i}." for i in (0, 2)]
+    assert client.get("/api/jobs").json()["loaded"] is True
+
+
+def test_library_item(client, fake):
+    _make_library(fake)
+    item = client.get("/api/library/a.wav").json()
+    assert item["file"] == "a.wav" and item["meta"]["seed"] == 42
+    for bad in ("../secret.wav", "notes.txt", "missing.wav"):
+        assert client.get(f"/api/library/{bad}").status_code == 404
 
 
 def test_unload(client, fake):

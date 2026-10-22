@@ -21,6 +21,7 @@
   </div>
   <nav class="tabs" role="tablist">
     <button role="tab" id="tab-generate" aria-controls="page-generate" aria-selected="true" data-page="generate" data-i18n="nav.generate">Generate</button>
+    <button role="tab" id="tab-edit" aria-controls="page-edit" aria-selected="false" data-page="edit" data-i18n="nav.edit">Edit</button>
     <button role="tab" id="tab-library" aria-controls="page-library" aria-selected="false" data-page="library" data-i18n="nav.library">Library</button>
   </nav>
   <div class="status" id="statusbar">
@@ -51,57 +52,66 @@
       <h1 class="panel-title" data-i18n="gen.title">New sound</h1>
 
       <fieldset class="field">
-        <legend data-i18n="gen.type">Type</legend>
+        <legend data-i18n="gen.type">What do you want to make?</legend>
         <div class="segmented" id="type-seg">
           <label><input type="radio" name="audio_type" value="music" checked><span data-i18n="type.music">Music</span></label>
           <label><input type="radio" name="audio_type" value="instrument"><span data-i18n="type.instrument">Instrument</span></label>
           <label><input type="radio" name="audio_type" value="sfx"><span data-i18n="type.sfx">Sound effect</span></label>
         </div>
+        <p class="hint" id="type-hint"></p>
       </fieldset>
 
       <div class="field">
         <label for="prompt" id="prompt-label" data-i18n="gen.prompt.music">Description (English)</label>
         <textarea id="prompt" name="prompt" rows="3" spellcheck="false"></textarea>
-        <p class="hint" id="prompt-hint" data-i18n="gen.promptHint.music"></p>
+        <p class="hint" id="prompt-hint"></p>
+        <div class="chips" id="examples" role="group" data-i18n-aria-label="gen.examples"></div>
       </div>
 
-      <div class="sfx-fields" id="sfx-fields" hidden>
-        <div class="field"><label for="sound_source" data-i18n="sfx.source">Source</label><input id="sound_source" name="sound_source" type="text" data-i18n-placeholder="sfx.sourcePh"></div>
-        <div class="field"><label for="sound_action" data-i18n="sfx.action">Action</label><input id="sound_action" name="sound_action" type="text" data-i18n-placeholder="sfx.actionPh"></div>
-        <div class="field"><label for="sound_material" data-i18n="sfx.material">Material</label><input id="sound_material" name="sound_material" type="text" data-i18n-placeholder="sfx.materialPh"></div>
-        <div class="field"><label for="sound_space" data-i18n="sfx.space">Space</label><input id="sound_space" name="sound_space" type="text" data-i18n-placeholder="sfx.spacePh"></div>
+      <details class="sfx-fields" id="sfx-fields" open hidden>
+        <summary data-i18n="sfx.detail">Describe in detail (optional)</summary>
+        <div class="sfx-grid">
+          <div class="field"><label for="sound_source" data-i18n="sfx.source">Source</label><input id="sound_source" name="sound_source" type="text" data-i18n-placeholder="sfx.sourcePh"></div>
+          <div class="field"><label for="sound_action" data-i18n="sfx.action">Action</label><input id="sound_action" name="sound_action" type="text" data-i18n-placeholder="sfx.actionPh"></div>
+          <div class="field"><label for="sound_material" data-i18n="sfx.material">Material</label><input id="sound_material" name="sound_material" type="text" data-i18n-placeholder="sfx.materialPh"></div>
+          <div class="field"><label for="sound_space" data-i18n="sfx.space">Space</label><input id="sound_space" name="sound_space" type="text" data-i18n-placeholder="sfx.spacePh"></div>
+        </div>
+      </details>
+
+      <div class="field">
+        <label for="duration_seconds" data-i18n="gen.duration">Length (seconds)</label>
+        <div class="inline">
+          <input id="duration_seconds" name="duration_seconds" class="num" type="number" min="0.5" max="380" step="0.5" inputmode="decimal">
+          <div class="chips" id="durations" role="group" data-i18n-aria-label="gen.durationPresets"></div>
+        </div>
+        <p class="hint" id="duration-hint"></p>
       </div>
 
       <div class="row">
-        <div class="field">
-          <label for="duration_seconds" data-i18n="gen.duration">Duration (s)</label>
-          <input id="duration_seconds" name="duration_seconds" type="number" min="0.5" max="380" step="0.5" inputmode="decimal">
-        </div>
-        <div class="field" id="bpm-field">
-          <label for="bpm" data-i18n="gen.bpm">BPM</label>
-          <input id="bpm" name="bpm" type="number" min="30" max="300" step="1" inputmode="numeric" data-i18n-placeholder="gen.optional">
-        </div>
         <fieldset class="field">
-          <legend data-i18n="gen.variations">Candidates</legend>
+          <legend data-i18n="gen.variations">Versions</legend>
           <div class="segmented compact">
-            <label><input type="radio" name="variations" value="1" checked><span>1</span></label>
-            <label><input type="radio" name="variations" value="2"><span>2</span></label>
+            <label><input type="radio" name="variations" value="1"><span>1</span></label>
+            <label><input type="radio" name="variations" value="2" checked><span>2</span></label>
             <label><input type="radio" name="variations" value="3"><span>3</span></label>
             <label><input type="radio" name="variations" value="4"><span>4</span></label>
           </div>
         </fieldset>
-      </div>
-
-      <div class="field">
-        <label for="title" data-i18n="gen.name">File name</label>
-        <input id="title" name="title" type="text" data-i18n-placeholder="gen.namePh">
+        <div class="field" id="bpm-field">
+          <label for="bpm" data-i18n="gen.bpm">Tempo (BPM)</label>
+          <input id="bpm" name="bpm" type="number" min="30" max="300" step="1" inputmode="numeric" data-i18n-placeholder="gen.auto">
+        </div>
       </div>
 
       <details class="advanced" id="advanced">
-        <summary data-i18n="gen.advanced">Advanced</summary>
+        <summary><span data-i18n="gen.advanced">Advanced</span><span class="mod-dot" id="adv-dot" hidden data-i18n-title="gen.modified"></span></summary>
+        <div class="field">
+          <label for="title" data-i18n="gen.name">File name</label>
+          <input id="title" name="title" type="text" data-i18n-placeholder="gen.namePh">
+        </div>
         <div class="row">
           <div class="field"><label for="seed" data-i18n="adv.seed">Seed</label><input id="seed" name="seed" type="number" min="-1" step="1" inputmode="numeric" data-i18n-placeholder="adv.seedPh"></div>
-          <div class="field"><label for="cfg" data-i18n="adv.cfg">CFG</label><input id="cfg" name="cfg" type="number" min="0" max="15" step="0.5" placeholder="1.0"></div>
+          <div class="field"><label for="cfg" data-i18n="adv.cfg">Prompt strength (CFG)</label><input id="cfg" name="cfg" type="number" min="0" max="15" step="0.5" placeholder="1.0"></div>
           <div class="field"><label for="steps" data-i18n="adv.steps">Steps</label><input id="steps" name="steps" type="number" min="1" max="50" step="1" placeholder="8"></div>
           <div class="field"><label for="peak_ceiling_db" data-i18n="adv.ceiling">Peak ceiling (dBFS)</label><input id="peak_ceiling_db" name="peak_ceiling_db" type="number" min="-24" max="0" step="0.5" placeholder="-1.0"></div>
         </div>
@@ -110,12 +120,14 @@
           <input id="negative_prompt" name="negative_prompt" type="text" data-i18n-placeholder="adv.negativePh">
           <p class="hint" data-i18n="adv.hint"></p>
         </div>
+        <button type="button" class="link-btn" id="adv-reset" data-i18n="gen.resetAdvanced">Reset to defaults</button>
       </details>
 
       <p class="form-error" id="form-error" role="alert" hidden></p>
       <div class="actions">
-        <button type="submit" class="btn btn-primary" id="gen-submit" data-i18n="gen.submit">Generate</button>
-        <button type="button" class="btn btn-quiet" id="gen-reset" data-i18n="gen.reset">Reset</button>
+        <button type="submit" class="btn btn-primary btn-lg" id="gen-submit">Generate</button>
+        <button type="button" class="btn btn-quiet" id="gen-reset" data-i18n="gen.reset">Clear</button>
+        <span class="kbd-hint muted small" data-i18n="gen.shortcut"></span>
       </div>
     </form>
 
@@ -125,7 +137,220 @@
         <span class="muted small" id="queue-info"></span>
       </div>
       <div id="jobs" class="jobs"></div>
-      <p class="empty" id="jobs-empty" data-i18n="jobs.empty">Generated sounds appear here.</p>
+      <div class="empty-state" id="jobs-empty">
+        <p class="empty-title" data-i18n="jobs.empty">Your sounds appear here.</p>
+        <p class="muted small" data-i18n="jobs.emptyHint"></p>
+        <div class="starter" id="starters"></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- Edit -->
+  <section id="page-edit" class="page" role="tabpanel" aria-labelledby="tab-edit" hidden>
+    <div class="empty-state" id="edit-empty">
+      <p class="empty-title" data-i18n="edit.emptyTitle">Open a sound to edit it</p>
+      <p class="muted small" data-i18n="edit.emptyHint"></p>
+      <div class="recent" id="edit-recent"></div>
+      <button type="button" class="btn" id="edit-to-library" data-i18n="edit.browse">Browse the library</button>
+    </div>
+
+    <div id="edit-main" hidden>
+      <div class="edit-head">
+        <div class="edit-title">
+          <h1 id="edit-name"></h1>
+          <span class="muted small" id="edit-info"></span>
+        </div>
+        <div class="edit-source small" id="edit-source"></div>
+      </div>
+
+      <div class="panel wave-panel">
+        <div class="wave-toolbar">
+          <button type="button" class="btn btn-primary play-main" id="w-play"><span class="icon-play" aria-hidden="true"></span><span id="w-play-text"></span></button>
+          <span class="clock" id="w-clock" aria-live="off">0:00.0 / 0:00.0</span>
+          <label class="toggle"><input type="checkbox" id="w-loop"><span data-i18n="wave.loop">Loop</span></label>
+          <span class="spacer"></span>
+          <div class="zoom" role="group" data-i18n-aria-label="wave.zoom">
+            <button type="button" class="btn btn-sm" id="w-zoom-out" data-i18n-aria-label="wave.zoomOut" data-i18n-title="wave.zoomOut">−</button>
+            <button type="button" class="btn btn-sm" id="w-zoom-in" data-i18n-aria-label="wave.zoomIn" data-i18n-title="wave.zoomIn">+</button>
+            <button type="button" class="btn btn-sm" id="w-zoom-fit" data-i18n="wave.fit">Fit</button>
+            <button type="button" class="btn btn-sm" id="w-zoom-sel" data-i18n="wave.zoomSel">Zoom to selection</button>
+          </div>
+        </div>
+        <canvas class="ruler" id="w-ruler" aria-hidden="true"></canvas>
+        <div class="wave" id="w-wave" tabindex="0" role="slider" data-i18n-aria-label="wave.playhead" aria-valuemin="0">
+          <canvas id="w-canvas" aria-hidden="true"></canvas>
+          <div class="sel" id="w-sel" hidden>
+            <div class="handle start" id="w-h-start" role="slider" tabindex="0" data-i18n-aria-label="wave.selStart"></div>
+            <div class="handle end" id="w-h-end" role="slider" tabindex="0" data-i18n-aria-label="wave.selEnd"></div>
+          </div>
+          <div class="playhead" id="w-playhead"></div>
+          <div class="wave-loading muted small" id="w-loading" data-i18n="wave.loading">Loading waveform…</div>
+        </div>
+        <div class="overview" id="w-overview" data-i18n-title="wave.overview" hidden>
+          <canvas id="w-ov-canvas" aria-hidden="true"></canvas>
+          <div class="view-box" id="w-view"></div>
+        </div>
+        <div class="sel-bar">
+          <span class="sel-label" data-i18n="wave.selection">Selection</span>
+          <label class="sel-field"><span data-i18n="wave.start">Start</span><input type="number" id="w-start" class="num" min="0" step="0.01" inputmode="decimal"></label>
+          <label class="sel-field"><span data-i18n="wave.end">End</span><input type="number" id="w-end" class="num" min="0" step="0.01" inputmode="decimal"></label>
+          <span class="sel-len" id="w-len"></span>
+          <button type="button" class="link-btn" id="w-sel-all" data-i18n="wave.selectAll">Select all</button>
+          <button type="button" class="link-btn" id="w-sel-clear" data-i18n="wave.clear">Clear</button>
+          <span class="spacer"></span>
+          <span class="muted small wave-help" id="w-help" data-i18n="wave.help"></span>
+        </div>
+      </div>
+
+      <div class="edit-body">
+        <div class="panel edit-tools">
+          <div class="subtabs" role="tablist">
+            <button role="tab" id="st-ai" aria-selected="true" aria-controls="ai-form" data-i18n="edit.aiTab">Change with AI</button>
+            <button role="tab" id="st-export" aria-selected="false" aria-controls="export-form" data-i18n="edit.exportTab">Export</button>
+          </div>
+
+          <form id="ai-form" class="form-body" role="tabpanel" aria-labelledby="st-ai" novalidate>
+            <fieldset class="field">
+              <legend class="sr-only" data-i18n="edit.mode">Mode</legend>
+              <div class="mode-cards" id="mode-cards">
+                <label class="mode-card"><input type="radio" name="mode" value="variation" checked><span class="mode-name" data-i18n="mode.variation">Make a variation</span><span class="mode-desc" data-i18n="mode.variationDesc"></span></label>
+                <label class="mode-card"><input type="radio" name="mode" value="inpaint"><span class="mode-name" data-i18n="mode.inpaint">Replace a section</span><span class="mode-desc" data-i18n="mode.inpaintDesc"></span></label>
+                <label class="mode-card"><input type="radio" name="mode" value="continue"><span class="mode-name" data-i18n="mode.continue">Extend</span><span class="mode-desc" data-i18n="mode.continueDesc"></span></label>
+              </div>
+            </fieldset>
+
+            <div class="field" id="strength-field">
+              <label for="strength"><span data-i18n="edit.strength">How different?</span> <output id="strength-out" class="muted"></output></label>
+              <input id="strength" name="strength" type="range" min="0.05" max="1" step="0.05" value="0.6">
+              <div class="range-labels muted small"><span data-i18n="edit.subtle">Close to the original</span><span data-i18n="edit.loose">Very different</span></div>
+            </div>
+
+            <p class="note" id="inpaint-note" hidden></p>
+
+            <div class="field" id="extend-field" hidden>
+              <label for="ai-duration" data-i18n="edit.totalLength">Total length after extending (seconds)</label>
+              <div class="inline">
+                <input id="ai-duration" name="duration_seconds" class="num" type="number" min="1" step="1" inputmode="decimal">
+                <div class="chips" id="extend-chips"></div>
+              </div>
+              <p class="hint" id="extend-hint"></p>
+            </div>
+
+            <div class="field">
+              <label for="ai-prompt" id="ai-prompt-label" data-i18n="edit.prompt">Description (English)</label>
+              <textarea id="ai-prompt" name="prompt" rows="2" spellcheck="false"></textarea>
+              <p class="hint" id="ai-prompt-hint"></p>
+            </div>
+
+            <div class="row">
+              <div class="field">
+                <label for="ai-type" data-i18n="gen.typeShort">Type</label>
+                <select id="ai-type" name="audio_type">
+                  <option value="music" data-i18n="type.music">Music</option>
+                  <option value="instrument" data-i18n="type.instrument">Instrument</option>
+                  <option value="sfx" data-i18n="type.sfx">Sound effect</option>
+                </select>
+              </div>
+              <fieldset class="field">
+                <legend data-i18n="gen.variations">Versions</legend>
+                <div class="segmented compact">
+                  <label><input type="radio" name="variations" value="1"><span>1</span></label>
+                  <label><input type="radio" name="variations" value="2" checked><span>2</span></label>
+                  <label><input type="radio" name="variations" value="3"><span>3</span></label>
+                  <label><input type="radio" name="variations" value="4"><span>4</span></label>
+                </div>
+              </fieldset>
+            </div>
+
+            <details class="advanced" id="ai-advanced">
+              <summary data-i18n="gen.advanced">Advanced</summary>
+              <div class="field">
+                <label for="ai-title" data-i18n="gen.name">File name</label>
+                <input id="ai-title" name="title" type="text" data-i18n-placeholder="gen.namePh">
+              </div>
+              <div class="row">
+                <div class="field"><label for="ai-seed" data-i18n="adv.seed">Seed</label><input id="ai-seed" name="seed" type="number" min="-1" step="1" data-i18n-placeholder="adv.seedPh"></div>
+                <div class="field"><label for="ai-cfg" data-i18n="adv.cfg">Prompt strength (CFG)</label><input id="ai-cfg" name="cfg" type="number" min="0" max="15" step="0.5" placeholder="1.0"></div>
+                <div class="field"><label for="ai-steps" data-i18n="adv.steps">Steps</label><input id="ai-steps" name="steps" type="number" min="1" max="50" step="1" placeholder="8"></div>
+              </div>
+              <div class="field">
+                <label for="ai-negative" data-i18n="adv.negative">Negative prompt</label>
+                <input id="ai-negative" name="negative_prompt" type="text" data-i18n-placeholder="adv.negativePh">
+              </div>
+            </details>
+
+            <p class="form-error" id="ai-error" role="alert" hidden></p>
+            <div class="actions"><button type="submit" class="btn btn-primary btn-lg" id="ai-submit"></button></div>
+          </form>
+
+          <form id="export-form" class="form-body" role="tabpanel" aria-labelledby="st-export" novalidate hidden>
+            <fieldset class="field">
+              <legend data-i18n="exp.purpose">What is it for?</legend>
+              <div class="preset-grid" id="presets"></div>
+              <p class="hint" id="preset-desc"></p>
+            </fieldset>
+
+            <label class="check" id="trim-sel-row"><input type="checkbox" name="trim_selection" id="x-trim-sel"><span id="x-trim-sel-text"></span></label>
+
+            <details class="advanced" id="x-custom">
+              <summary data-i18n="exp.customize">Customize</summary>
+              <div class="checks">
+                <label class="check"><input type="checkbox" name="trim_silence"><span data-i18n="exp.trimSilence">Remove silence at the start and end</span></label>
+                <label class="check"><input type="checkbox" name="mono"><span data-i18n="exp.mono">Mono</span></label>
+                <label class="check"><input type="checkbox" name="loop"><span data-i18n="exp.loop">Seamless loop</span></label>
+              </div>
+              <div class="row">
+                <div class="field">
+                  <label for="x-normalize" data-i18n="exp.volume">Volume</label>
+                  <select id="x-normalize" name="normalize">
+                    <option value="none" data-i18n="exp.volNone">Keep as is</option>
+                    <option value="peak" data-i18n="exp.volPeak">Peak (loudest point)</option>
+                    <option value="loudness" data-i18n="exp.volLoud">Loudness (LUFS)</option>
+                  </select>
+                </div>
+                <div class="field" id="x-lufs-field"><label for="x-lufs" data-i18n="exp.lufs">Target (LUFS)</label><input id="x-lufs" name="target_lufs" type="number" min="-40" max="-5" step="1"></div>
+                <div class="field"><label for="x-peak" data-i18n="exp.peak">Peak limit (dBFS)</label><input id="x-peak" name="peak_ceiling_db" type="number" min="-24" max="0" step="0.5"></div>
+              </div>
+              <div class="row">
+                <div class="field" id="x-xfade-field"><label for="x-xfade" data-i18n="exp.xfade">Loop crossfade (ms)</label><input id="x-xfade" name="loop_crossfade_ms" type="number" min="1" max="5000" step="10"></div>
+                <div class="field"><label for="x-fin" data-i18n="exp.fadeIn">Fade in (ms)</label><input id="x-fin" name="fade_in_ms" type="number" min="0" max="10000" step="10"></div>
+                <div class="field"><label for="x-fout" data-i18n="exp.fadeOut">Fade out (ms)</label><input id="x-fout" name="fade_out_ms" type="number" min="0" max="10000" step="10"></div>
+              </div>
+              <div class="row">
+                <fieldset class="field">
+                  <legend data-i18n="exp.format">Format</legend>
+                  <div class="segmented compact">
+                    <label><input type="radio" name="format" value="wav"><span>WAV</span></label>
+                    <label><input type="radio" name="format" value="ogg"><span>OGG</span></label>
+                    <label><input type="radio" name="format" value="flac"><span>FLAC</span></label>
+                  </div>
+                </fieldset>
+                <fieldset class="field">
+                  <legend data-i18n="exp.rate">Sample rate</legend>
+                  <div class="segmented compact">
+                    <label><input type="radio" name="sample_rate" value="44100"><span>44.1 kHz</span></label>
+                    <label><input type="radio" name="sample_rate" value="48000"><span>48 kHz</span></label>
+                  </div>
+                </fieldset>
+              </div>
+              <div class="field">
+                <label for="x-title" data-i18n="gen.name">File name</label>
+                <input id="x-title" name="title" type="text" data-i18n-placeholder="exp.namePh">
+              </div>
+            </details>
+
+            <p class="summary small" id="x-summary"></p>
+            <p class="form-error" id="x-error" role="alert" hidden></p>
+            <div class="actions"><button type="submit" class="btn btn-primary btn-lg" id="x-submit" data-i18n="exp.submit">Export</button></div>
+          </form>
+        </div>
+
+        <div class="results">
+          <div class="results-head"><h2 data-i18n="edit.results">Results from this sound</h2></div>
+          <div id="edit-jobs" class="jobs"></div>
+          <p class="empty-state small" id="edit-jobs-empty" data-i18n="edit.noResults"></p>
+        </div>
+      </div>
     </div>
   </section>
 
@@ -139,13 +364,18 @@
     </div>
     <p class="muted small folder" id="lib-folder"></p>
     <div id="library" class="library"></div>
-    <p class="empty" id="lib-empty" hidden data-i18n="lib.empty">No audio files yet.</p>
+    <div class="empty-state" id="lib-empty" hidden>
+      <p class="empty-title" id="lib-empty-text"></p>
+      <button type="button" class="btn" id="lib-empty-btn"></button>
+    </div>
     <div class="more"><button class="btn btn-quiet" id="lib-more" hidden data-i18n="lib.more">Show more</button></div>
   </section>
 </main>
 
 <div class="toast" id="toast" role="status" aria-live="polite" hidden></div>
 <script src="/static/i18n.js"></script>
+<script src="/static/wave.js"></script>
+<script src="/static/editor.js"></script>
 <script src="/static/app.js"></script>
 </body>
 </html>

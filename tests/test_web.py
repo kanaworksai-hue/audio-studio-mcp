@@ -156,8 +156,9 @@ def _make_library(fake):
     post.write(out / "a.wav", sine(1.0), 44100, "wav")
     post.write_sidecar(out / "a.wav", {"kind": "generate", "title": "Rain loop", "prompt": "soft rain",
                                        "audio_type": "sfx", "seed": 42, "seconds": 1.0})
-    time.sleep(0.01)
     post.write(out / "b.flac", sine(0.5), 44100, "flac")  # no sidecar
+    os.utime(out / "a.wav", (1_700_000_000, 1_700_000_000))
+    os.utime(out / "b.flac", (1_700_000_100, 1_700_000_100))
     (out / "notes.txt").write_text("x")
     (out / "reserved.wav").touch()  # name reserved by a running generation
     return out
@@ -183,6 +184,19 @@ def test_library_search_and_paging(client, fake):
     page = client.get("/api/library?limit=1&offset=1").json()
     assert page["total"] == 2 and [i["file"] for i in page["items"]] == ["a.wav"]
     assert client.get("/api/library?limit=x").status_code == 400
+
+
+def test_library_survives_bad_sidecars_and_picks_up_new_ones(client, fake):
+    out = _make_library(fake)
+    (out / "b.flac.json").write_text("[1, 2]")  # valid JSON, not an object
+    post.write(out / "c.wav", sine(0.2), 44100, "wav")
+    (out / "c.wav.json").write_text("{broken")
+    lib = client.get("/api/library?q=wav").json()
+    assert {i["file"] for i in lib["items"]} == {"a.wav", "c.wav"}
+    assert client.get("/api/library").json()["total"] == 3
+    # a sidecar written after the first listing (cached entry) shows up
+    post.write_sidecar(out / "c.wav", {"kind": "generate", "title": "late", "seed": 1})
+    assert [i["file"] for i in client.get("/api/library?q=late").json()["items"]] == ["c.wav"]
 
 
 def test_library_without_output_dir(client, fake):
@@ -238,8 +252,40 @@ def test_rejects_foreign_host_and_cross_origin_writes(fake, monkeypatch):
         assert c.post("/api/jobs", content=b'{"arguments":{"prompt":"x"}}',
                       headers={"Origin": good, "Content-Type": "text/plain"}).status_code == 403
         assert c.post("/api/jobs", json=body, headers={"Origin": good}).status_code == 202
-        # the page itself is not restricted beyond what the MCP SDK does
-        assert c.get("/").status_code == 200
+        # reads from another site's page (e.g. <audio src> or fetch) are refused too
+        for site in ("cross-site", "same-site"):
+            assert c.get("/api/library", headers={"Sec-Fetch-Site": site}).status_code == 403
+        assert c.get("/api/library", headers={"Sec-Fetch-Site": "same-origin"}).status_code == 200
+        assert c.get("/api/library", headers={"Sec-Fetch-Site": "none"}).status_code == 200
+        # the page cannot be framed (clickjacking)
+        r = c.get("/")
+        assert r.status_code == 200 and r.headers["x-frame-options"] == "DENY"
+        assert "frame-ancestors 'none'" in r.headers["content-security-policy"]
+        assert c.get("/api/status", headers={"Host": "evil.example"}).headers["x-frame-options"] == "DENY"
+
+
+def test_jobs_interrupted_by_a_new_event_loop_are_reported(fake):
+    q = web.JobQueue()
+    gate = threading.Event()
+    orig = fake._generate
+    fake._generate = lambda seeds, req: (gate.wait(10), orig(seeds, req))[1]
+
+    async def first():
+        q.submit("generate_audio", {"prompt": "x", "duration_seconds": 1})
+        q.submit("generate_audio", {"prompt": "y", "duration_seconds": 1})
+        await anyio.sleep(0.2)  # first one running, second queued; then the loop ends
+    anyio.run(first)
+    gate.set()
+    running, queued = sorted(q.jobs.values(), key=lambda j: j.seq)
+    assert (running.status, running.error) == ("error", "cancelled")
+    assert queued.status == "queued"
+
+    async def second():
+        job = q.submit("unload_models", {})
+        while job.status != "done":
+            await anyio.sleep(0.01)
+    anyio.run(second)
+    assert queued.status == "error" and "interrupted" in queued.error
 
 
 # ── real process: `audio-studio-mcp --web PORT` ──────────────────────────────
@@ -289,7 +335,11 @@ async def test_web_flag_serves_ui_api_and_mcp_on_one_port(tmp_path):
         assert (await http("/api/library"))["total"] == 2  # both the web job and the MCP call
     finally:
         proc.terminate()
-        out = proc.communicate(timeout=10)[0].decode(errors="replace")
+        try:
+            out = proc.communicate(timeout=10)[0].decode(errors="replace")
+        except subprocess.TimeoutExpired:
+            proc.kill()
+            out = proc.communicate()[0].decode(errors="replace")
     assert f"web UI: {base}/" in out, out
 
 
@@ -297,6 +347,13 @@ def test_web_and_http_are_exclusive(capsys):
     with pytest.raises(SystemExit):
         server.main(["--web", "8000", "--http", "8001"])
     assert "not allowed with" in capsys.readouterr().err
+
+
+@pytest.mark.parametrize("port", ["0", "70000", "x"])
+def test_web_port_is_validated(capsys, port):
+    with pytest.raises(SystemExit):
+        server.main(["--web", port])
+    assert "--web" in capsys.readouterr().err
 
 
 def test_web_opens_browser_once_started(monkeypatch):

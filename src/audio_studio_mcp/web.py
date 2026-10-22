@@ -19,7 +19,9 @@ from __future__ import annotations
 import asyncio
 import itertools
 import json
+import os
 import secrets
+import stat
 import time
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -95,12 +97,18 @@ class JobQueue:
         self._seq = itertools.count(1)
         self._queue: asyncio.Queue[Job] | None = None
         self._worker: asyncio.Task | None = None
+        self._loop: asyncio.AbstractEventLoop | None = None
 
     def submit(self, tool: str, arguments: dict) -> Job:
-        if self._queue is None:
-            self._queue = asyncio.Queue()
+        loop = asyncio.get_running_loop()
+        if self._loop is not loop:  # first call, or the app was restarted on a new loop
+            self._loop, self._queue = loop, asyncio.Queue()
+            for j in self.jobs.values():
+                if j.status in ("queued", "running"):  # their worker died with the old loop
+                    j.status, j.error, j.finished = "error", "interrupted (server restarted)", time.time()
+            self._worker = None
         if self._worker is None or self._worker.done():
-            self._worker = asyncio.get_running_loop().create_task(self._run())
+            self._worker = loop.create_task(self._run())
         job = Job(id=secrets.token_hex(6), tool=tool, arguments=arguments, seq=next(self._seq))
         self.jobs[job.id] = job
         self._queue.put_nowait(job)
@@ -126,18 +134,22 @@ class JobQueue:
             del self.jobs[j.id]
 
     async def _run(self) -> None:
-        assert self._queue is not None
+        queue = self._queue
+        assert queue is not None
         while True:
-            job = await self._queue.get()
+            job = await queue.get()
             job.status, job.started = "running", time.time()
             try:
                 job.result = _tool_result(await server.server.call_tool(job.tool, job.arguments))
                 job.status = "done"
             except Exception as e:  # ToolError carries the same text MCP clients see
                 job.error, job.status = str(e), "error"
+            except asyncio.CancelledError:  # server shutting down
+                job.error, job.status = "cancelled", "error"
+                raise
             finally:
                 job.finished = time.time()
-                self._queue.task_done()
+                queue.task_done()
 
 
 jobs = JobQueue()
@@ -179,15 +191,29 @@ def _safe_audio_path(name: str) -> Path | None:
     return resolved
 
 
-def _entry(path: Path) -> dict:
-    st = path.stat()
-    meta = None
+def _read_meta(side: Path) -> dict | None:
+    try:
+        meta = json.loads(side.read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return None
+    return meta if isinstance(meta, dict) else None
+
+
+# file name → (stat key, entry); a library request re-reads only changed files
+_entry_cache: dict[str, tuple[tuple, dict]] = {}
+
+
+def _entry(path: Path, st: os.stat_result) -> dict:
     side = path.with_suffix(path.suffix + ".json")
-    if side.is_file():
-        try:
-            meta = json.loads(side.read_text(encoding="utf-8"))
-        except (OSError, ValueError):
-            meta = None
+    try:
+        side_mtime = side.stat().st_mtime_ns
+    except OSError:
+        side_mtime = None
+    key = (str(path), st.st_mtime_ns, st.st_size, side_mtime)
+    hit = _entry_cache.get(path.name)
+    if hit and hit[0] == key:
+        return hit[1]
+    meta = _read_meta(side) if side_mtime is not None else None
     seconds = (meta or {}).get("seconds")
     if not isinstance(seconds, (int, float)):
         try:
@@ -195,33 +221,47 @@ def _entry(path: Path) -> dict:
             seconds = round(float(sf.info(str(path)).duration), 3)
         except Exception:
             seconds = None
-    return {"file": path.name, "path": str(path), "size": st.st_size, "mtime": st.st_mtime,
-            "seconds": seconds, "format": path.suffix.lower().lstrip("."), "meta": meta}
+    entry = {"file": path.name, "path": str(path), "size": st.st_size, "mtime": st.st_mtime,
+             "seconds": seconds, "format": path.suffix.lower().lstrip("."), "meta": meta}
+    _entry_cache[path.name] = (key, entry)
+    return entry
 
 
 def _search_text(e: dict) -> str:
     m = e["meta"] or {}
-    sf = m.get("sound_fields") or {}
+    sf = m.get("sound_fields")
     parts = [e["file"], m.get("title"), m.get("prompt"), m.get("prompt_used"),
-             m.get("original_idea"), m.get("audio_type"), m.get("kind"), str(m.get("seed", "")),
+             m.get("original_idea"), m.get("audio_type"), m.get("kind"), m.get("seed"),
              *(sf.values() if isinstance(sf, dict) else [])]
-    return " ".join(str(p) for p in parts if p).lower()
+    return " ".join(str(p) for p in parts if p is not None and p != "").lower()
 
 
 def list_library(query: str = "", offset: int = 0, limit: int = 100) -> dict:
     root = _output_dir()
-    files = []
-    if root.is_dir():
-        files = [p for p in root.iterdir()
-                 if p.suffix.lower() in AUDIO_EXTS and p.is_file() and not p.name.startswith(".")
-                 and p.stat().st_size > 0]  # skip names reserved by a running generation
-    files.sort(key=lambda p: p.stat().st_mtime, reverse=True)
-    entries = [_entry(p) for p in files]
+    files: list[tuple[Path, os.stat_result]] = []
+    try:
+        names = list(root.iterdir()) if root.is_dir() else []
+    except OSError:
+        names = []
+    for p in names:
+        if p.suffix.lower() not in AUDIO_EXTS or p.name.startswith("."):
+            continue
+        try:
+            st = p.stat()
+        except OSError:  # deleted while we scan
+            continue
+        if stat.S_ISREG(st.st_mode) and st.st_size > 0:  # empty = name reserved by a running generation
+            files.append((p, st))
+    files.sort(key=lambda f: (f[1].st_mtime, f[0].name), reverse=True)
+    if len(_entry_cache) > 2 * len(files) + 100:
+        _entry_cache.clear()
     words = query.lower().split()
-    if words:
-        entries = [e for e in entries if all(w in _search_text(e) for w in words)]
-    return {"output_dir": str(root), "total": len(entries),
-            "items": entries[offset:offset + limit]}
+    if not words:  # build entries for the requested page only
+        return {"output_dir": str(root), "total": len(files),
+                "items": [_entry(p, st) for p, st in files[offset:offset + limit]]}
+    entries = [e for e in (_entry(p, st) for p, st in files)
+               if all(w in _search_text(e) for w in words)]
+    return {"output_dir": str(root), "total": len(entries), "items": entries[offset:offset + limit]}
 
 
 # ── HTTP ─────────────────────────────────────────────────────────────────────
@@ -230,10 +270,13 @@ def _err(status: int, message: str, **extra) -> JSONResponse:
 
 
 class LocalOnly:
-    """ASGI middleware for /api: loopback Host only; writes need a same-origin
-    Origin and a JSON body (blocks DNS rebinding and cross-site form posts)."""
+    """ASGI middleware. /api: loopback Host only (DNS rebinding), no requests
+    from other sites (Sec-Fetch-Site), and writes need a same-origin Origin and
+    a JSON body (cross-site form posts). Every response: no framing (clickjacking)."""
 
     LOOPBACK = ("127.0.0.1", "localhost", "::1")
+    FRAME_HEADERS = [(b"x-frame-options", b"DENY"),
+                     (b"content-security-policy", b"frame-ancestors 'none'")]
 
     def __init__(self, app, port: int | None) -> None:
         self.app, self.port = app, port
@@ -248,22 +291,34 @@ class LocalOnly:
             return False
         return self.port is None or port == self.port
 
-    async def __call__(self, scope, receive, send):
-        if scope["type"] != "http" or not scope["path"].startswith("/api/"):
-            return await self.app(scope, receive, send)
+    def _problem(self, scope) -> str | None:
         headers = {k.decode("latin-1"): v.decode("latin-1") for k, v in scope["headers"]}
-        problem = None
         if not self._host_ok(headers.get("host", "")):
-            problem = "host not allowed"
-        elif scope["method"] not in ("GET", "HEAD"):
+            return "host not allowed"
+        if headers.get("sec-fetch-site", "same-origin") not in ("same-origin", "none"):
+            return "cross-site request refused"
+        if scope["method"] not in ("GET", "HEAD"):
             origin = headers.get("origin")
             if origin is None or not self._host_ok(origin.split("://", 1)[-1]):
-                problem = "cross-origin request refused"
-            elif not headers.get("content-type", "").startswith("application/json"):
-                problem = "expected application/json"
-        if problem:
-            return await _err(403, problem)(scope, receive, send)
-        return await self.app(scope, receive, send)
+                return "cross-origin request refused"
+            if not headers.get("content-type", "").startswith("application/json"):
+                return "expected application/json"
+        return None
+
+    async def __call__(self, scope, receive, send):
+        if scope["type"] != "http":
+            return await self.app(scope, receive, send)
+
+        async def send_with_headers(message):
+            if message["type"] == "http.response.start":
+                message = {**message, "headers": [*message.get("headers", []), *self.FRAME_HEADERS]}
+            await send(message)
+
+        if scope["path"].startswith("/api/"):
+            problem = self._problem(scope)
+            if problem:
+                return await _err(403, problem)(scope, receive, send_with_headers)
+        return await self.app(scope, receive, send_with_headers)
 
 
 async def api_status(_: Request) -> Response:
@@ -381,7 +436,8 @@ def serve(port: int, open_browser: bool = True) -> None:
     import uvicorn
 
     url = f"http://127.0.0.1:{port}/"
-    config = uvicorn.Config(create_app(port), host="127.0.0.1", port=port, log_level="info")
+    config = uvicorn.Config(create_app(port), host="127.0.0.1", port=port, log_level="info",
+                            access_log=False)  # the page polls; keep the console readable
     srv = uvicorn.Server(config)
 
     def announce():

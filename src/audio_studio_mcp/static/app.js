@@ -10,6 +10,7 @@ const state = {
   lib: { items: [], total: 0, offset: 0, query: "" },
 };
 const PAGE = 50;
+const RESTORE_JOBS = 8;
 
 // ── i18n ───────────────────────────────────────────────────────────────────
 function pickLang(pref) {
@@ -130,7 +131,7 @@ function initTabs() {
 // ── status bar ───────────────────────────────────────────────────────────────
 function renderStatus() {
   const box = $("#model-state"), text = $("#model-text"), s = state.status;
-  if (!s) { box.dataset.state = "error"; text.textContent = t("status.offline"); return; }
+  if (!s) { box.dataset.state = "error"; text.textContent = t("status.offline"); $("#unload").disabled = true; return; }
   const busy = s.jobs.running > 0;
   box.dataset.state = busy ? "busy" : s.loaded ? "loaded" : "idle";
   text.textContent = `${busy ? t("status.working") : s.loaded ? t("status.loaded") : t("status.notLoaded")} · ${s.backend}`;
@@ -173,7 +174,8 @@ function updateTypeUI() {
   updateDurationPlaceholder();
 }
 
-const NUMBER_FIELDS = { duration_seconds: parseFloat, bpm: parseInt, seed: parseInt, cfg: parseFloat, steps: parseInt, peak_ceiling_db: parseFloat };
+// Sent as typed; the server validates (a seed of 1.5 is an error, not 1).
+const NUMBER_FIELDS = ["duration_seconds", "bpm", "seed", "cfg", "steps", "peak_ceiling_db"];
 function readForm() {
   const f = form(), type = currentType();
   const args = { audio_type: type, prompt: f.prompt.value.trim(), variations: parseInt(f.variations.value, 10) };
@@ -183,10 +185,10 @@ function readForm() {
       if (v) args[k] = v;
     }
   }
-  for (const [k, parse] of Object.entries(NUMBER_FIELDS)) {
+  for (const k of NUMBER_FIELDS) {
     if (k === "bpm" && type === "sfx") continue;
     const raw = f[k].value.trim();
-    if (raw !== "") args[k] = parse(raw, 10);
+    if (raw !== "") args[k] = Number(raw);
   }
   const title = f.title.value.trim();
   if (title) args.title = title;
@@ -325,14 +327,22 @@ async function pollJobs() {
       let finished = false;
       try {
         const r = await api("/api/jobs");
+        const seen = new Set();
         for (const j of r.items) {
           const prev = state.jobs.get(j.id);
           if (prev && prev.status !== j.status && (j.status === "done" || j.status === "error")) finished = true;
           state.jobs.set(j.id, j);
+          seen.add(j.id);
+        }
+        // The server restarted and forgot these: stop waiting for them.
+        for (const j of state.jobs.values()) {
+          if (!seen.has(j.id) && (j.status === "queued" || j.status === "running")) {
+            state.jobs.set(j.id, { ...j, status: "error", position: null, error: t("jobs.lost") });
+          }
         }
         renderJobs();
       } catch { /* server restarting: keep trying */ }
-      if (finished) { refreshStatus(); if (!$("#page-library").hidden) loadLibrary(true); }
+      if (finished) refreshStatus();
       await new Promise((r) => setTimeout(r, 800));
     }
   } finally {
@@ -343,7 +353,8 @@ async function pollJobs() {
 async function restoreJobs() {
   try {
     const r = await api("/api/jobs");
-    for (const j of r.items) state.jobs.set(j.id, j);
+    // After a reload show the latest few jobs plus anything still waiting.
+    r.items.forEach((j, i) => { if (i < RESTORE_JOBS || j.status === "queued" || j.status === "running") state.jobs.set(j.id, j); });
     renderJobs();
     pollJobs();
   } catch { /* offline */ }
@@ -382,7 +393,8 @@ function regenerate(item) {
 function libraryItem(item) {
   const m = item.meta || {};
   const title = m.title || item.file;
-  const canRegen = m.kind === "generate" && m.seed != null;
+  // The form has no "raw" type, so only these can be regenerated faithfully.
+  const canRegen = m.kind === "generate" && m.seed != null && ["music", "instrument", "sfx"].includes(m.audio_type);
   const details = el("dl", { class: "item-details", hidden: true },
     metaRows(item).flatMap(([k, v]) => [el("dt", { text: k }), el("dd", { text: String(v) })]));
   const toggle = el("button", { class: "link-btn", type: "button", "aria-expanded": "false", text: t("act.details") });

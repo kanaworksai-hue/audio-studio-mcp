@@ -402,13 +402,20 @@ async def unload_models() -> dict:
     return {"unloaded": await _backend.unload()}
 
 
+def _port(text: str) -> int:
+    port = int(text)
+    if not 1 <= port <= 65535:
+        raise argparse.ArgumentTypeError(f"port must be 1-65535, got {port}")
+    return port
+
+
 def main(argv: list[str] | None = None) -> None:
     global _preload_when_ready
     ap = argparse.ArgumentParser(prog="audio-studio-mcp", description=__doc__.split("\n")[0])
     mode = ap.add_mutually_exclusive_group()
     mode.add_argument("--http", type=int, metavar="PORT",
                       help="serve streamable HTTP on 127.0.0.1:PORT instead of stdio (local only)")
-    mode.add_argument("--web", type=int, metavar="PORT",
+    mode.add_argument("--web", type=_port, metavar="PORT",
                       help="serve the web UI at http://127.0.0.1:PORT/ and MCP at /mcp on the same "
                            "port, sharing one loaded model (local only)")
     ap.add_argument("--no-browser", action="store_true", help="with --web: do not open a browser")
@@ -422,12 +429,12 @@ def main(argv: list[str] | None = None) -> None:
         sys.exit(1)
     backend.start_idle_reaper(IDLE_UNLOAD_MIN)
     if args.preload:
-        if args.http or args.web:
+        if args.http or args.web is not None:
             backend.preload()
         else:
             _preload_when_ready = True
 
-    if args.web:
+    if args.web is not None:
         from . import web
         web.serve(args.web, open_browser=not args.no_browser)
     elif args.http:

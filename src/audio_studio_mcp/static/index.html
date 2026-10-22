@@ -31,14 +31,14 @@
     <button class="btn btn-quiet btn-sm" id="unload" data-i18n="status.unload" data-i18n-title="status.unloadHint">Free memory</button>
     <label class="sr-only" for="lang" data-i18n="settings.language">Language</label>
     <select id="lang" class="select-sm">
-      <option value="auto" data-i18n="settings.auto">Auto</option>
+      <option value="auto" data-i18n="settings.autoLang">Language: Auto</option>
       <option value="ja">日本語</option>
       <option value="en">English</option>
       <option value="zh">简体中文</option>
     </select>
     <label class="sr-only" for="theme" data-i18n="settings.theme">Theme</label>
     <select id="theme" class="select-sm">
-      <option value="system" data-i18n="settings.system">System</option>
+      <option value="system" data-i18n="settings.systemTheme">Theme: System</option>
       <option value="light" data-i18n="settings.light">Light</option>
       <option value="dark" data-i18n="settings.dark">Dark</option>
     </select>
@@ -126,8 +126,8 @@
       <p class="form-error" id="form-error" role="alert" hidden></p>
       <div class="actions">
         <button type="submit" class="btn btn-primary btn-lg" id="gen-submit">Generate</button>
-        <button type="button" class="btn btn-quiet" id="gen-reset" data-i18n="gen.reset">Clear</button>
         <span class="kbd-hint muted small" data-i18n="gen.shortcut"></span>
+        <button type="button" class="link-btn clear-btn" id="gen-reset" data-i18n="gen.reset">Clear form</button>
       </div>
     </form>
 
@@ -139,8 +139,12 @@
       <div id="jobs" class="jobs"></div>
       <div class="empty-state" id="jobs-empty">
         <p class="empty-title" data-i18n="jobs.empty">Your sounds appear here.</p>
+        <ol class="steps" id="steps">
+          <li><strong data-i18n="steps.1"></strong><span class="muted small" data-i18n="steps.1d"></span></li>
+          <li><strong data-i18n="steps.2"></strong><span class="muted small" data-i18n="steps.2d"></span></li>
+          <li><strong data-i18n="steps.3"></strong><span class="muted small" data-i18n="steps.3d"></span></li>
+        </ol>
         <p class="muted small" data-i18n="jobs.emptyHint"></p>
-        <div class="starter" id="starters"></div>
       </div>
     </div>
   </section>
@@ -210,6 +214,7 @@
           </div>
 
           <form id="ai-form" class="form-body" role="tabpanel" aria-labelledby="st-ai" novalidate>
+            <p class="note warn" id="export-note" hidden></p>
             <fieldset class="field">
               <legend class="sr-only" data-i18n="edit.mode">Mode</legend>
               <div class="mode-cards" id="mode-cards">
@@ -244,12 +249,13 @@
 
             <div class="row">
               <div class="field">
-                <label for="ai-type" data-i18n="gen.typeShort">Type</label>
-                <select id="ai-type" name="audio_type">
+                <label for="ai-type" data-i18n="edit.treatAs">Treat as</label>
+                <select id="ai-type" name="audio_type" aria-describedby="ai-type-hint">
                   <option value="music" data-i18n="type.music">Music</option>
                   <option value="instrument" data-i18n="type.instrument">Instrument</option>
                   <option value="sfx" data-i18n="type.sfx">Sound effect</option>
                 </select>
+                <p class="hint" id="ai-type-hint" data-i18n="edit.treatAsHint"></p>
               </div>
               <fieldset class="field">
                 <legend data-i18n="gen.variations">Versions</legend>
@@ -281,6 +287,7 @@
 
             <p class="form-error" id="ai-error" role="alert" hidden></p>
             <div class="actions"><button type="submit" class="btn btn-primary btn-lg" id="ai-submit"></button></div>
+            <p class="hint" data-i18n="edit.keepsOriginal"></p>
           </form>
 
           <form id="export-form" class="form-body" role="tabpanel" aria-labelledby="st-export" novalidate hidden>
@@ -299,15 +306,15 @@
                 <label class="check"><input type="checkbox" name="mono"><span data-i18n="exp.mono">Mono</span></label>
                 <label class="check"><input type="checkbox" name="loop"><span data-i18n="exp.loop">Seamless loop</span></label>
               </div>
+              <div class="field">
+                <label for="x-normalize" data-i18n="exp.volume">Volume</label>
+                <select id="x-normalize" name="normalize">
+                  <option value="none" data-i18n="exp.volNone">Keep as is</option>
+                  <option value="peak" data-i18n="exp.volPeak">Peak (loudest point)</option>
+                  <option value="loudness" data-i18n="exp.volLoud">Loudness (LUFS)</option>
+                </select>
+              </div>
               <div class="row">
-                <div class="field">
-                  <label for="x-normalize" data-i18n="exp.volume">Volume</label>
-                  <select id="x-normalize" name="normalize">
-                    <option value="none" data-i18n="exp.volNone">Keep as is</option>
-                    <option value="peak" data-i18n="exp.volPeak">Peak (loudest point)</option>
-                    <option value="loudness" data-i18n="exp.volLoud">Loudness (LUFS)</option>
-                  </select>
-                </div>
                 <div class="field" id="x-lufs-field"><label for="x-lufs" data-i18n="exp.lufs">Target (LUFS)</label><input id="x-lufs" name="target_lufs" type="number" min="-40" max="-5" step="1"></div>
                 <div class="field"><label for="x-peak" data-i18n="exp.peak">Peak limit (dBFS)</label><input id="x-peak" name="peak_ceiling_db" type="number" min="-24" max="0" step="0.5"></div>
               </div>
@@ -362,6 +369,7 @@
       <button class="btn btn-quiet" id="lib-refresh" data-i18n="lib.refresh">Refresh</button>
       <span class="muted small" id="lib-count"></span>
     </div>
+    <div class="chips lib-kinds" id="lib-kinds" role="group" data-i18n-aria-label="lib.filter"></div>
     <p class="muted small folder" id="lib-folder"></p>
     <div id="library" class="library"></div>
     <div class="empty-state" id="lib-empty" hidden>

@@ -53,39 +53,44 @@ const Player = {
   audio: new Audio(),
   file: null,
   owner: null,        // the MiniWave currently loaded
+  prev: null,         // the one before (to redraw it as stopped)
   listeners: new Set(),
   init() {
     const a = this.audio;
     a.preload = "auto";
-    const tick = () => this.emit();
+    const tick = () => this.emit(false);
     for (const ev of ["play", "pause", "ended", "timeupdate", "loadedmetadata", "seeked"]) a.addEventListener(ev, tick);
     a.addEventListener("play", () => { this.raf(); window.dispatchEvent(new CustomEvent("as:play", { detail: "cards" })); });
     window.addEventListener("as:play", (e) => { if (e.detail !== "cards") a.pause(); });
     let rt;  // redraw thumbnails after a resize or theme change
-    const redraw = () => { clearTimeout(rt); rt = setTimeout(() => this.emit(), 100); };
+    const redraw = () => { clearTimeout(rt); rt = setTimeout(() => this.emit(true), 100); };
     window.addEventListener("resize", redraw);
     window.addEventListener("as:theme", redraw);
     matchMedia("(prefers-color-scheme: dark)").addEventListener("change", redraw);
   },
   raf() {
     if (this.audio.paused) return;
-    this.emit();
+    this.emit(false);
     requestAnimationFrame(() => this.raf());
   },
-  emit() { for (const f of this.listeners) f(); },
+  // all = every thumbnail (resize, theme); otherwise only the playing one and the previous one
+  emit(all) {
+    if (all) { for (const m of this.listeners) m.render(); return; }
+    for (const m of [this.owner, this.prev]) if (m) m.render();
+  },
   async play(mini, at) {
     const a = this.audio;
     if (this.file !== mini.file) {
       this.file = mini.file;
       a.src = audioUrl(mini.file);
     }
-    this.owner = mini;
+    if (this.owner !== mini) { this.prev = this.owner; this.owner = mini; }
     if (at != null) {
       if (a.readyState < 1) await new Promise((r) => a.addEventListener("loadedmetadata", r, { once: true }));
       a.currentTime = Math.min(at, (a.duration || at) - 0.01);
     }
     try { await a.play(); } catch { /* interrupted by another play() */ }
-    this.emit();
+    this.emit(false);
   },
   pause() { this.audio.pause(); },
   isPlaying(mini) { return this.owner === mini && !this.audio.paused; },
@@ -105,8 +110,7 @@ class MiniWave {
     this.time = el("span", { class: "mini-time" });
     this.node = el("div", { class: "mini-wave", dataset: { file } }, this.btn, this.track, this.time);
     this.node.mini = this;
-    this.update = () => this.render();
-    Player.listeners.add(this.update);
+    Player.listeners.add(this);
     MiniWave.observer.observe(this.node);
     this.render();
   }
@@ -135,20 +139,29 @@ class MiniWave {
     e.preventDefault();
   }
   render() {
-    if (!this.node.isConnected && this.drawn) { Player.listeners.delete(this.update); return; }
-    const playing = Player.isPlaying(this), now = Player.time(this);
-    this.btn.classList.toggle("playing", playing);
-    this.btn.setAttribute("aria-label", playing ? t("player.pause") : t("player.play"));
-    this.time.textContent = Player.owner === this && now > 0 ? `${fmtClock(now)} / ${fmtClock(this.seconds)}` : fmtClock(this.seconds);
-    this.track.setAttribute("aria-valuemax", String(Math.round(this.seconds * 10) / 10));
-    this.track.setAttribute("aria-valuenow", String(Math.round(now * 10) / 10));
-    this.track.setAttribute("aria-valuetext", `${fmtClock(now)} / ${fmtClock(this.seconds)}`);
-    if (!this.peaks || !this.node.isConnected) return;
+    if (!this.node.isConnected) {  // card removed from the page: forget it
+      if (this.attached) Player.listeners.delete(this);
+      return this.update();
+    }
+    this.attached = true;
+    this.update();
+    if (!this.peaks) return;
+    const now = Player.time(this);
     const ctx = fitCanvas(this.cv);
     ctx.clearRect(0, 0, this.cv.width, this.cv.height);
     drawPeaks(ctx, this.peaks.min, this.peaks.max, {
       color: cssVar("--wave"), played: cssVar("--wave-played"), split: this.seconds ? now / this.seconds : 0 });
-    this.drawn = true;
+  }
+  // button, time and slider values (no drawing)
+  update() {
+    const playing = Player.isPlaying(this), now = Player.time(this);
+    this.btn.classList.toggle("playing", playing);
+    this.btn.setAttribute("aria-label", playing ? t("player.pause") : t("player.play"));
+    const f = (x) => (this.seconds < 60 ? `${x.toFixed(1)} s` : fmtClock(x));  // short sounds: tenths
+    this.time.textContent = Player.owner === this && now > 0 ? `${f(now)} / ${f(this.seconds)}` : f(this.seconds);
+    this.track.setAttribute("aria-valuemax", String(Math.round(this.seconds * 10) / 10));
+    this.track.setAttribute("aria-valuenow", String(Math.round(now * 10) / 10));
+    this.track.setAttribute("aria-valuetext", `${fmtClock(now)} / ${fmtClock(this.seconds)}`);
   }
 }
 MiniWave.observer = new IntersectionObserver((entries) => {

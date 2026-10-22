@@ -311,6 +311,20 @@ def test_library_search_and_paging(client, fake):
     assert client.get("/api/library?limit=x").status_code == 400
 
 
+def test_library_kind_filter(client, fake):
+    out = _make_library(fake)  # a.wav = generated sfx, b.flac = no sidecar
+    post.write(out / "c.wav", sine(0.2), 44100, "wav")
+    post.write_sidecar(out / "c.wav", {"kind": "edit:inpaint", "audio_type": "music"})
+    post.write(out / "d.ogg", sine(0.2), 44100, "ogg")
+    post.write_sidecar(out / "d.ogg", {"kind": "process", "source": {"audio_type": "sfx"}})
+    files = lambda k, q="": [i["file"] for i in client.get(f"/api/library?kind={k}&q={q}").json()["items"]]
+    assert files("sfx") == ["a.wav"]
+    assert files("music") == ["c.wav"]  # an edit of music is still music
+    assert files("edit") == ["c.wav"] and files("process") == ["d.ogg"]
+    assert files("instrument") == [] and files("sfx", "rain") == ["a.wav"] and files("sfx", "nope") == []
+    assert client.get("/api/library?kind=video").status_code == 400
+
+
 def test_library_survives_bad_sidecars_and_picks_up_new_ones(client, fake):
     out = _make_library(fake)
     (out / "b.flac.json").write_text("[1, 2]")  # valid JSON, not an object

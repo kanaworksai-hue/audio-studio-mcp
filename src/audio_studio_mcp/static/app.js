@@ -10,7 +10,7 @@ const state = {
   jobs: new Map(),        // id -> job view from the server
   expect: new Map(),      // id -> audio seconds the job will produce (for the estimate)
   polling: false,
-  lib: { items: [], total: 0, query: "" },
+  lib: { items: [], total: 0, query: "", kind: "" },
 };
 const PAGE = 50;
 const RESTORE_JOBS = 8;
@@ -69,7 +69,7 @@ function applyI18n() {
   renderStatus();
   renderJobs();
   renderLibrary();
-  renderStarters();
+  renderKinds();
   Editor.applyI18n();
 }
 
@@ -242,7 +242,7 @@ function updateDurationUI() {
   $("#duration-hint").textContent = t("gen.durationHint", { def: d ?? "—", max });
   const cur = input.value.trim() === "" ? d : Number(input.value);
   $("#durations").replaceChildren(...DURATIONS[type].filter((s) => s <= max).map((s) =>
-    el("button", { type: "button", class: "chip", "aria-pressed": String(cur === s), text: fmtLen(s),
+    el("button", { type: "button", class: "chip", "aria-pressed": String(cur === s), text: `${s} s`,
       onclick: () => { input.value = s; updateDurationUI(); } })));
 }
 function updateTypeUI() {
@@ -377,22 +377,19 @@ function initForm() {
   form().addEventListener("keydown", (e) => {
     if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) { e.preventDefault(); form().requestSubmit(); }
   });
-  $("#gen-reset").addEventListener("click", () => { form().reset(); clearErrors(); updateTypeUI(); updateAdvancedDot(); });
+  $("#gen-reset").addEventListener("click", () => {
+    const saved = [...form().elements].filter((n) => n.name).map((n) => [n, n.type === "radio" || n.type === "checkbox" ? n.checked : n.value]);
+    form().reset(); clearErrors(); updateTypeUI(); updateAdvancedDot();
+    toast(t("toast.cleared"), { label: t("act.undo"), run: () => {
+      for (const [n, v] of saved) { if (n.type === "radio" || n.type === "checkbox") n.checked = v; else n.value = v; }
+      updateTypeUI(); updateAdvancedDot();
+    } });
+  });
   $("#adv-reset").addEventListener("click", () => {
     for (const k of ADV_FIELDS) field(k).value = "";
     updateAdvancedDot();
   });
   $("#unload").addEventListener("click", unloadModel);
-}
-
-// Starter cards in the empty Results area: one click fills the form.
-function renderStarters() {
-  const picks = [["sfx", EXAMPLES.sfx[0]], ["music", EXAMPLES.music[1]], ["instrument", EXAMPLES.instrument[0]]];
-  $("#starters").replaceChildren(...picks.map(([type, ex]) => el("button", { type: "button", class: "starter-card",
-    onclick: () => applyExample(type, ex) },
-    el("span", { class: "badge", text: t(`type.${type}`) }),
-    el("span", { class: "starter-name", text: t(`ex.${ex.key}`) }),
-    el("span", { class: "muted small", text: fmtLen(ex.seconds) }))));
 }
 
 // ── jobs ─────────────────────────────────────────────────────────────────────
@@ -441,16 +438,15 @@ function candidateCard(c, i, job) {
   const file = baseName(c.path), mini = new MiniWave(file, c.seconds);
   const many = job.result.candidates.length > 1;
   return el("div", { class: "cand", dataset: { index: i } },
-    el("div", { class: "cand-head" },
-      el("strong", { text: many ? t("cand.label", { n: LETTERS[i] || i + 1 }) : t("cand.single") }),
-      c.seed != null ? el("span", { class: "muted", text: t("cand.seed", { seed: c.seed }) }) : null),
+    el("div", { class: "cand-head", title: c.seed != null ? t("cand.seed", { seed: c.seed }) : null },
+      el("strong", { text: many ? t("cand.label", { n: LETTERS[i] || i + 1 }) : t("cand.single") })),
     mini.node,
     el("div", { class: "cand-actions" },
       el("button", { class: "btn btn-sm", type: "button", text: t("act.edit"), onclick: () => openEditor(file) }),
       el("a", { class: "btn btn-sm btn-quiet", href: audioUrl(file, true), download: file, text: t("act.download") }),
       moreMenu([
         [t("act.copyPath"), () => copyText(c.path)],
-        job.tool === "generate_audio" && c.seed != null ? [t("act.useSeed"), () => {
+        job.tool === "generate_audio" && c.seed != null ? [t("act.useSeed", { seed: c.seed }), () => {
           field("seed").value = c.seed; $("#advanced").open = true; updateAdvancedDot(); showPage("generate");
           toast(t("toast.seedSet", { seed: c.seed }));
         }] : null,
@@ -651,7 +647,9 @@ function regenerate(item) {
 }
 function libraryItem(item) {
   const m = item.meta || {};
-  const title = m.title || item.file;
+  // what the sound is (title or prompt), not its long generated file name
+  const prompt = promptLabel({ prompt: m.prompt, ...prefixSound(m.sound_fields) }) || (m.source && m.source.prompt) || "";
+  const title = m.title || prompt || item.file;
   // The form has no "raw" type, so only these can be regenerated faithfully.
   const canRegen = m.kind === "generate" && m.seed != null && TYPES.includes(m.audio_type);
   const details = el("dl", { class: "item-details", hidden: true },
@@ -667,15 +665,13 @@ function libraryItem(item) {
     kind.startsWith("edit") ? t(`mode.${kind.split(":")[1]}`) : kind === "process" ? t("kind.process") : null,
     kind === "process" || !m.kind ? item.format.toUpperCase() : null].filter(Boolean);
   const mini = new MiniWave(item.file, item.seconds);
-  const sub = promptLabel({ prompt: m.prompt, ...prefixSound(m.sound_fields) }) || (m.source && m.source.prompt) || "";
   return el("article", { class: "panel item" },
     el("div", { class: "item-main" },
-      el("div", { class: "item-title", title: item.file, text: title }),
+      el("div", { class: "item-title", title: title, text: title }),
       el("div", { class: "item-meta" },
         badges.map((b) => el("span", { class: "badge", text: b })),
-        el("span", { text: fmtDate(item.mtime) }),
-        m.seed != null ? el("span", { text: t("cand.seed", { seed: m.seed }) }) : null),
-      sub ? el("div", { class: "item-prompt", title: sub, text: sub }) : null),
+        el("span", { text: fmtDate(item.mtime) })),
+      el("div", { class: "item-file", title: item.path, text: item.file })),
     el("div", { class: "item-side" },
       mini.node,
       el("div", { class: "item-actions" },
@@ -697,8 +693,9 @@ function renderLibrary() {
   box.replaceChildren(...L.items.map(libraryItem));
   $("#lib-count").textContent = t("lib.count", { n: L.total });
   $("#lib-empty").hidden = L.items.length > 0;
-  $("#lib-empty-text").textContent = L.query ? t("lib.noMatch", { q: L.query }) : t("lib.empty");
-  $("#lib-empty-btn").textContent = L.query ? t("lib.clearSearch") : t("lib.generateFirst");
+  const filtered = L.query || L.kind;
+  $("#lib-empty-text").textContent = L.query ? t("lib.noMatch", { q: L.query }) : L.kind ? t("lib.noKind") : t("lib.empty");
+  $("#lib-empty-btn").textContent = filtered ? t("lib.clearSearch") : t("lib.generateFirst");
   $("#lib-more").hidden = L.items.length >= L.total;
 }
 let libSeq = 0;
@@ -706,7 +703,7 @@ async function loadLibrary(reset) {
   const L = state.lib, seq = ++libSeq;
   const offset = reset ? 0 : L.items.length;
   try {
-    const r = await api(`/api/library?q=${encodeURIComponent(L.query)}&offset=${offset}&limit=${PAGE}`);
+    const r = await api(`/api/library?q=${encodeURIComponent(L.query)}&kind=${L.kind}&offset=${offset}&limit=${PAGE}`);
     if (seq !== libSeq) return;  // a newer search finished first
     L.items = reset ? r.items : L.items.concat(r.items);
     L.total = r.total;
@@ -717,6 +714,13 @@ async function loadLibrary(reset) {
   }
   renderLibrary();
 }
+// Type filter chips above the library list.
+const LIB_KINDS = ["", "music", "instrument", "sfx", "edit", "process"];
+function renderKinds() {
+  $("#lib-kinds").replaceChildren(...LIB_KINDS.map((k) => el("button", { type: "button", class: "chip",
+    "aria-pressed": String(state.lib.kind === k), text: t(`lib.kind.${k || "all"}`),
+    onclick: () => { state.lib.kind = k; renderKinds(); loadLibrary(true); } })));
+}
 function initLibrary() {
   let timer;
   $("#lib-search").addEventListener("input", (e) => {
@@ -726,7 +730,9 @@ function initLibrary() {
   $("#lib-refresh").addEventListener("click", () => loadLibrary(true));
   $("#lib-more").addEventListener("click", () => loadLibrary(false));
   $("#lib-empty-btn").addEventListener("click", () => {
-    if (state.lib.query) { $("#lib-search").value = ""; state.lib.query = ""; loadLibrary(true); }
+    if (state.lib.query || state.lib.kind) {
+      $("#lib-search").value = ""; state.lib.query = ""; state.lib.kind = ""; renderKinds(); loadLibrary(true);
+    }
     else { showPage("generate"); $("#prompt").focus(); }
   });
 }

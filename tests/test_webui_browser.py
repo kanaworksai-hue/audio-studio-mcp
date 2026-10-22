@@ -132,10 +132,15 @@ def test_empty_states(web, browser, shots):
     """Runs first, on an empty output folder: every page explains what to do."""
     errors: list[str] = []
     page = _page(browser, web, "en", "light", errors)
-    page.wait_for_selector(".starter-card")
+    page.wait_for_selector("#steps li")
     _check(page, "empty/generate")
     page.screenshot(path=str(shots / "empty-generate.png"), full_page=True)
-    page.locator(".starter-card").first.click()
+    page.click("#gen-form label:has(input[name=audio_type][value=sfx])")
+    page.click("#examples >> text=Glass breaking")
+    assert page.input_value("#sound_source") == "glass bottle"
+    page.click("#gen-reset")  # clear, then undo from the toast
+    assert page.input_value("#sound_source") == ""
+    page.click("#toast >> text=Undo")
     assert page.input_value("#sound_source") == "glass bottle"
     assert page.is_checked("#gen-form input[name=audio_type][value=sfx]")
     page.click("#tab-edit")
@@ -256,7 +261,8 @@ def test_editor_flow(web, browser, shots):
     sel = page.evaluate("Editor.sel")
     assert sel["a"] == pytest.approx(1.0, abs=0.05) and sel["b"] == pytest.approx(2.0, abs=0.05)
     assert page.input_value("#w-start") == f"{sel['a']:.2f}"
-    assert page.text_content("#ai-submit").startswith("Replace 0:01.0")
+    assert page.text_content("#ai-submit").startswith("Replace 1.0")
+    assert page.text_content("#ai-submit").endswith("· 2 versions")
     # the numeric fields edit the selection too
     page.fill("#w-start", "1.5")
     page.press("#w-start", "Enter")
@@ -274,7 +280,7 @@ def test_editor_flow(web, browser, shots):
     page.click("label.mode-card:has(input[value=continue])")
     page.click("#extend-chips >> text=+5 s")
     assert page.input_value("#ai-duration") == "9"
-    assert page.text_content("#ai-submit").startswith("Extend to 0:09")
+    assert page.text_content("#ai-submit") == "Extend to 9 s · 2 versions"
 
     # export the selection as a game sound effect
     page.click("#st-export")
@@ -286,6 +292,19 @@ def test_editor_flow(web, browser, shots):
     exp = page.evaluate("[...state.jobs.values()].find(j => j.tool === 'process_audio')")
     assert exp["status"] == "done" and exp["result"]["format"] == "ogg" and exp["result"]["channels"] == 1
     assert exp["result"]["seconds"] <= 1.5 + 0.01
+    # fades never swallow a short selection
+    page.fill("#w-start", "0.2")
+    page.press("#w-start", "Enter")
+    page.fill("#w-end", "0.6")
+    page.press("#w-end", "Enter")
+    page.click("label.preset:has(input[value=video_bgm])")
+    assert "shortened to fit" in page.text_content("#x-summary")
+    assert page.text_content("#x-summary").startswith("Will export 0.40 s")
+    page.click("#x-submit")
+    page.wait_for_function("[...state.jobs.values()].filter(j => j.tool === 'process_audio' && j.status === 'done').length === 2", timeout=10000)
+    vid = page.evaluate("[...state.jobs.values()].filter(j => j.tool === 'process_audio').sort((a, b) => b.created - a.created)[0]")
+    assert vid["arguments"]["fade_in_ms"] == 100 and vid["arguments"]["fade_out_ms"] == 100
+    assert vid["result"]["seconds"] == pytest.approx(0.4, abs=0.01)
     # changing a detail switches the preset to Custom
     page.click("#x-custom summary")
     page.click("#export-form label.check:has(input[name=mono])")
@@ -295,7 +314,7 @@ def test_editor_flow(web, browser, shots):
     page.click("#w-zoom-sel")
     assert page.is_visible("#w-overview")
     v = page.evaluate("Editor.view")
-    assert v["s"] >= 1.4 and v["e"] <= 3.1
+    assert v["s"] >= 0.15 and v["e"] <= 0.65
     for _ in range(6):
         page.click("#w-zoom-in")
     page.wait_for_function("Editor.detail !== null", timeout=5000)
@@ -317,6 +336,14 @@ def test_editor_flow(web, browser, shots):
 
     assert not errors, errors
     # a missing file falls back to the empty editor (the browser logs the 404)
+    # the library filters by type
+    page.click("#tab-library")
+    page.click("#lib-kinds >> text=Exports")
+    page.wait_for_function("document.querySelectorAll('.item').length === 2")
+    assert all(f.endswith(".ogg") or f.endswith(".wav") for f in page.locator(".item-file").all_text_contents())
+    page.click("#lib-kinds >> text=AI edits")
+    page.wait_for_function("document.querySelectorAll('.item').length === 2")
+    page.click("#lib-kinds >> text=All")
     page.goto(web + "/#edit/missing.wav")
     page.wait_for_selector("#edit-empty:not([hidden])")
     page.wait_for_selector("#toast >> text=missing.wav is not in the output folder")

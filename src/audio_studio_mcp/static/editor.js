@@ -160,7 +160,7 @@ const Editor = {
     $("#edit-name").textContent = m.title || this.file;
     $("#edit-name").title = this.file;
     const parts = [];
-    if (this.seconds) parts.push(fmtClock(this.seconds, 1));
+    if (this.seconds) parts.push(this.fmt(this.seconds));
     if (this.sampleRate) parts.push(`${(this.sampleRate / 1000).toFixed(1).replace(/\.0$/, "")} kHz`, this.channels === 1 ? t("edit.mono") : t("edit.stereo"));
     if (m.audio_type) parts.push(t(`type.${m.audio_type}`));
     if (m.kind) parts.push(kindLabel(m));
@@ -255,7 +255,7 @@ const Editor = {
     for (let tk = Math.ceil(s / step) * step; tk <= e + 1e-9; tk += step) {
       const x = Math.round(((tk - s) / span) * W) + 0.5;
       ctx.beginPath(); ctx.moveTo(x, H - 6 * dpr); ctx.lineTo(x, H); ctx.stroke();
-      ctx.fillText(fmtClock(tk, decimals), x + 3 * dpr, 2 * dpr);
+      ctx.fillText(this.seconds >= 60 ? fmtClock(tk, decimals) : tk.toFixed(decimals), x + 3 * dpr, 2 * dpr);
     }
   },
   drawOverview() {
@@ -329,7 +329,7 @@ const Editor = {
     }
     $("#w-start").placeholder = "0.00";
     $("#w-end").placeholder = this.seconds ? this.seconds.toFixed(2) : "";
-    $("#w-len").textContent = s ? t("wave.length", { len: (s.b - s.a).toFixed(2) }) : t("wave.noSelection");
+    $("#w-len").textContent = s ? t("wave.length", { len: this.fmt(s.b - s.a) }) : t("wave.noSelection");
     $("#w-sel-clear").disabled = !s;
     $("#w-zoom-sel").disabled = !s;
   },
@@ -466,7 +466,7 @@ const Editor = {
     if (this.playhead > e || this.playhead < s) this.setView(this.playhead - span * 0.1, this.playhead + span * 0.9);
   },
   renderClock() {
-    $("#w-clock").textContent = `${fmtClock(this.playhead, 1)} / ${fmtClock(this.seconds, 1)}`;
+    $("#w-clock").textContent = `${this.fmt(this.playhead, undefined, false)} / ${this.fmt(this.seconds)}`;
   },
   renderTransport() {
     const playing = !this.audio.paused;
@@ -506,9 +506,23 @@ const Editor = {
     clearErrors($("#export-form"), $("#x-error"));
     this.updateAiForm();
   },
-  selText() {
-    const d = this.seconds < 10 ? 2 : 1;  // short sounds need finer times
-    return this.sel ? `${fmtClock(this.sel.a, d)}–${fmtClock(this.sel.b, d)}` : "";
+  // Times as the selection fields show them: seconds under a minute, m:ss.d above.
+  fmt(sec, d = this.seconds < 10 ? 2 : 1, unit = true) {
+    if (this.seconds >= 60) return fmtClock(sec, d);
+    return `${sec.toFixed(d)}${unit ? " s" : ""}`;
+  },
+  selText() { return this.sel ? `${this.fmt(this.sel.a, undefined, false)}–${this.fmt(this.sel.b)}` : ""; },
+  outLen() {
+    const trim = this.xField("trim_selection").checked && this.sel;
+    let len = trim ? this.sel.b - this.sel.a : this.seconds;
+    if (this.xField("loop").checked) len -= Number(this.xField("loop_crossfade_ms").value) / 1000 || 0;
+    return Math.max(0, len);
+  },
+  // Fades never take more than a quarter of the output each (a 2 s fade on a 0.4 s clip silences it).
+  fades() {
+    const cap = (this.outLen() * 1000) / 4;
+    const fi = Number(this.xField("fade_in_ms").value) || 0, fo = Number(this.xField("fade_out_ms").value) || 0;
+    return { fi: Math.round(Math.min(fi, cap)), fo: Math.round(Math.min(fo, cap)), clamped: fi > cap || fo > cap };
   },
   updateAiForm() {
     if (!$("#ai-form")) return;
@@ -527,7 +541,7 @@ const Editor = {
     dur.min = String(Math.floor(this.seconds) + 1);
     dur.max = String(this.max());
     const target = parseFloat(dur.value);
-    $("#extend-hint").textContent = t("edit.extendHint", { now: fmtClock(this.seconds, 1), max: this.max() });
+    $("#extend-hint").textContent = t("edit.extendHint", { now: this.fmt(this.seconds), max: this.max() });
     const adds = [5, 10, 30, 60].filter((d) => this.seconds + d <= this.max());
     $("#extend-chips").replaceChildren(...adds.map((d) => el("button", { type: "button", class: "chip",
       "aria-pressed": String(Math.abs(target - Math.ceil(this.seconds + d)) < 0.01), text: `+${d} s`,
@@ -537,8 +551,17 @@ const Editor = {
     btn.disabled = !this.file || (mode === "inpaint" && !this.sel);
     if (mode === "variation") btn.textContent = n > 1 ? t("edit.submitVariationN", { n }) : t("edit.submitVariation");
     else if (mode === "inpaint") btn.textContent = this.sel ? t("edit.submitInpaint", { range: this.selText() }) : t("mode.inpaint");
-    else btn.textContent = t("edit.submitContinue", { len: target > 0 ? fmtClock(target) : "—" });
-    if (n > 1 && mode !== "variation") btn.textContent += ` × ${n}`;
+    else btn.textContent = t("edit.submitContinue", { len: target > 0 ? `${target} s` : "—" });
+    if (n > 1 && mode !== "variation") btn.textContent += t("edit.nVersions", { n });
+    // AI edits of an export (mono, resampled, normalized) are better done on its original
+    const m = (this.item && this.item.meta) || {};
+    const exp = $("#export-note");
+    exp.hidden = !(m.kind === "process" && m.input_audio);
+    if (!exp.hidden) {
+      const orig = baseName(m.input_audio);
+      exp.replaceChildren(el("span", { text: t("edit.isExport") }), " ",
+        el("button", { type: "button", class: "link-btn", text: t("edit.openOriginal"), onclick: () => openEditor(orig) }));
+    }
   },
   async submitAi() {
     const f = $("#ai-form"), mode = this.aiMode();
@@ -598,7 +621,9 @@ const Editor = {
   },
   setPreset(p) {
     this.preset = p;
-    const v = PRESETS[p];
+    let v = PRESETS[p];
+    // "keep as is" keeps the file's own rate when it is one we can write
+    if (p === "original" && [44100, 48000].includes(this.sampleRate)) v = { ...v, sample_rate: String(this.sampleRate) };
     if (v) {
       for (const [k, val] of Object.entries(v)) {
         const fld = this.xField(k);
@@ -620,7 +645,9 @@ const Editor = {
     const trim = this.xField("trim_selection");
     trim.disabled = !this.sel;
     if (!this.sel) trim.checked = false;
-    $("#x-trim-sel-text").textContent = this.sel ? t("exp.trimSel", { range: this.selText() }) : t("exp.trimSelNone");
+    $("#x-trim-sel-text").textContent = this.sel
+      ? t("exp.trimSel", { range: this.selText(), len: this.fmt(this.sel.b - this.sel.a), total: this.fmt(this.seconds) })
+      : t("exp.trimSelNone");
     $("#trim-sel-row").classList.toggle("disabled", !this.sel);
     const norm = this.xField("normalize").value;
     $("#x-lufs-field").hidden = norm !== "loudness";
@@ -633,11 +660,11 @@ const Editor = {
     if (norm === "peak") parts.push(t("sum.peak", { db: this.xField("peak_ceiling_db").value }));
     if (norm === "loudness") parts.push(t("sum.lufs", { lufs: this.xField("target_lufs").value }));
     if (this.xField("loop").checked) parts.push(t("sum.loop", { ms: this.xField("loop_crossfade_ms").value }));
-    const fi = Number(this.xField("fade_in_ms").value), fo = Number(this.xField("fade_out_ms").value);
-    if (fi || fo) parts.push(t("sum.fade", { a: fi, b: fo }));
+    const { fi, fo, clamped } = this.fades();
+    if (fi || fo) parts.push(t(clamped ? "sum.fadeShort" : "sum.fade", { a: fi, b: fo }));
     const fmt = String(this.xField("format").value).toUpperCase(), sr = Number(this.xField("sample_rate").value) / 1000;
     parts.push(`${fmt} ${sr} kHz`);
-    $("#x-summary").textContent = t("sum.prefix") + parts.join(" · ");
+    $("#x-summary").textContent = t("sum.prefix", { len: this.fmt(this.outLen()) }) + parts.join(" · ");
     $("#x-submit").disabled = !this.file;
   },
   async submitExport() {
@@ -646,7 +673,7 @@ const Editor = {
     const num = (k) => Number(this.xField(k).value);
     const args = { input_audio: this.file, trim_silence: this.xField("trim_silence").checked, mono: this.xField("mono").checked,
       normalize: this.xField("normalize").value, peak_ceiling_db: num("peak_ceiling_db"), loop: this.xField("loop").checked,
-      fade_in_ms: num("fade_in_ms"), fade_out_ms: num("fade_out_ms"), format: this.xField("format").value,
+      fade_in_ms: this.fades().fi, fade_out_ms: this.fades().fo, format: this.xField("format").value,
       sample_rate: num("sample_rate") };
     if (args.normalize === "loudness") args.target_lufs = num("target_lufs");
     if (args.loop) args.loop_crossfade_ms = num("loop_crossfade_ms");

@@ -274,7 +274,20 @@ def _search_text(e: dict) -> str:
     return " ".join(str(p) for p in parts if p is not None and p != "").lower()
 
 
-def list_library(query: str = "", offset: int = 0, limit: int = 100) -> dict:
+LIBRARY_KINDS = ("music", "instrument", "sfx", "edit", "process")
+
+
+def _kind_matches(e: dict, kind: str) -> bool:
+    m = e["meta"] or {}
+    k = str(m.get("kind") or "")
+    if kind == "edit":
+        return k.startswith("edit")
+    if kind == "process":
+        return k == "process"
+    return m.get("audio_type") == kind and k != "process"
+
+
+def list_library(query: str = "", offset: int = 0, limit: int = 100, kind: str = "") -> dict:
     root = _output_dir()
     files: list[tuple[Path, os.stat_result]] = []
     try:
@@ -294,11 +307,11 @@ def list_library(query: str = "", offset: int = 0, limit: int = 100) -> dict:
     if len(_entry_cache) > 2 * len(files) + 100:
         _entry_cache.clear()
     words = query.lower().split()
-    if not words:  # build entries for the requested page only
+    if not words and not kind:  # build entries for the requested page only
         return {"output_dir": str(root), "total": len(files),
                 "items": [_entry(p, st) for p, st in files[offset:offset + limit]]}
     entries = [e for e in (_entry(p, st) for p, st in files)
-               if all(w in _search_text(e) for w in words)]
+               if all(w in _search_text(e) for w in words) and (not kind or _kind_matches(e, kind))]
     return {"output_dir": str(root), "total": len(entries), "items": entries[offset:offset + limit]}
 
 
@@ -483,7 +496,10 @@ async def api_library(request: Request) -> Response:
         limit = min(500, max(1, int(q.get("limit", 100))))
     except ValueError:
         return _err(400, "offset/limit must be integers")
-    return JSONResponse(await asyncio.to_thread(list_library, q.get("q", ""), offset, limit))
+    kind = q.get("kind", "")
+    if kind and kind not in LIBRARY_KINDS:
+        return _err(400, f"kind must be one of {', '.join(LIBRARY_KINDS)}")
+    return JSONResponse(await asyncio.to_thread(list_library, q.get("q", ""), offset, limit, kind))
 
 
 async def api_library_item(request: Request) -> Response:

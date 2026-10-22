@@ -264,7 +264,9 @@ def test_editor_flow(web, browser, shots):
     # inpaint needs a selection
     page.click("label.mode-card:has(input[value=inpaint])")
     assert page.is_disabled("#ai-submit")
+    assert page.text_content("#w-hint") == "Drag across the waveform to choose the part to replace"
     _drag(page, "#w-wave", 0.25, 0.5)
+    assert page.is_hidden("#w-hint") and page.text_content("#w-sel-label") == "Will be replaced"
     sel = page.evaluate("Editor.sel")
     assert sel["a"] == pytest.approx(1.0, abs=0.05) and sel["b"] == pytest.approx(2.0, abs=0.05)
     assert page.input_value("#w-start") == f"{sel['a']:.2f}"
@@ -282,18 +284,23 @@ def test_editor_flow(web, browser, shots):
     assert job["arguments"]["start_seconds"] == 1.5 and job["arguments"]["end_seconds"] == 3
     assert job["arguments"]["input_audio"].endswith(file)
     assert page.locator("#edit-jobs .cand").count() == 2
+    assert page.locator("#edit-jobs .orig .mini-wave").count() == 1  # the original, key 0
+    assert page.text_content("#edit-jobs .job-prompt") == "Replace 1.5–3 s"
 
     # extend: target length, button says so
     page.click("label.mode-card:has(input[value=continue])")
     page.click("#extend-chips >> text=+5 s")
     assert page.input_value("#ai-duration") == "9"
     assert page.text_content("#ai-submit") == "Extend to 9 s · 2 versions"
+    assert page.text_content("#w-ghost") == "+5 s new"
 
     # export the selection as a game sound effect
     page.click("#st-export")
     page.click("label.preset:has(input[value=game_sfx])")
     assert page.is_checked("#x-trim-sel")
     assert "OGG 48 kHz" in page.text_content("#x-summary")
+    assert page.text_content("#x-submit") == "Export 1.50 s as OGG"
+    assert page.text_content("#w-sel-label") == "Will be exported"
     page.click("#x-submit")
     page.wait_for_selector("#toast >> text=Saved", timeout=10000)
     exp = page.evaluate("[...state.jobs.values()].find(j => j.tool === 'process_audio')")
@@ -347,7 +354,8 @@ def test_editor_flow(web, browser, shots):
     page.wait_for_function("[...state.jobs.values()].filter(j => j.tool === 'process_audio' && j.status === 'done').length === 3", timeout=10000)
     last = page.evaluate("[...state.jobs.values()].filter(j => j.tool === 'process_audio').sort((a, b) => b.created - a.created)[0]")
     assert "peak_ceiling_db" not in last["arguments"] and last["result"]["peak_dbfs"] <= -0.99
-    page.click("#st-ai")
+    page.click("label.mode-card:has(input[value=variation])")
+    assert page.is_hidden("#export-form") and page.is_visible("#ai-form")
 
     # keys: Esc clears, click moves the playhead, Space plays and pauses
     page.click("#w-wave")
@@ -371,6 +379,11 @@ def test_editor_flow(web, browser, shots):
     assert all(f.endswith(".ogg") or f.endswith(".wav") for f in page.locator(".item-file").all_text_contents())
     page.click("#lib-kinds >> text=AI edits")
     page.wait_for_function("document.querySelectorAll('.item').length === 2")
+    # Export from a library row opens the editor on the Export task
+    page.locator(".item").first.locator(".item-actions button", has_text="Export").click()
+    page.wait_for_selector("#export-form:not([hidden])")
+    assert page.get_attribute("#st-export", "aria-pressed") == "true"
+    page.click("#tab-library")
     page.click("#lib-kinds >> text=All")
     page.evaluate("location.hash = '#edit/%E0%A4%A'")  # malformed link: no exception
     page.wait_for_selector("#page-generate:not([hidden])")
@@ -404,7 +417,7 @@ def test_languages_and_themes(web, browser, shots, lang, theme):
 
     page.click("#tab-library")
     page.wait_for_selector(".item")
-    page.locator(".item").first.locator(".item-actions button").nth(1).click()  # Details
+    page.locator(".item").first.locator(".item-actions button[aria-expanded]").click()  # Details
     _check(page, f"{lang}/{theme}/library")
     page.screenshot(path=str(shots / f"library-{lang}-{theme}.png"), full_page=True)
 

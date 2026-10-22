@@ -2,7 +2,8 @@
 window.I18N = {
   en: {
     "settings.theme": "Theme", "settings.light": "Light", "settings.system": "Follow the system", "settings.dark": "Dark",
-    "nav.generate": "Generate", "nav.edit": "Edit", "nav.library": "Library",
+    "nav.generate": "Generate", "nav.edit": "Edit & export", "nav.library": "Library",
+    "task.title": "What do you want to do with this sound?", "task.export": "Export", "task.exportDesc": "For a game or video: format, volume, loop", "task.scope.whole": "Whole sound", "task.scope.sel": "Uses your selection", "task.scope.end": "Adds to the end", "task.scope.either": "Whole sound or selection", "wave.dragHint": "Drag across the waveform to choose the part to replace", "wave.region.inpaint": "Will be replaced", "wave.region.export": "Will be exported", "wave.wholeNote": "The whole sound is used", "wave.ghost": "+{len} new", "wave.shortcuts": "Keyboard shortcuts", "act.export": "Export", "act.downloadWav": "Download original WAV", "act.reuse": "Reuse settings", "cand.original": "Original", "cand.abHintOrig": "Compare: press 1–4 for the new versions, 0 for the original, at the same moment", "jobs.nextHint": "Pick the version you like, then Edit it or Export it for your game or video.", "jobs.gotIt": "Got it", "exp.submitLen": "Export {len} as {fmt}", "edit.jobInpaint": "Replace {range}", "edit.jobContinue": "Extend to {len}", "gen.durationAuto": "Auto ({def} s)", "gen.durationOther": "Other",
     "status.unload": "Unload model", "status.unloadHint": "Frees the 5–7 GB the model uses. It loads again on the next generation.",
     "status.loaded": "Model ready", "status.notLoaded": "Model loads on first use", "status.working": "Working",
     "status.offline": "Server unreachable", "status.unloaded": "Model unloaded, memory freed",
@@ -147,7 +148,8 @@ window.I18N = {
   },
   ja: {
     "settings.theme": "テーマ", "settings.light": "ライト", "settings.system": "システムに合わせる", "settings.dark": "ダーク",
-    "nav.generate": "生成", "nav.edit": "編集", "nav.library": "ライブラリ",
+    "nav.generate": "生成", "nav.edit": "編集・書き出し", "nav.library": "ライブラリ",
+    "task.title": "この音をどうしますか？", "task.export": "書き出し", "task.exportDesc": "ゲーム・動画向けに形式・音量・ループを整える", "task.scope.whole": "音全体", "task.scope.sel": "選択範囲を使う", "task.scope.end": "末尾に追加", "task.scope.either": "全体または選択範囲", "wave.dragHint": "差し替える部分を波形の上でドラッグして選んでください", "wave.region.inpaint": "ここを差し替え", "wave.region.export": "書き出す範囲", "wave.wholeNote": "音全体が対象です", "wave.ghost": "+{len} 追加", "wave.shortcuts": "キーボード操作", "act.export": "書き出し", "act.downloadWav": "元の WAV をダウンロード", "act.reuse": "この設定を使う", "cand.original": "元の音", "cand.abHintOrig": "聴き比べ：1〜4 キーで新しいバージョン、0 で元の音（同じ位置のまま）", "jobs.nextHint": "気に入ったバージョンを選んで「編集」か「書き出し」へ。", "jobs.gotIt": "OK", "exp.submitLen": "{len} を {fmt} で書き出し", "edit.jobInpaint": "{range} を差し替え", "edit.jobContinue": "{len} に延長", "gen.durationAuto": "おまかせ（{def} 秒）", "gen.durationOther": "その他",
     "status.unload": "モデルを解放", "status.unloadHint": "モデルが使っている 5〜7 GB のメモリを解放します。次の生成でまた読み込みます。",
     "status.loaded": "モデル準備完了", "status.notLoaded": "初回の生成時にモデルを読み込みます", "status.working": "処理中",
     "status.offline": "サーバーに接続できません", "status.unloaded": "モデルをアンロードしてメモリを解放しました",
@@ -292,7 +294,8 @@ window.I18N = {
   },
   zh: {
     "settings.theme": "主题", "settings.light": "浅色", "settings.system": "跟随系统", "settings.dark": "深色",
-    "nav.generate": "生成", "nav.edit": "编辑", "nav.library": "作品库",
+    "nav.generate": "生成", "nav.edit": "编辑与导出", "nav.library": "作品库",
+    "task.title": "要对这个声音做什么？", "task.export": "导出", "task.exportDesc": "为游戏或视频调整格式、音量、循环", "task.scope.whole": "整段声音", "task.scope.sel": "使用选区", "task.scope.end": "接在结尾", "task.scope.either": "整段或选区", "wave.dragHint": "在波形上拖动，选择要替换的部分", "wave.region.inpaint": "将被替换", "wave.region.export": "导出范围", "wave.wholeNote": "使用整段声音", "wave.ghost": "新增 +{len}", "wave.shortcuts": "键盘操作", "act.export": "导出", "act.downloadWav": "下载原始 WAV", "act.reuse": "沿用设置", "cand.original": "原始", "cand.abHintOrig": "对比试听：按 1–4 听新版本，按 0 听原始（同一位置）", "jobs.nextHint": "选出喜欢的版本，然后“编辑”或“导出”到游戏或视频。", "jobs.gotIt": "知道了", "exp.submitLen": "导出 {len}（{fmt}）", "edit.jobInpaint": "替换 {range}", "edit.jobContinue": "延长到 {len}", "gen.durationAuto": "自动（{def} 秒）", "gen.durationOther": "其他",
     "status.unload": "卸载模型", "status.unloadHint": "释放模型占用的 5–7 GB 内存，下次生成时会重新加载。",
     "status.loaded": "模型已就绪", "status.notLoaded": "首次生成时加载模型", "status.working": "处理中",
     "status.offline": "无法连接服务器", "status.unloaded": "已卸载模型并释放内存",

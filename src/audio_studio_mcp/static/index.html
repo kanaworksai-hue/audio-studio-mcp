@@ -5,7 +5,8 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <meta name="color-scheme" content="light dark">
 <title>Audio Studio</title>
-<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%232563eb'/%3E%3Cpath d='M7 16v0M11 11v10M15 7v18M19 12v8M23 9v14M25 16v0' stroke='white' stroke-width='2.4' stroke-linecap='round'/%3E%3C/svg%3E">
+<link rel="icon" type="image/png" href="/static/brand/favicon.png">
+<link rel="preload" href="/static/fonts/ibm-plex-sans-latin.woff2" as="font" type="font/woff2" crossorigin>
 <link rel="stylesheet" href="/static/app.css">
 <script>
   // Apply the saved theme before first paint (no flash).
@@ -15,7 +16,8 @@
 <body>
 <header class="topbar">
   <div class="brand">
-    <svg class="logo" viewBox="0 0 32 32" aria-hidden="true"><rect width="32" height="32" rx="7"/><path d="M11 11v10M15 7v18M19 12v8M23 9v14" /></svg>
+    <!-- Kana, the KanaWorks_AI mascot: not MIT-licensed, see static/brand/README.md -->
+    <img class="logo" src="/static/brand/kana.png" alt="" width="32" height="32">
     <span class="brand-name">Audio Studio</span>
     <span class="version" id="version"></span>
   </div>
@@ -55,7 +57,10 @@
   <!-- Generate -->
   <section id="page-generate" class="page" role="tabpanel" aria-labelledby="tab-generate">
     <form id="gen-form" class="panel form" novalidate>
-      <h1 class="panel-title" data-i18n="gen.title">New sound</h1>
+      <div class="panel-head">
+        <h1 class="panel-title" data-i18n="gen.title">New sound</h1>
+        <button type="button" class="link-btn" id="gen-reset" data-i18n="gen.reset">Clear form</button>
+      </div>
 
       <fieldset class="field">
         <legend data-i18n="gen.type">What do you want to make?</legend>
@@ -87,22 +92,14 @@
       <div class="field">
         <label for="duration_seconds" data-i18n="gen.duration">Length (seconds)</label>
         <div class="inline">
-          <input id="duration_seconds" name="duration_seconds" class="num" type="number" min="0.5" max="380" step="0.5" inputmode="decimal">
           <div class="chips" id="durations" role="group" data-i18n-aria-label="gen.durationPresets"></div>
+          <span class="other-len"><span class="muted small" aria-hidden="true" data-i18n="gen.durationOther">Other</span>
+          <input id="duration_seconds" name="duration_seconds" class="num" type="number" min="0.5" max="380" step="0.5" inputmode="decimal"></span>
         </div>
-        <p class="hint" id="duration-hint"></p>
+        <p class="hint" id="duration-hint" hidden></p>
       </div>
 
       <div class="row">
-        <fieldset class="field">
-          <legend data-i18n="gen.variations">Versions</legend>
-          <div class="segmented compact">
-            <label><input type="radio" name="variations" value="1"><span>1</span></label>
-            <label><input type="radio" name="variations" value="2" checked><span>2</span></label>
-            <label><input type="radio" name="variations" value="3"><span>3</span></label>
-            <label><input type="radio" name="variations" value="4"><span>4</span></label>
-          </div>
-        </fieldset>
         <div class="field" id="bpm-field">
           <label for="bpm" data-i18n="gen.bpm">Tempo (BPM)</label>
           <input id="bpm" name="bpm" type="number" min="30" max="300" step="1" inputmode="numeric" data-i18n-placeholder="gen.auto">
@@ -130,17 +127,29 @@
       </details>
 
       <p class="form-error" id="form-error" role="alert" hidden></p>
-      <div class="actions">
+      <div class="submit-row">
+        <fieldset class="field versions">
+          <legend data-i18n="gen.variations">Versions</legend>
+          <div class="segmented compact">
+            <label><input type="radio" name="variations" value="1"><span>1</span></label>
+            <label><input type="radio" name="variations" value="2" checked><span>2</span></label>
+            <label><input type="radio" name="variations" value="3"><span>3</span></label>
+            <label><input type="radio" name="variations" value="4"><span>4</span></label>
+          </div>
+        </fieldset>
         <button type="submit" class="btn btn-primary btn-lg" id="gen-submit">Generate</button>
-        <span class="kbd-hint muted small" data-i18n="gen.shortcut"></span>
-        <button type="button" class="link-btn clear-btn" id="gen-reset" data-i18n="gen.reset">Clear form</button>
       </div>
+      <p class="kbd-hint muted small" data-i18n="gen.shortcut"></p>
     </form>
 
     <div class="results">
       <div class="results-head">
         <h2 data-i18n="jobs.title">Results</h2>
         <span class="muted small" id="queue-info"></span>
+      </div>
+      <div class="tip" id="next-tip" role="note" hidden>
+        <span data-i18n="jobs.nextHint"></span>
+        <button type="button" class="btn btn-sm" id="next-tip-ok" data-i18n="jobs.gotIt">Got it</button>
       </div>
       <div id="jobs" class="jobs"></div>
       <div class="empty-state" id="jobs-empty">
@@ -189,7 +198,10 @@
         <canvas class="ruler" id="w-ruler" aria-hidden="true"></canvas>
         <div class="wave" id="w-wave" tabindex="0" role="slider" data-i18n-aria-label="wave.playhead" aria-valuemin="0">
           <canvas id="w-canvas" aria-hidden="true"></canvas>
+          <div class="wave-hint" id="w-hint" hidden></div>
+          <div class="ghost" id="w-ghost" hidden></div>
           <div class="sel" id="w-sel" hidden>
+            <span class="region-label" id="w-sel-label" hidden></span>
             <div class="handle start" id="w-h-start" role="slider" tabindex="0" data-i18n-aria-label="wave.selStart"></div>
             <div class="handle end" id="w-h-end" role="slider" tabindex="0" data-i18n-aria-label="wave.selEnd"></div>
           </div>
@@ -208,27 +220,29 @@
           <button type="button" class="link-btn" id="w-sel-all" data-i18n="wave.selectAll">Select all</button>
           <button type="button" class="link-btn" id="w-sel-clear" data-i18n="wave.clear">Clear</button>
           <span class="spacer"></span>
-          <span class="muted small wave-help" id="w-help" data-i18n="wave.help"></span>
+          <details class="wave-help small" id="w-help">
+            <summary data-i18n="wave.shortcuts">Keyboard shortcuts</summary>
+            <p class="muted" data-i18n="wave.help"></p>
+          </details>
         </div>
       </div>
 
+      <section class="task-bar" aria-labelledby="task-title">
+        <h2 class="task-title" id="task-title" data-i18n="task.title">What do you want to do with this sound?</h2>
+        <div class="mode-cards" id="mode-cards" role="group" aria-labelledby="task-title">
+          <label class="mode-card"><input type="radio" name="mode" value="variation" form="ai-form" checked><span class="mode-name" data-i18n="mode.variation">Make a variation</span><span class="mode-desc" data-i18n="mode.variationDesc"></span><span class="mode-scope" data-i18n="task.scope.whole"></span></label>
+          <label class="mode-card"><input type="radio" name="mode" value="inpaint" form="ai-form"><span class="mode-name" data-i18n="mode.inpaint">Replace a section</span><span class="mode-desc" data-i18n="mode.inpaintDesc"></span><span class="mode-scope" data-i18n="task.scope.sel"></span></label>
+          <label class="mode-card"><input type="radio" name="mode" value="continue" form="ai-form"><span class="mode-name" data-i18n="mode.continue">Extend</span><span class="mode-desc" data-i18n="mode.continueDesc"></span><span class="mode-scope" data-i18n="task.scope.end"></span></label>
+          <button type="button" class="mode-card task-export" id="st-export" aria-pressed="false"><span class="mode-name" data-i18n="task.export">Export</span><span class="mode-desc" data-i18n="task.exportDesc"></span><span class="mode-scope" data-i18n="task.scope.either"></span></button>
+        </div>
+      </section>
+
       <div class="edit-body">
         <div class="panel edit-tools">
-          <div class="subtabs" role="tablist">
-            <button role="tab" id="st-ai" aria-selected="true" aria-controls="ai-form" data-i18n="edit.aiTab">Change with AI</button>
-            <button role="tab" id="st-export" aria-selected="false" aria-controls="export-form" data-i18n="edit.exportTab">Export</button>
-          </div>
+          <h2 class="tool-title" id="tool-title"></h2>
 
-          <form id="ai-form" class="form-body" role="tabpanel" aria-labelledby="st-ai" novalidate>
+          <form id="ai-form" class="form-body" aria-labelledby="tool-title" novalidate>
             <p class="note warn" id="export-note" hidden></p>
-            <fieldset class="field">
-              <legend class="sr-only" data-i18n="edit.mode">Mode</legend>
-              <div class="mode-cards" id="mode-cards">
-                <label class="mode-card"><input type="radio" name="mode" value="variation" checked><span class="mode-name" data-i18n="mode.variation">Make a variation</span><span class="mode-desc" data-i18n="mode.variationDesc"></span></label>
-                <label class="mode-card"><input type="radio" name="mode" value="inpaint"><span class="mode-name" data-i18n="mode.inpaint">Replace a section</span><span class="mode-desc" data-i18n="mode.inpaintDesc"></span></label>
-                <label class="mode-card"><input type="radio" name="mode" value="continue"><span class="mode-name" data-i18n="mode.continue">Extend</span><span class="mode-desc" data-i18n="mode.continueDesc"></span></label>
-              </div>
-            </fieldset>
 
             <div class="field" id="strength-field">
               <label for="strength"><span data-i18n="edit.strength">How different?</span> <output id="strength-out" class="muted"></output></label>
@@ -253,8 +267,19 @@
               <p class="hint" id="ai-prompt-hint"></p>
             </div>
 
-            <div class="row top">
-              <div class="field">
+            <fieldset class="field">
+              <legend data-i18n="gen.variations">Versions</legend>
+              <div class="segmented compact">
+                <label><input type="radio" name="variations" value="1"><span>1</span></label>
+                <label><input type="radio" name="variations" value="2" checked><span>2</span></label>
+                <label><input type="radio" name="variations" value="3"><span>3</span></label>
+                <label><input type="radio" name="variations" value="4"><span>4</span></label>
+              </div>
+            </fieldset>
+
+            <details class="advanced" id="ai-advanced">
+              <summary data-i18n="gen.advanced">Advanced</summary>
+              <div class="field" id="ai-type-field">
                 <label for="ai-type" data-i18n="edit.treatAs">Treat as</label>
                 <select id="ai-type" name="audio_type" aria-describedby="ai-type-hint">
                   <option value="music" data-i18n="type.music">Music</option>
@@ -263,19 +288,6 @@
                 </select>
                 <p class="hint" id="ai-type-hint" data-i18n="edit.treatAsHint"></p>
               </div>
-              <fieldset class="field">
-                <legend data-i18n="gen.variations">Versions</legend>
-                <div class="segmented compact">
-                  <label><input type="radio" name="variations" value="1"><span>1</span></label>
-                  <label><input type="radio" name="variations" value="2" checked><span>2</span></label>
-                  <label><input type="radio" name="variations" value="3"><span>3</span></label>
-                  <label><input type="radio" name="variations" value="4"><span>4</span></label>
-                </div>
-              </fieldset>
-            </div>
-
-            <details class="advanced" id="ai-advanced">
-              <summary data-i18n="gen.advanced">Advanced</summary>
               <div class="field">
                 <label for="ai-title" data-i18n="gen.name">File name</label>
                 <input id="ai-title" name="title" type="text" data-i18n-placeholder="gen.namePh">
@@ -296,7 +308,7 @@
             <p class="hint" data-i18n="edit.keepsOriginal"></p>
           </form>
 
-          <form id="export-form" class="form-body" role="tabpanel" aria-labelledby="st-export" novalidate hidden>
+          <form id="export-form" class="form-body" aria-labelledby="tool-title" novalidate hidden>
             <fieldset class="field">
               <legend data-i18n="exp.purpose">What is it for?</legend>
               <div class="preset-grid" id="presets"></div>
@@ -369,6 +381,7 @@
 
   <!-- Library -->
   <section id="page-library" class="page" role="tabpanel" aria-labelledby="tab-library" hidden>
+    <h1 class="page-title" data-i18n="nav.library">Library</h1>
     <div class="library-bar">
       <label class="sr-only" for="lib-search" data-i18n="lib.search">Search</label>
       <input id="lib-search" type="search" data-i18n-placeholder="lib.searchPh" autocomplete="off">

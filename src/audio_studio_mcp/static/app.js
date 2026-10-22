@@ -9,6 +9,7 @@ const state = {
   loaded: false,          // model loaded (from /api/jobs while polling)
   jobs: new Map(),        // id -> job view from the server
   expect: new Map(),      // id -> audio seconds the job will produce (for the estimate)
+  presets: new Map(),     // export job id -> preset it was made with (names its result)
   polling: false,
   lib: { items: [], total: 0, query: "", kind: "" },
 };
@@ -204,9 +205,14 @@ function showPage(name, push = true) {
   if (name === "edit") Editor.shown();
   else Editor.hidden();
 }
-function openEditor(file) {
+function openEditor(file, { task } = {}) {
+  if (task) Editor.setTask(task);
   Editor.open(file);
   showPage("edit");
+}
+function download(file) {
+  const a = el("a", { href: audioUrl(file, true), download: file });
+  document.body.append(a); a.click(); a.remove();
 }
 function route() {
   const h = location.hash;
@@ -240,7 +246,8 @@ function renderStatus() {
   text.textContent = busy ? t("status.working") : s.loaded ? t("status.loaded") : t("status.notLoaded");
   box.title = `${s.backend} — ${s.model}`;
   $("#version").textContent = `v${s.version}`;
-  $("#unload").disabled = !s.loaded || busy;
+  $("#unload").hidden = !s.loaded;
+  $("#unload").disabled = busy;
   $("#queue-info").textContent = (s.jobs.running || s.jobs.queued) ? t("jobs.queueInfo", s.jobs) : "";
   $("#lib-folder").textContent = t("lib.folder", { dir: s.output_dir });
   updateDurationUI();
@@ -271,10 +278,14 @@ function updateDurationUI() {
   if (state.status) input.max = String(state.status.max_seconds);
   const max = state.status ? state.status.max_seconds : 380;
   $("#duration-hint").textContent = t("gen.durationHint", { def: d ?? "—", max });
-  const cur = input.value.trim() === "" ? d : Number(input.value);
-  $("#durations").replaceChildren(...DURATIONS[type].filter((s) => s <= max).map((s) =>
-    el("button", { type: "button", class: "chip", "aria-pressed": String(cur === s), text: `${s} s`,
-      onclick: () => { input.value = s; updateDurationUI(); } })));
+  const empty = input.value.trim() === "", cur = Number(input.value), auto = empty || cur === d;
+  input.title = t("gen.durationHint", { def: d ?? "—", max });
+  $("#durations").replaceChildren(
+    el("button", { type: "button", class: "chip", "aria-pressed": String(auto), text: t("gen.durationAuto", { def: d ?? "—" }),
+      onclick: () => { input.value = ""; updateDurationUI(); } }),
+    ...DURATIONS[type].filter((s) => s <= max && s !== d).map((s) =>
+      el("button", { type: "button", class: "chip", "aria-pressed": String(!empty && cur === s), text: `${s} s`,
+        onclick: () => { input.value = s; updateDurationUI(); } })));
 }
 function updateTypeUI() {
   const type = currentType(), sfx = type === "sfx";
@@ -421,6 +432,7 @@ function initForm() {
     updateAdvancedDot();
   });
   $("#unload").addEventListener("click", unloadModel);
+  $("#next-tip-ok").addEventListener("click", () => { localStorage.setItem("as.tip.next", "1"); $("#next-tip").hidden = true; });
 }
 
 // ── jobs ─────────────────────────────────────────────────────────────────────
@@ -455,10 +467,24 @@ function promptLabel(a) {
   return parts.join(", ");
 }
 function jobTitle(job) {
-  const a = job.arguments || {};
-  if (job.tool === "process_audio") return t("jobs.exportOf", { file: baseName(a.input_audio || "") });
-  if (job.tool === "edit_audio") return `${t(`mode.${a.mode}`)} · ${promptLabel(a) || baseName(a.input_audio || "")}`;
+  const a = job.arguments || {}, r = job.result || {};
+  if (job.tool === "process_audio") {
+    const preset = state.presets.get(job.id);
+    const parts = [preset ? t(`preset.${preset}`) : null, String(a.format || "wav").toUpperCase()].filter(Boolean);
+    if (typeof r.seconds === "number") parts.push(fmtLen(r.seconds));
+    return parts.join(" · ");
+  }
+  if (job.tool === "edit_audio") {
+    if (a.mode === "inpaint") return t("edit.jobInpaint", { range: `${a.start_seconds}–${a.end_seconds} s` });
+    if (a.mode === "continue") return t("edit.jobContinue", { len: a.duration_seconds ? `${a.duration_seconds} s` : "—" });
+    return t(`mode.${a.mode}`);
+  }
   return promptLabel(a) || "—";
+}
+// Full detail for the title tooltip: the prompt, the input, the processing steps.
+function jobDetail(job) {
+  const a = job.arguments || {}, r = job.result || {};
+  return [...new Set([jobTitle(job), promptLabel(a), a.input_audio && baseName(a.input_audio), r.steps && r.steps.join(" → ")].filter(Boolean))].join("\n");
 }
 function jobBadge(job) {
   if (job.tool === "process_audio") return t("kind.process");
@@ -467,21 +493,37 @@ function jobBadge(job) {
 const LETTERS = "ABCD";
 function candidateCard(c, i, job) {
   const file = baseName(c.path), mini = new MiniWave(file, c.seconds, Math.round(job.finished || 0));
-  const many = job.result.candidates.length > 1;
+  const many = job.result.candidates.length > 1 || job.tool === "edit_audio";
+  const exported = job.tool === "process_audio";
   return el("div", { class: "cand", dataset: { index: i } },
     el("div", { class: "cand-head", title: c.seed != null ? t("cand.seed", { seed: c.seed }) : null },
-      el("strong", { text: many ? t("cand.label", { n: LETTERS[i] || i + 1 }) : t("cand.single") })),
+      el("strong", { text: job.result.candidates.length > 1 ? t("cand.label", { n: LETTERS[i] || i + 1 }) : t("cand.single") }),
+      many ? el("kbd", { text: String(i + 1) }) : null),
     mini.node,
     el("div", { class: "cand-actions" },
-      el("button", { class: "btn btn-sm", type: "button", text: t("act.edit"), onclick: () => openEditor(file) }),
-      el("a", { class: "btn btn-sm btn-quiet", href: audioUrl(file, true), download: file, text: t("act.download") }),
+      exported
+        ? el("a", { class: "btn btn-sm", href: audioUrl(file, true), download: file, text: t("act.download") })
+        : el("button", { class: "btn btn-sm", type: "button", text: t("act.edit"), onclick: () => openEditor(file, { task: "ai" }) }),
+      exported
+        ? el("button", { class: "btn btn-sm btn-quiet", type: "button", text: t("act.edit"), onclick: () => openEditor(file, { task: "ai" }) })
+        : el("button", { class: "btn btn-sm btn-quiet", type: "button", text: t("act.export"), onclick: () => openEditor(file, { task: "export" }) }),
       moreMenu([
+        exported ? null : [t("act.downloadWav"), () => download(file)],
         [t("act.copyPath"), () => copyText(c.path)],
         job.tool === "generate_audio" && c.seed != null ? [t("act.useSeed", { seed: c.seed }), () => {
           field("seed").value = c.seed; $("#advanced").open = true; updateAdvancedDot(); showPage("generate");
           toast(t("toast.seedSet", { seed: c.seed }));
         }] : null,
       ])));
+}
+// The sound an AI edit started from, to compare against (key 0).
+function originalCard(job) {
+  const file = baseName(job.arguments.input_audio || "");
+  const secs = file === Editor.file ? Editor.seconds : 0;
+  const mini = new MiniWave(file, secs, Editor.item && file === Editor.file ? Math.round(Editor.item.mtime) : 0);
+  return el("div", { class: "orig" },
+    el("div", { class: "cand-head" }, el("strong", { text: t("cand.original") }), el("kbd", { text: "0" })),
+    mini.node);
 }
 function resultCandidates(job) {
   const r = job.result || {};
@@ -493,7 +535,7 @@ function jobCard(job) {
   const active = job.status === "queued" || job.status === "running";
   const head = el("div", { class: "job-head" },
     el("span", { class: "badge", text: jobBadge(job) }),
-    el("span", { class: "job-prompt", title: jobTitle(job), text: jobTitle(job) }),
+    el("span", { class: "job-prompt", title: jobDetail(job), text: jobTitle(job) }),
     el("span", { class: "job-state" }, active ? el("span", { class: "spinner", "aria-hidden": "true" }) : null,
       el("span", { class: "job-state-text", text: jobStateText(job) })));
   const card = el("article", { class: "panel job", dataset: { status: job.status, id: job.id, tool: job.tool }, onkeydown: (e) => abKeys(e, card) }, head);
@@ -504,16 +546,19 @@ function jobCard(job) {
   if (job.status === "error") card.append(el("p", { class: "job-error", text: job.error || "" }));
   if (job.status === "done") {
     const cands = resultCandidates(job);
+    const orig = job.tool === "edit_audio" && job.arguments.input_audio ? originalCard(job) : null;
     if (job.result && job.result.candidates) {
-      card.append(el("div", { class: "candidates" }, cands.map((c, i) => candidateCard(c, i, job))));
+      card.append(el("div", { class: "candidates" }, orig, cands.map((c, i) => candidateCard(c, i, job))));
     } else {
       card.append(el("div", { class: "candidates" }, cands.map((c) => candidateCard(c, 0, { ...job, result: { candidates: [c] } }))));
-      if (job.result && job.result.steps) card.append(el("p", { class: "muted small job-steps", text: job.result.steps.join(" → ") }));
     }
     const foot = el("div", { class: "job-foot" });
-    if (cands.length > 1) foot.append(el("span", { class: "muted small", text: t("cand.abHint") }));
+    if (orig) foot.append(el("span", { class: "muted small", text: t("cand.abHintOrig") }));
+    else if (cands.length > 1) foot.append(el("span", { class: "muted small", text: t("cand.abHint") }));
     if (job.tool === "generate_audio") {
-      foot.append(el("button", { class: "link-btn", type: "button", text: t("act.moreLike"), onclick: () => moreLikeThis(job) }));
+      foot.append(el("div", { class: "foot-actions" },
+        el("button", { class: "btn btn-sm", type: "button", text: t("act.moreLike"), onclick: () => moreLikeThis(job) }),
+        el("button", { class: "btn btn-sm btn-quiet", type: "button", text: t("act.reuse"), onclick: () => reuseSettings(job) })));
     }
     if (foot.children.length) card.append(foot);
   }
@@ -530,13 +575,17 @@ function updateProgress(card, job) {
     bar.style.width = "";
   }
 }
-// 1–4 (or A–D) play candidate N of this card from the same position; ←/→ step.
+// 1–4 (or A–D) play candidate N of this card from the same position, 0 the
+// original of an AI edit; ↑/↓ step.
 function abKeys(e, card) {
   if (typing(e) || e.metaKey || e.ctrlKey || e.altKey) return;
   const minis = [...card.querySelectorAll(".mini-wave")].map((n) => n.mini);
   if (minis.length < 2) return;
+  const hasOrig = !!card.querySelector(".orig .mini-wave");
   let i = "1234".indexOf(e.key);
   if (i < 0) i = "abcd".indexOf(e.key.toLowerCase());
+  if (i >= 0 && hasOrig) i += 1;
+  if (e.key === "0" && hasOrig) i = 0;
   const cur = minis.indexOf(Player.owner);
   if (e.key === "ArrowDown" || e.key === "ArrowUp") {
     i = ((cur < 0 ? 0 : cur) + (e.key === "ArrowDown" ? 1 : minis.length - 1)) % minis.length;
@@ -551,6 +600,15 @@ async function cancelJob(job) {
   try { state.jobs.set(job.id, await api(`/api/jobs/${job.id}/cancel`, { json: {} })); }
   catch (e) { toast(e.message); }
   renderJobs();
+}
+// Put a result's settings back in the form, without its seed (a new take).
+function reuseSettings(job) {
+  const a = job.arguments || {};
+  fillForm({ audio_type: a.audio_type, prompt: a.prompt, seconds: a.duration_seconds, bpm: a.bpm, cfg: a.cfg, steps: a.steps,
+    negative_prompt: a.negative_prompt,
+    sound_fields: { source: a.sound_source, action: a.sound_action, material: a.sound_material, space: a.sound_space } });
+  window.scrollTo({ top: 0 });
+  $("#prompt").focus();
 }
 function moreLikeThis(job) {
   const args = { ...job.arguments };
@@ -584,13 +642,15 @@ function renderJobs() {
   const gen = list.filter((j) => j.tool === "generate_audio");
   renderJobList($("#jobs"), gen);
   $("#jobs-empty").hidden = gen.length > 0;
+  // once: what to do with a finished result
+  $("#next-tip").hidden = !gen.some((j) => j.status === "done") || localStorage.getItem("as.tip.next") === "1";
   Editor.renderJobs(list.filter((j) => j.tool !== "generate_audio"));
 }
 let unseen = 0;
 function noteFinished() {
   if (!document.hidden) return;
   unseen++;
-  document.title = `(${unseen}) ✓ Audio Studio`;
+  document.title = `(${unseen}) Audio Studio`;
 }
 document.addEventListener("visibilitychange", () => { if (!document.hidden) { unseen = 0; document.title = "Audio Studio"; } });
 async function pollJobs() {
@@ -709,10 +769,13 @@ function libraryItem(item) {
     el("div", { class: "item-side" },
       mini.node,
       el("div", { class: "item-actions" },
-        el("button", { class: "btn btn-sm", type: "button", text: t("act.edit"), onclick: () => openEditor(item.file) }),
-        el("a", { class: "btn btn-sm btn-quiet", href: audioUrl(item.file, true), download: item.file, text: t("act.download") }),
+        el("button", { class: "btn btn-sm", type: "button", text: t("act.edit"), onclick: () => openEditor(item.file, { task: "ai" }) }),
+        kind === "process"
+          ? el("a", { class: "btn btn-sm btn-quiet", href: audioUrl(item.file, true), download: item.file, text: t("act.download") })
+          : el("button", { class: "btn btn-sm btn-quiet", type: "button", text: t("act.export"), onclick: () => openEditor(item.file, { task: "export" }) }),
         toggle,
         moreMenu([
+          kind === "process" ? null : [t("act.download"), () => download(item.file)],
           canRegen ? [t("act.regen"), () => regenerate(item)] : null,
           [t("act.copyPath"), () => copyText(item.path)],
         ]))),

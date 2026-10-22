@@ -1,6 +1,6 @@
-// Edit page: waveform with zoom, playhead and a drag-selected range, then
-// "Change with AI" (edit_audio: variation / inpaint / continue) and "Export"
-// (process_audio). Mouse: click = move the playhead (outside the selection it
+// Edit page: waveform with zoom, playhead and a drag-selected range, then one
+// row of tasks: three AI edits (edit_audio: variation / inpaint / continue) and
+// Export (process_audio). The waveform labels what the chosen task will touch. Mouse: click = move the playhead (outside the selection it
 // also clears it), drag = select, Shift+click = move the nearest edge,
 // double-click = select all, Ctrl/⌘+wheel = zoom, horizontal wheel = scroll.
 "use strict";
@@ -27,7 +27,7 @@ const Editor = {
   file: null, item: null, seconds: 0, sampleRate: 0, channels: 0,
   view: { s: 0, e: 1 }, sel: null, playhead: 0, playSel: false,
   overview: null, detail: null, detailTimer: null, drag: null,
-  audio: new Audio(), visible: false, openSeq: 0,
+  audio: new Audio(), visible: false, openSeq: 0, task: "ai",
 
   // ── setup ──────────────────────────────────────────────────────────────
   init() {
@@ -69,17 +69,23 @@ const Editor = {
     window.addEventListener("as:theme", () => this.draw());
     matchMedia("(prefers-color-scheme: dark)").addEventListener("change", () => this.draw());
 
-    // sub tabs
-    for (const b of document.querySelectorAll(".subtabs [role=tab]")) {
-      b.addEventListener("click", () => {
-        for (const o of document.querySelectorAll(".subtabs [role=tab]")) {
-          o.setAttribute("aria-selected", String(o === b));
-          $(`#${o.getAttribute("aria-controls")}`).hidden = o !== b;
-        }
-      });
-    }
+    // task cards: the three AI modes (radios of #ai-form) and Export
+    $("#mode-cards").addEventListener("change", () => this.setTask("ai"));
+    for (const lab of document.querySelectorAll("#mode-cards label.mode-card")) lab.addEventListener("click", () => this.setTask("ai"));
+    $("#st-export").addEventListener("click", () => this.setTask("export"));
+    $("#mode-cards").addEventListener("keydown", (e) => {  // the radios sit outside #ai-form
+      if (e.key === "Enter" && (e.metaKey || e.ctrlKey) && this.task === "ai") { e.preventDefault(); $("#ai-form").requestSubmit(); }
+    });
     this.initAiForm();
     this.initExportForm();
+  },
+  setTask(task) {
+    this.task = task;
+    $("#ai-form").hidden = task !== "ai";
+    $("#export-form").hidden = task !== "export";
+    $("#st-export").setAttribute("aria-pressed", String(task === "export"));
+    this.updateAiForm();
+    this.updateExportForm();
   },
   applyI18n() {
     this.renderTransport();
@@ -257,7 +263,7 @@ const Editor = {
     const decimals = step < 0.1 ? 2 : step < 1 ? 1 : 0;
     ctx.fillStyle = cssVar("--muted");
     ctx.strokeStyle = cssVar("--border-strong");
-    ctx.font = `${11 * dpr}px system-ui, sans-serif`;
+    ctx.font = `${11 * dpr}px "IBM Plex Sans", system-ui, sans-serif`;
     ctx.textBaseline = "top";
     for (let tk = Math.ceil(s / step) * step; tk <= e + 1e-9; tk += step) {
       const x = Math.round(((tk - s) / span) * W) + 0.5;
@@ -289,6 +295,7 @@ const Editor = {
     wave.setAttribute("aria-valuemax", String(Math.round(this.seconds * 100) / 100));
     wave.setAttribute("aria-valuenow", String(Math.round(this.playhead * 100) / 100));
     wave.setAttribute("aria-valuetext", `${fmtClock(this.playhead, 1)} / ${fmtClock(this.seconds, 1)}`);
+    this.renderHints();
     const box = $("#w-sel");
     if (!this.sel) { box.hidden = true; return; }
     const a = this.t2x(this.sel.a), b = this.t2x(this.sel.b);
@@ -302,6 +309,30 @@ const Editor = {
       h.setAttribute("aria-valuenow", String(Math.round(v * 100) / 100));
       h.setAttribute("aria-valuetext", fmtClock(v, 2));
     }
+  },
+
+  // What the chosen task will touch, said on the waveform itself.
+  renderHints() {
+    const mode = this.task === "export" ? "export" : this.aiMode();
+    const trim = this.task === "export" && this.xField("trim_selection").checked && !!this.sel;
+    const wave = $("#w-wave");
+    wave.dataset.task = mode;
+    wave.classList.toggle("sel-used", mode === "inpaint" || trim);
+    const label = $("#w-sel-label");
+    label.hidden = !(mode === "inpaint" || trim);
+    label.textContent = mode === "inpaint" ? t("wave.region.inpaint") : trim ? t("wave.region.export") : "";
+    const hint = $("#w-hint");
+    let text = "";
+    if (this.seconds && mode === "inpaint" && !this.sel) text = t("wave.dragHint");
+    else if (this.seconds && this.sel && (mode === "variation" || mode === "continue" || (mode === "export" && !trim))) text = t("wave.wholeNote");
+    hint.hidden = !text;
+    hint.textContent = text;
+    hint.classList.toggle("center", mode === "inpaint");
+    // extend: a strip at the end of the sound says how much is added
+    const ghost = $("#w-ghost"), target = parseFloat(this.aiField("duration_seconds").value);
+    const add = target - this.seconds, atEnd = this.view.e >= this.seconds - 1e-6;
+    ghost.hidden = !(mode === "continue" && add > 0.01 && atEnd);
+    ghost.textContent = ghost.hidden ? "" : t("wave.ghost", { len: `${Math.round(add * 10) / 10} s` });
   },
 
   // ── selection ──────────────────────────────────────────────────────────
@@ -424,7 +455,8 @@ const Editor = {
     this.setSel(edge === "a" ? { a: v, b } : { a, b: v }, { keep: true });
   },
   globalKey(e) {
-    if (!this.visible || !this.file || typing(e) || e.altKey) return;
+    if (!this.visible || !this.file || typing(e) || e.altKey || e.defaultPrevented) return;
+    if (e.target.closest && e.target.closest("#edit-jobs")) return;  // keys there compare results (abKeys)
     if (e.target.closest && e.target.closest("button, a, summary, [role=menuitem]") && (e.key === " " || e.key === "Enter")) return;
     const k = e.key;
     if ((e.metaKey || e.ctrlKey) && k.toLowerCase() === "a") { e.preventDefault(); this.selectAll(); return; }
@@ -549,7 +581,10 @@ const Editor = {
     $("#inpaint-note").hidden = mode !== "inpaint";
     $("#extend-field").hidden = mode !== "continue";
     $("#strength-out").textContent = Number(this.aiField("strength").value).toFixed(2);
-    for (const c of document.querySelectorAll(".mode-card")) c.classList.toggle("checked", c.querySelector("input").checked);
+    for (const c of document.querySelectorAll("#mode-cards label.mode-card")) c.classList.toggle("checked", this.task === "ai" && c.querySelector("input").checked);
+    $("#st-export").classList.toggle("checked", this.task === "export");
+    $("#tool-title").textContent = this.task === "export" ? t("task.export") : t(`mode.${mode}`);
+    if (this.overview) this.renderHints();
     const note = $("#inpaint-note");
     note.classList.toggle("warn", !this.sel);
     note.textContent = this.sel ? t("edit.inpaintSel", { range: this.selText() }) : t("edit.inpaintNoSel");
@@ -685,7 +720,9 @@ const Editor = {
     const fmt = String(this.xField("format").value).toUpperCase(), sr = Number(this.xField("sample_rate").value) / 1000;
     parts.push(`${fmt} ${sr} kHz`);
     $("#x-summary").textContent = t("sum.prefix", { len: this.fmt(this.outLen()) }) + parts.join(" · ");
+    $("#x-submit").textContent = this.seconds ? t("exp.submitLen", { len: this.fmt(this.outLen()), fmt }) : t("exp.submit");
     $("#x-submit").disabled = !this.file;
+    if (this.overview) this.renderHints();
   },
   async submitExport() {
     const f = $("#export-form");
@@ -707,8 +744,10 @@ const Editor = {
     const title = this.xField("title").value.trim();
     if (title) args.title = title;
     $("#x-submit").disabled = true;
-    await queueJob("process_audio", args, {
+    const preset = this.preset;
+    const job = await queueJob("process_audio", args, {
       onError: (e) => showFormError(e.message, e.body && e.body.fields, f, $("#x-error"), $("#x-custom")) });
+    if (job) { state.presets.set(job.id, preset); renderJobs(); }
     this.updateExportForm();
   },
 

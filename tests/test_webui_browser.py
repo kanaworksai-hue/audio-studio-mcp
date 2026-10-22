@@ -138,6 +138,8 @@ def test_empty_states(web, browser, shots):
     page.click("#gen-form label:has(input[name=audio_type][value=sfx])")
     page.click("#examples >> text=Glass breaking")
     assert page.input_value("#sound_source") == "glass bottle"
+    page.evaluate("toast('plain message')")  # a toast without an action button
+    assert page.text_content("#toast") == "plain message"
     page.click("#gen-reset")  # clear, then undo from the toast
     assert page.input_value("#sound_source") == ""
     page.click("#toast >> text=Undo")

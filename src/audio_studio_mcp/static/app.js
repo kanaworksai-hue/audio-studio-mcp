@@ -112,8 +112,9 @@ function typing(e) {
 let toastTimer;
 function toast(msg, action) {
   const n = $("#toast");
-  n.replaceChildren(el("span", { text: msg }), action ? el("button", { class: "link-btn toast-act", type: "button", text: action.label,
-    onclick: () => { n.hidden = true; action.run(); } }) : null);
+  // replaceChildren would print a null as the text "null"
+  n.replaceChildren(el("span", { text: msg }), ...(action ? [el("button", { class: "link-btn toast-act", type: "button", text: action.label,
+    onclick: () => { n.hidden = true; action.run(); } })] : []));
   n.hidden = false;
   clearTimeout(toastTimer);
   toastTimer = setTimeout(() => { n.hidden = true; }, action ? 6000 : 2200);

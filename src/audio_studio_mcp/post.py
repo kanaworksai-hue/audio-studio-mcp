@@ -18,6 +18,8 @@ from pathlib import Path
 import numpy as np
 import soundfile as sf
 
+OGG_WRITE_BLOCK = 16384  # frames per Vorbis write call, see write()
+
 
 def db_to_lin(db: float) -> float:
     return float(10 ** (db / 20))
@@ -66,8 +68,13 @@ def write(path: Path, audio: np.ndarray, sr: int, fmt: str, ogg_quality: float =
     elif fmt == "flac":
         sf.write(str(path), data, sr, format="FLAC", subtype="PCM_24")
     elif fmt == "ogg":
-        sf.write(str(path), data, sr, format="OGG", subtype="VORBIS",
-                 compression_level=float(np.clip(1.0 - ogg_quality, 0.0, 1.0)))
+        # libsndfile's Vorbis encoder overflows the 1 MB Windows thread stack
+        # (0xC00000FD, the whole process dies) when handed a long clip in one
+        # call; writing in blocks keeps its per-call buffers small.
+        with sf.SoundFile(str(path), "w", sr, data.shape[1], format="OGG", subtype="VORBIS",
+                          compression_level=float(np.clip(1.0 - ogg_quality, 0.0, 1.0))) as f:
+            for i in range(0, len(data), OGG_WRITE_BLOCK):
+                f.write(data[i:i + OGG_WRITE_BLOCK])
     else:
         raise ValueError(f"unknown format {fmt}")
 

@@ -1,4 +1,6 @@
 import shutil
+import subprocess
+import sys
 
 import numpy as np
 import pytest
@@ -66,6 +68,25 @@ def test_write_read_roundtrip(tmp_path, fmt, ext):
     audio, sr = post.read(path)
     assert sr == 44100 and audio.shape[0] == 2
     assert abs(audio.shape[-1] - 22050) < 2000  # vorbis pads a little
+
+
+def test_long_ogg_write_does_not_crash_worker_thread(tmp_path):
+    # A long clip handed to libsndfile's Vorbis encoder in one call overflowed
+    # the 1 MB Windows thread stack and killed the process (#10). Run it in a
+    # child process so a crash fails this test instead of pytest.
+    path = tmp_path / "long.ogg"
+    code = (
+        "import sys, threading, numpy as np\n"
+        "from audio_studio_mcp import post\n"
+        "a = (np.random.default_rng(0).random((2, 48000 * 60), dtype=np.float32) - 0.5) * 0.5\n"
+        "t = threading.Thread(target=post.write, args=(sys.argv[1], a, 48000, 'ogg'))\n"
+        "t.start(); t.join()\n"
+    )
+    r = subprocess.run([sys.executable, "-c", code, str(path)], capture_output=True, text=True)
+    assert r.returncode == 0, f"exit {r.returncode:#x}: {r.stderr[-400:]}"
+    audio, sr = post.read(path)
+    assert sr == 48000 and audio.shape[0] == 2
+    assert abs(audio.shape[-1] - 48000 * 60) < 2000
 
 
 @needs_ffmpeg

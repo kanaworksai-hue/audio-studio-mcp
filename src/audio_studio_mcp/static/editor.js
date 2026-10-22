@@ -102,11 +102,13 @@ const Editor = {
     $("#edit-main").hidden = false;
     $("#w-loading").hidden = false;
     $("#w-loading").textContent = t("wave.loading");
-    this.audio.src = audioUrl(file);
     this.renderInfo();
     let item, peaks;
     try {
-      [item, peaks] = await Promise.all([api(`/api/library/${encodeURIComponent(file)}`), Peaks.get(file, OVERVIEW_N)]);
+      item = await api(`/api/library/${encodeURIComponent(file)}`);  // 404 if it is not in the output folder
+      if (seq !== this.openSeq) return;
+      this.audio.src = audioUrl(file);
+      peaks = await Peaks.get(file, OVERVIEW_N);
     } catch (e) {
       if (seq !== this.openSeq) return;
       this.file = null;
@@ -504,7 +506,10 @@ const Editor = {
     clearErrors($("#export-form"), $("#x-error"));
     this.updateAiForm();
   },
-  selText() { return this.sel ? `${fmtClock(this.sel.a, 1)}–${fmtClock(this.sel.b, 1)}` : ""; },
+  selText() {
+    const d = this.seconds < 10 ? 2 : 1;  // short sounds need finer times
+    return this.sel ? `${fmtClock(this.sel.a, d)}–${fmtClock(this.sel.b, d)}` : "";
+  },
   updateAiForm() {
     if (!$("#ai-form")) return;
     const mode = this.aiMode(), n = parseInt(this.aiField("variations").value, 10) || 1;

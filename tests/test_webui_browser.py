@@ -1,6 +1,7 @@
 """Browser checks of the web UI (fake backend): every language × theme renders
 without untranslated keys, console errors or text below 4.5:1 contrast, and
-generate → result → library → regenerate works by clicking.
+generate → result → library → regenerate and library → editor → inpaint /
+export work by clicking.
 
 Needs Playwright and a Chrome/Chromium; skipped otherwise (CI does not install
 them). Run locally:
@@ -127,35 +128,73 @@ def _check(page, where):
     assert not bad, f"{where}: contrast below 4.5:1: {json.dumps(bad, ensure_ascii=False)}"
 
 
+def test_empty_states(web, browser, shots):
+    """Runs first, on an empty output folder: every page explains what to do."""
+    errors: list[str] = []
+    page = _page(browser, web, "en", "light", errors)
+    page.wait_for_selector(".starter-card")
+    _check(page, "empty/generate")
+    page.screenshot(path=str(shots / "empty-generate.png"), full_page=True)
+    page.locator(".starter-card").first.click()
+    assert page.input_value("#sound_source") == "glass bottle"
+    assert page.is_checked("#gen-form input[name=audio_type][value=sfx]")
+    page.click("#tab-edit")
+    page.wait_for_selector("#edit-empty:not([hidden])")
+    _check(page, "empty/edit")
+    page.click("#edit-to-library")
+    page.wait_for_selector("#lib-empty:not([hidden])")
+    _check(page, "empty/library")
+    page.click("#lib-empty-btn")
+    page.wait_for_selector("#page-generate:not([hidden])")
+    assert not errors, errors
+
+
 def test_generate_and_library_flow(web, browser, shots):
     """Click through: sfx form → queue of two jobs → candidates → library → regenerate."""
     errors: list[str] = []
     page = _page(browser, web, "en", "light", errors)
-    page.click("label:has(input[name=audio_type][value=sfx])")
+    page.click("#gen-form label:has(input[name=audio_type][value=sfx])")
     assert page.is_visible("#sound_source") and not page.is_visible("#bpm")
     page.fill("#sound_source", "glass bottle")
     page.fill("#sound_action", "shattering on impact")
     page.fill("#duration_seconds", "2")
-    page.click("label:has(input[name=variations][value='3'])")
+    page.click("#gen-form label:has(input[name=variations][value='3'])")
+    assert page.text_content("#gen-submit") == "Generate 3 versions"
     page.click("#gen-submit")
-    page.click("label:has(input[name=audio_type][value=music])")
+    page.click("#gen-form label:has(input[name=audio_type][value=music])")
     page.fill("#prompt", "calm piano")
     page.fill("#duration_seconds", "2")
-    page.click("label:has(input[name=variations][value='1'])")
+    page.click("#gen-form label:has(input[name=variations][value='1'])")
     page.click("#gen-submit")
-    # second job waits behind the first
-    page.wait_for_selector(".job[data-status=queued] >> text=#1 in queue", timeout=5000)
+    # second job waits behind the first and can be cancelled; queue it again
+    page.wait_for_selector(".job[data-status=queued] >> text=#1 in line", timeout=5000)
+    page.locator(".job[data-status=queued] >> text=Cancel").click()
+    page.wait_for_selector(".job[data-status=cancelled]", timeout=5000)
+    page.click("#gen-submit")
     page.wait_for_selector(".job[data-status=running]", timeout=5000)
     page.wait_for_function("document.querySelectorAll('.job[data-status=done]').length === 2", timeout=15000)
-    assert page.locator(".job").first.locator(".cand").count() == 1
-    assert page.locator(".job").nth(1).locator(".cand").count() == 3
-    # audio is served
-    src = page.locator(".cand audio").first.get_attribute("src")
-    assert page.request.get(web + src).status == 200
+    done = page.locator(".job[data-status=done]")
+    assert done.first.locator(".cand").count() == 1
+    assert done.nth(1).locator(".cand").count() == 3
+    # audio and its waveform are served; one player at a time
+    file = page.locator(".mini-wave").first.get_attribute("data-file")
+    assert page.request.get(f"{web}/api/audio/{file}").status == 200
+    page.wait_for_function("document.querySelectorAll('.mini-wave-canvas').length && [...document.querySelectorAll('.mini-wave-canvas')].every(c => c.width > 1)")
+    page.locator(".job[data-status=done]").nth(1).locator(".play-btn").first.click()
+    page.wait_for_function("document.querySelector('.play-btn.playing') !== null", timeout=5000)
+    page.locator(".job[data-status=done]").nth(1).locator(".play-btn").nth(1).click()
+    page.wait_for_timeout(300)
+    assert page.locator(".play-btn.playing").count() == 1
+
+    # an example chip fills the form
+    page.click("#gen-form label:has(input[name=audio_type][value=sfx])")
+    page.click("#examples >> text=Footsteps on gravel")
+    assert page.input_value("#sound_source") == "footsteps" and page.input_value("#duration_seconds") == "5"
 
     # validation error is shown on the field, nothing queued
     page.click("#advanced summary")
     page.fill("#steps", "99")
+    assert page.is_visible("#adv-dot")
     page.click("#gen-submit")
     page.wait_for_selector("#form-error:not([hidden])")
     assert page.get_attribute("#steps", "aria-invalid") == "true"
@@ -169,12 +208,120 @@ def test_generate_and_library_flow(web, browser, shots):
     page.locator(".item").first.locator("text=Details").click()
     assert page.locator(".item-details").first.is_visible()
     assert "glass bottle" in page.locator(".item-details").first.text_content()
+    page.locator(".item").first.locator(".menu-btn").click()
     page.locator(".item").first.locator("text=Regenerate (same seed)").click()
     page.wait_for_selector("#page-generate:not([hidden])")
-    page.wait_for_function("document.querySelectorAll('.job').length === 3", timeout=5000)
+    page.wait_for_function("document.querySelectorAll('#jobs .job').length === 4", timeout=5000)
     page.wait_for_function("document.querySelectorAll('.job[data-status=done]').length === 3", timeout=15000)
     assert page.input_value("#sound_source") == "glass bottle"
+    page.click("#tab-library")
+    page.fill("#lib-search", "nothing-matches-this")
+    page.wait_for_selector("#lib-empty:not([hidden])")
+    page.click("#lib-empty-btn")  # clear search
+    page.wait_for_function("document.querySelectorAll('.item').length === 5")
     assert not errors, errors
+
+
+def _drag(page, sel, x0, x1):
+    box = page.locator(sel).bounding_box()
+    y = box["y"] + box["height"] / 2
+    page.mouse.move(box["x"] + box["width"] * x0, y)
+    page.mouse.down()
+    page.mouse.move(box["x"] + box["width"] * x1, y, steps=6)
+    page.mouse.up()
+
+
+def test_editor_flow(web, browser, shots):
+    """Library → editor: select a range, replace it with AI, export it; zoom and keys."""
+    errors: list[str] = []
+    page = _page(browser, web, "en", "light", errors)
+    page.fill("#prompt", "drum loop")
+    page.fill("#duration_seconds", "4")
+    page.click("#gen-form label:has(input[name=variations][value='1'])")
+    page.wait_for_selector("#jobs .job")  # restored jobs from earlier tests
+    page.click("#gen-submit")
+    page.wait_for_selector("#jobs .job:first-child[data-status=done] >> text=drum loop", timeout=15000)
+    page.locator("#jobs .job").first.locator("text=Edit").first.click()
+    page.wait_for_selector("#page-edit:not([hidden])")
+    page.wait_for_selector("#w-loading", state="hidden")
+    file = page.evaluate("Editor.file")
+    assert page.evaluate("location.hash") == "#edit/" + file
+    assert page.input_value("#ai-prompt") == "drum loop"
+    assert page.evaluate("Editor.seconds") == pytest.approx(4, abs=0.01)
+
+    # inpaint needs a selection
+    page.click("label.mode-card:has(input[value=inpaint])")
+    assert page.is_disabled("#ai-submit")
+    _drag(page, "#w-wave", 0.25, 0.5)
+    sel = page.evaluate("Editor.sel")
+    assert sel["a"] == pytest.approx(1.0, abs=0.05) and sel["b"] == pytest.approx(2.0, abs=0.05)
+    assert page.input_value("#w-start") == f"{sel['a']:.2f}"
+    assert page.text_content("#ai-submit").startswith("Replace 0:01.0")
+    # the numeric fields edit the selection too
+    page.fill("#w-start", "1.5")
+    page.press("#w-start", "Enter")
+    page.fill("#w-end", "3")
+    page.press("#w-end", "Enter")
+    assert page.evaluate("Editor.sel") == {"a": 1.5, "b": 3}
+    page.click("#ai-submit")
+    page.wait_for_selector("#edit-jobs .job[data-status=done]", timeout=15000)
+    job = page.evaluate("[...state.jobs.values()].find(j => j.tool === 'edit_audio')")
+    assert job["arguments"]["start_seconds"] == 1.5 and job["arguments"]["end_seconds"] == 3
+    assert job["arguments"]["input_audio"].endswith(file)
+    assert page.locator("#edit-jobs .cand").count() == 2
+
+    # extend: target length, button says so
+    page.click("label.mode-card:has(input[value=continue])")
+    page.click("#extend-chips >> text=+5 s")
+    assert page.input_value("#ai-duration") == "9"
+    assert page.text_content("#ai-submit").startswith("Extend to 0:09")
+
+    # export the selection as a game sound effect
+    page.click("#st-export")
+    page.click("label.preset:has(input[value=game_sfx])")
+    assert page.is_checked("#x-trim-sel")
+    assert "OGG 48 kHz" in page.text_content("#x-summary")
+    page.click("#x-submit")
+    page.wait_for_selector("#toast >> text=Saved", timeout=10000)
+    exp = page.evaluate("[...state.jobs.values()].find(j => j.tool === 'process_audio')")
+    assert exp["status"] == "done" and exp["result"]["format"] == "ogg" and exp["result"]["channels"] == 1
+    assert exp["result"]["seconds"] <= 1.5 + 0.01
+    # changing a detail switches the preset to Custom
+    page.click("#x-custom summary")
+    page.click("#export-form label.check:has(input[name=mono])")
+    assert page.is_checked("label.preset:has(input[value=custom]) input")
+
+    # zoom: overview appears, finer peaks are fetched, Fit restores
+    page.click("#w-zoom-sel")
+    assert page.is_visible("#w-overview")
+    v = page.evaluate("Editor.view")
+    assert v["s"] >= 1.4 and v["e"] <= 3.1
+    for _ in range(6):
+        page.click("#w-zoom-in")
+    page.wait_for_function("Editor.detail !== null", timeout=5000)
+    page.click("#w-zoom-fit")
+    assert page.evaluate("Editor.view") == {"s": 0, "e": page.evaluate("Editor.seconds")}
+
+    # keys: Esc clears, click moves the playhead, Space plays and pauses
+    page.click("#w-wave")
+    page.keyboard.press("Escape")
+    assert page.evaluate("Editor.sel") is None
+    _drag(page, "#w-wave", 0.6, 0.6)  # a click, not a drag
+    assert page.evaluate("Editor.playhead") == pytest.approx(2.4, abs=0.05)
+    page.keyboard.press("Space")
+    page.wait_for_function("!Editor.audio.paused", timeout=5000)
+    page.keyboard.press("Space")
+    page.wait_for_function("Editor.audio.paused", timeout=5000)
+    page.keyboard.press("Control+a")
+    assert page.evaluate("Editor.sel")["b"] == pytest.approx(4, abs=0.01)
+
+    assert not errors, errors
+    # a missing file falls back to the empty editor (the browser logs the 404)
+    page.goto(web + "/#edit/missing.wav")
+    page.wait_for_selector("#edit-empty:not([hidden])")
+    page.wait_for_selector("#toast >> text=missing.wav is not in the output folder")
+    assert page.evaluate("location.hash") == "#edit"
+    assert all("404" in e for e in errors) and len(errors) == 1, errors
 
 
 @pytest.mark.parametrize("theme", THEMES)
@@ -189,19 +336,30 @@ def test_languages_and_themes(web, browser, shots, lang, theme):
     if not page.locator(".job").count():
         page.fill("#prompt", "lo-fi piano loop")
         page.fill("#duration_seconds", "2")
-        page.click("label:has(input[name=variations][value='2'])")
+        page.click("#gen-form label:has(input[name=variations][value='2'])")
         page.click("#gen-submit")
     page.wait_for_selector(".job[data-status=done]", timeout=15000)
-    page.click("label:has(input[name=audio_type][value=sfx])")
+    page.click("#gen-form label:has(input[name=audio_type][value=sfx])")
     page.click("#advanced summary")
     _check(page, f"{lang}/{theme}/generate")
     page.screenshot(path=str(shots / f"generate-{lang}-{theme}.png"), full_page=True)
 
     page.click("#tab-library")
     page.wait_for_selector(".item")
-    page.locator(".item").first.locator(".item-actions button").first.click()
+    page.locator(".item").first.locator(".item-actions button").nth(1).click()  # Details
     _check(page, f"{lang}/{theme}/library")
     page.screenshot(path=str(shots / f"library-{lang}-{theme}.png"), full_page=True)
+
+    page.locator(".item").first.locator(".item-actions button").first.click()  # Edit
+    page.wait_for_selector("#w-loading", state="hidden")
+    _drag(page, "#w-wave", 0.2, 0.45)
+    page.click("label.mode-card:has(input[value=inpaint])")
+    _check(page, f"{lang}/{theme}/edit")
+    page.screenshot(path=str(shots / f"edit-{lang}-{theme}.png"), full_page=True)
+    page.click("#st-export")
+    page.click("#x-custom summary")
+    _check(page, f"{lang}/{theme}/export")
+    page.screenshot(path=str(shots / f"export-{lang}-{theme}.png"), full_page=True)
     assert not errors, errors
 
 

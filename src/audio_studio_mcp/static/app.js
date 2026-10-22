@@ -189,11 +189,15 @@ function openEditor(file) {
   Editor.open(file);
   showPage("edit");
 }
-function initTabs() {
-  document.querySelectorAll(".tabs [role=tab]").forEach((b) => b.addEventListener("click", () => showPage(b.dataset.page)));
+function route() {
   const h = location.hash;
   if (h.startsWith("#edit/")) openEditor(decodeURIComponent(h.slice(6)));
   else showPage(h === "#library" ? "library" : h === "#edit" ? "edit" : "generate", false);
+}
+function initTabs() {
+  document.querySelectorAll(".tabs [role=tab]").forEach((b) => b.addEventListener("click", () => showPage(b.dataset.page)));
+  window.addEventListener("hashchange", route);  // typed or pasted links
+  route();
 }
 
 // ── status bar ───────────────────────────────────────────────────────────────

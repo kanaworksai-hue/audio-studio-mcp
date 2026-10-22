@@ -66,6 +66,7 @@ function applyI18n() {
   document.querySelectorAll("[data-i18n-title]").forEach((n) => { n.title = t(n.dataset.i18nTitle); });
   document.querySelectorAll("[data-i18n-aria-label]").forEach((n) => { n.setAttribute("aria-label", t(n.dataset.i18nAriaLabel)); });
   updateTypeUI();
+  renderThemeButton();
   renderStatus();
   renderJobs();
   renderLibrary();
@@ -156,14 +157,17 @@ document.addEventListener("keydown", (e) => {
 
 // ── theme / language settings ────────────────────────────────────────────────
 function initSettings() {
-  const theme = localStorage.getItem("as.theme") || "system";
-  $("#theme").value = theme;
-  $("#theme").addEventListener("change", (e) => {
-    const v = e.target.value;
-    if (v === "system") { delete document.documentElement.dataset.theme; localStorage.removeItem("as.theme"); }
-    else { document.documentElement.dataset.theme = v; localStorage.setItem("as.theme", v); }
+  // Sun / moon toggle. Only a choice that differs from the system is saved, so
+  // switching back to the system's look means "follow the system" again.
+  const systemDark = matchMedia("(prefers-color-scheme: dark)");
+  $("#theme").addEventListener("click", () => {
+    const next = isDark() ? "light" : "dark";
+    if ((next === "dark") === systemDark.matches) { delete document.documentElement.dataset.theme; localStorage.removeItem("as.theme"); }
+    else { document.documentElement.dataset.theme = next; localStorage.setItem("as.theme", next); }
+    renderThemeButton();
     window.dispatchEvent(new Event("as:theme"));
   });
+  systemDark.addEventListener("change", renderThemeButton);
   const lang = localStorage.getItem("as.lang") || "auto";
   $("#lang").value = lang;
   state.lang = pickLang(lang);
@@ -173,6 +177,17 @@ function initSettings() {
     state.lang = pickLang(v);
     applyI18n();
   });
+}
+
+function isDark() {
+  const forced = document.documentElement.dataset.theme;
+  return forced ? forced === "dark" : matchMedia("(prefers-color-scheme: dark)").matches;
+}
+function renderThemeButton() {
+  const b = $("#theme"), dark = isDark(), label = t(dark ? "settings.toLight" : "settings.toDark");
+  b.setAttribute("aria-pressed", String(dark));
+  b.setAttribute("aria-label", label);
+  b.title = label;
 }
 
 // ── pages ────────────────────────────────────────────────────────────────────

@@ -93,7 +93,25 @@ textarea { resize: vertical; min-height: 64px; }
 input::placeholder, textarea::placeholder { color: var(--muted); opacity: 1; }
 input:focus, textarea:focus, select:focus { outline: 2px solid var(--accent); outline-offset: -1px; border-color: transparent; }
 [aria-invalid="true"] { border-color: var(--danger) !important; }
-.select-sm { width: auto; padding: 4px 6px; font-size: 12.5px; }
+/* own chevron with room on the right (the native arrow sits against the edge) */
+select {
+  appearance: none; -webkit-appearance: none; padding-right: 30px; cursor: pointer;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 12 12'%3E%3Cpath d='M2.5 4.5 6 8l3.5-3.5' fill='none' stroke='%23555e68' stroke-width='1.6' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
+  background-repeat: no-repeat; background-position: right 10px center; background-size: 12px;
+}
+:root[data-theme="dark"] select { background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 12 12'%3E%3Cpath d='M2.5 4.5 6 8l3.5-3.5' fill='none' stroke='%23a4acb5' stroke-width='1.6' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E"); }
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) select { background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 12 12'%3E%3Cpath d='M2.5 4.5 6 8l3.5-3.5' fill='none' stroke='%23a4acb5' stroke-width='1.6' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E"); }
+}
+.select-sm { width: auto; padding: 5px 30px 5px 10px; font-size: 12.5px; background-position: right 9px center; }
+.icon-btn {
+  appearance: none; width: 32px; height: 30px; display: inline-flex; align-items: center; justify-content: center;
+  border: 1px solid var(--border-strong); border-radius: 6px; background: var(--surface); color: var(--text); cursor: pointer; padding: 0;
+}
+.icon-btn:hover { background: var(--surface-2); }
+.icon-btn svg { width: 17px; height: 17px; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
+.icon-btn .icon-moon { fill: currentColor; stroke: none; }
+#theme[aria-pressed="true"] .icon-sun, #theme[aria-pressed="false"] .icon-moon { display: none; }
 .btn {
   appearance: none; font: inherit; font-weight: 550; border-radius: 6px; padding: 7px 14px; cursor: pointer;
   border: 1px solid var(--border-strong); background: var(--surface); color: var(--text);

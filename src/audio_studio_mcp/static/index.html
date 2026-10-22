@@ -36,12 +36,11 @@
       <option value="en">English</option>
       <option value="zh">简体中文</option>
     </select>
-    <label class="sr-only" for="theme" data-i18n="settings.theme">Theme</label>
-    <select id="theme" class="select-sm">
-      <option value="system" data-i18n="settings.systemTheme">Theme: System</option>
-      <option value="light" data-i18n="settings.light">Light</option>
-      <option value="dark" data-i18n="settings.dark">Dark</option>
-    </select>
+    <!-- sun / moon toggle: follows the system until clicked -->
+    <button type="button" class="icon-btn" id="theme" aria-pressed="false">
+      <svg class="icon-sun" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="4.2"/><path d="M12 2.5v2.2M12 19.3v2.2M2.5 12h2.2M19.3 12h2.2M5.3 5.3l1.6 1.6M17.1 17.1l1.6 1.6M5.3 18.7l1.6-1.6M17.1 6.9l1.6-1.6"/></svg>
+      <svg class="icon-moon" viewBox="0 0 24 24" aria-hidden="true"><path d="M20.2 14.6A8.3 8.3 0 0 1 9.4 3.8a8.3 8.3 0 1 0 10.8 10.8z"/></svg>
+    </button>
   </div>
 </header>
 

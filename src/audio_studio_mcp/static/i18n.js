@@ -1,13 +1,13 @@
 // UI strings: English, Japanese, Simplified Chinese. {name} = placeholder.
 window.I18N = {
   en: {
+    "settings.toDark": "Switch to dark mode", "settings.toLight": "Switch to light mode",
     "nav.generate": "Generate", "nav.edit": "Edit", "nav.library": "Library",
     "status.unload": "Unload model", "status.unloadHint": "Frees the 5–7 GB the model uses. It loads again on the next generation.",
     "status.loaded": "Model ready", "status.notLoaded": "Model loads on first use", "status.working": "Working",
     "status.offline": "Server unreachable", "status.unloaded": "Model unloaded, memory freed",
     "status.nothingToUnload": "The model was not loaded",
-    "settings.language": "Language", "settings.auto": "Auto", "settings.theme": "Theme",
-    "settings.system": "System", "settings.light": "Light", "settings.dark": "Dark",
+    "settings.language": "Language", "settings.auto": "Auto",
 
     "gen.title": "New sound", "gen.type": "What do you want to make?",
     "type.music": "Music", "type.instrument": "Instrument loop", "type.sfx": "Sound effect", "type.raw": "Raw",
@@ -121,7 +121,6 @@ window.I18N = {
     "sum.prefix": "Will export {len}: ", "sum.trim": "selection {range}", "sum.silence": "trim silence", "sum.mono": "mono",
     "sum.peak": "peak {db} dB", "sum.lufs": "{lufs} LUFS", "sum.loop": "loop ({ms} ms crossfade)", "sum.fade": "fade {a}/{b} ms",
     "settings.autoLang": "Language: Auto",
-    "settings.systemTheme": "Theme: System",
     "toast.cleared": "Form cleared",
     "act.undo": "Undo",
     "steps.1": "1. Describe",
@@ -147,13 +146,13 @@ window.I18N = {
     "sum.fadeShort": "fade {a}/{b} ms (shortened to fit)",
   },
   ja: {
+    "settings.toDark": "ダークモードに切り替え", "settings.toLight": "ライトモードに切り替え",
     "nav.generate": "生成", "nav.edit": "編集", "nav.library": "ライブラリ",
     "status.unload": "モデルを解放", "status.unloadHint": "モデルが使っている 5〜7 GB のメモリを解放します。次の生成でまた読み込みます。",
     "status.loaded": "モデル準備完了", "status.notLoaded": "初回の生成時にモデルを読み込みます", "status.working": "処理中",
     "status.offline": "サーバーに接続できません", "status.unloaded": "モデルをアンロードしてメモリを解放しました",
     "status.nothingToUnload": "モデルは読み込まれていません",
-    "settings.language": "言語", "settings.auto": "自動", "settings.theme": "テーマ",
-    "settings.system": "システム", "settings.light": "ライト", "settings.dark": "ダーク",
+    "settings.language": "言語", "settings.auto": "自動",
 
     "gen.title": "新しい音", "gen.type": "何を作りますか？",
     "type.music": "音楽", "type.instrument": "楽器ソロ／ループ", "type.sfx": "効果音", "type.raw": "Raw",
@@ -267,7 +266,6 @@ window.I18N = {
     "sum.prefix": "{len} を書き出し：", "sum.trim": "選択範囲 {range}", "sum.silence": "無音カット", "sum.mono": "モノラル",
     "sum.peak": "ピーク {db} dB", "sum.lufs": "{lufs} LUFS", "sum.loop": "ループ（クロスフェード {ms} ms）", "sum.fade": "フェード {a}/{b} ms",
     "settings.autoLang": "言語：自動",
-    "settings.systemTheme": "テーマ：システム",
     "toast.cleared": "フォームをクリアしました",
     "act.undo": "元に戻す",
     "steps.1": "1. 説明する",
@@ -293,13 +291,13 @@ window.I18N = {
     "sum.fadeShort": "フェード {a}/{b} ms（長さに合わせて短縮）",
   },
   zh: {
+    "settings.toDark": "切换到深色模式", "settings.toLight": "切换到浅色模式",
     "nav.generate": "生成", "nav.edit": "编辑", "nav.library": "作品库",
     "status.unload": "卸载模型", "status.unloadHint": "释放模型占用的 5–7 GB 内存，下次生成时会重新加载。",
     "status.loaded": "模型已就绪", "status.notLoaded": "首次生成时加载模型", "status.working": "处理中",
     "status.offline": "无法连接服务器", "status.unloaded": "已卸载模型并释放内存",
     "status.nothingToUnload": "模型尚未加载",
-    "settings.language": "语言", "settings.auto": "自动", "settings.theme": "主题",
-    "settings.system": "跟随系统", "settings.light": "浅色", "settings.dark": "深色",
+    "settings.language": "语言", "settings.auto": "自动",
 
     "gen.title": "新建声音", "gen.type": "想做什么？",
     "type.music": "音乐", "type.instrument": "单乐器 / 循环", "type.sfx": "音效", "type.raw": "Raw",
@@ -413,7 +411,6 @@ window.I18N = {
     "sum.prefix": "将导出 {len}：", "sum.trim": "选区 {range}", "sum.silence": "去静音", "sum.mono": "单声道",
     "sum.peak": "峰值 {db} dB", "sum.lufs": "{lufs} LUFS", "sum.loop": "循环（交叉淡化 {ms} ms）", "sum.fade": "淡入淡出 {a}/{b} ms",
     "settings.autoLang": "语言：自动",
-    "settings.systemTheme": "主题：跟随系统",
     "toast.cleared": "已清空表单",
     "act.undo": "撤销",
     "steps.1": "1. 描述",

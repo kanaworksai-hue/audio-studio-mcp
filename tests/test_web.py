@@ -203,6 +203,13 @@ def test_peaks(client, fake):
     e = client.get("/api/peaks/p.wav?n=10&start=5&end=9").json()
     assert e["min"] == [] and e["start"] == e["end"] == 1.0
     assert client.get("/api/peaks/p.wav?n=x").status_code == 400
+    for bad in ("nan", "inf", "-inf"):
+        assert client.get(f"/api/peaks/p.wav?n=10&start={bad}&end=1").status_code == 400
+    # summary path (coarse) and exact path (fine) agree on a window
+    coarse = client.get("/api/peaks/p.wav?n=4&start=0&end=1").json()
+    fine = client.get("/api/peaks/p.wav?n=400&start=0&end=0.01").json()
+    assert len(coarse["max"]) == 4 and len(fine["max"]) == 400
+    assert max(coarse["max"]) == pytest.approx(0.5, abs=1e-3)
     assert client.get("/api/peaks/b.flac?n=10").json()["seconds"] == pytest.approx(0.5, abs=0.01)
     for bad in ("../secret.wav", "notes.txt", "missing.wav"):
         assert client.get(f"/api/peaks/{bad}").status_code == 404
@@ -237,6 +244,16 @@ def test_queue_runs_in_order_with_positions(client, fake):
     assert [r[1].prompt for r in fake.requests] == [f"TrackType: Music, VocalType: Instrumental, p{i}." for i in range(3)]
     listed = client.get("/api/jobs").json()["items"]
     assert [j["id"] for j in listed] == ids[::-1]
+
+
+def test_jobs_list_filtered_by_ids(client, fake):
+    ids = [client.post("/api/jobs", json={"arguments": {"prompt": f"p{i}", "duration_seconds": 1}}).json()["id"]
+           for i in range(3)]
+    for i in ids:
+        wait_job(client, i)
+    r = client.get(f"/api/jobs?ids={ids[0]},{ids[2]},nope").json()
+    assert [j["id"] for j in r["items"]] == [ids[2], ids[0]]
+    assert len(client.get("/api/jobs").json()["items"]) == 3
 
 
 def test_cancel_waiting_job(client, fake):
@@ -323,6 +340,25 @@ def test_library_kind_filter(client, fake):
     assert files("edit") == ["c.wav"] and files("process") == ["d.ogg"]
     assert files("instrument") == [] and files("sfx", "rain") == ["a.wav"] and files("sfx", "nope") == []
     assert client.get("/api/library?kind=video").status_code == 400
+
+
+def test_symlinks_and_hidden_files(client, fake):
+    out = _make_library(fake)
+    secret = out.parent / "secret.wav"
+    post.write(secret, sine(0.1), 44100, "wav")
+    (out / ".hidden.wav").write_bytes((out / "a.wav").read_bytes())
+    try:
+        (out / "outside.wav").symlink_to(secret)
+        (out / "alias.wav").symlink_to(out / "a.wav.json")  # audio name, JSON target
+        (out / "inside.wav").symlink_to(out / "a.wav")
+    except OSError:
+        pytest.skip("symlinks not available")
+    listed = {i["file"] for i in client.get("/api/library").json()["items"]}
+    assert listed == {"a.wav", "b.flac", "inside.wav"}
+    for name in ("outside.wav", "alias.wav", ".hidden.wav"):
+        for api in ("audio", "peaks", "library"):
+            assert client.get(f"/api/{api}/{name}").status_code == 404, (api, name)
+    assert client.get("/api/audio/inside.wav").status_code == 200
 
 
 def test_library_survives_bad_sidecars_and_picks_up_new_ones(client, fake):
@@ -495,19 +531,22 @@ def test_web_port_is_validated(capsys, port):
     assert "--web" in capsys.readouterr().err
 
 
-def test_web_opens_browser_once_started(monkeypatch):
+def test_web_opens_browser_once_started(monkeypatch, capsys):
     opened = []
-    started = threading.Event()
 
-    class FakeServer:
+    class FakeServer:  # stands in for uvicorn.Server: startup succeeds or fails (port in use)
+        fail = False
+
         def __init__(self, config):
-            self.started, self.should_exit = False, False
+            self.started = False
             assert config.host == "127.0.0.1" and config.port == 8123
 
+        async def startup(self, sockets=None):
+            self.started = not self.fail
+
         def run(self):
-            self.started = True
-            started.set()
-            time.sleep(0.5)
+            anyio.run(self.startup)
+            time.sleep(0.2)  # the browser opens on a thread
 
     import uvicorn
     import webbrowser
@@ -515,6 +554,11 @@ def test_web_opens_browser_once_started(monkeypatch):
     monkeypatch.setattr(webbrowser, "open", opened.append)
     web.serve(8123, open_browser=True)
     assert opened == ["http://127.0.0.1:8123/"]
+    assert "web UI: http://127.0.0.1:8123/" in capsys.readouterr().out
     opened.clear()
     web.serve(8123, open_browser=False)
     assert opened == []
+    capsys.readouterr()
+    FakeServer.fail = True
+    web.serve(8123, open_browser=True)
+    assert opened == [] and "web UI" not in capsys.readouterr().out

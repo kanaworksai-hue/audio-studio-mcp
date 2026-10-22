@@ -8,6 +8,7 @@
 const OVERVIEW_N = 4000;
 const MIN_SPAN = 0.05;     // seconds visible at the deepest zoom
 const DRAG_PX = 4;         // movement that turns a click into a selection
+const MIN_SEL = 0.01;      // shortest selection (seconds)
 
 // Export presets: what the user is making → process_audio settings.
 const PRESETS = {
@@ -108,7 +109,7 @@ const Editor = {
       item = await api(`/api/library/${encodeURIComponent(file)}`);  // 404 if it is not in the output folder
       if (seq !== this.openSeq) return;
       this.audio.src = audioUrl(file);
-      peaks = await Peaks.get(file, OVERVIEW_N);
+      peaks = await Peaks.get(file, OVERVIEW_N, null, null, Math.round(item.mtime));
     } catch (e) {
       if (seq !== this.openSeq) return;
       this.file = null;
@@ -154,6 +155,12 @@ const Editor = {
       el("span", { class: "muted small", text: `${fmtLen(it.seconds)} · ${fmtDate(it.mtime)}` }))));
     if (items.length) box.prepend(el("p", { class: "small muted recent-head", text: t("edit.recent") }));
   },
+  // An input path can be opened here only if it is a file of the output folder.
+  inOutputDir(path) {
+    if (!path || !state.status) return false;
+    const name = baseName(path), dir = String(path).slice(0, -name.length - 1);
+    return dir === state.status.output_dir;
+  },
   renderInfo() {
     if (!this.file) return;
     const m = (this.item && this.item.meta) || {};
@@ -167,7 +174,7 @@ const Editor = {
     $("#edit-info").textContent = parts.join(" · ");
     const src = $("#edit-source");
     src.replaceChildren();
-    if (m.input_audio) {
+    if (this.inOutputDir(m.input_audio)) {
       const name = baseName(m.input_audio);
       src.append(el("span", { class: "muted", text: t("edit.madeFrom") }), " ",
         el("button", { type: "button", class: "link-btn", text: name, onclick: () => openEditor(name) }));
@@ -213,7 +220,7 @@ const Editor = {
       const n = Math.min(20000, Math.ceil(px * ((e - s) / span)));
       const file = this.file;
       try {
-        const p = await Peaks.get(file, n, s, e);
+        const p = await Peaks.get(file, n, s, e, this.item && Math.round(this.item.mtime));
         if (file === this.file) { this.detail = p; this.draw(); }
       } catch { /* keep the overview */ }
     }, 120);
@@ -298,11 +305,15 @@ const Editor = {
   },
 
   // ── selection ──────────────────────────────────────────────────────────
-  setSel(sel, { quiet } = {}) {
+  // keep: an edge is being moved, so hold a minimal width instead of dropping the selection
+  setSel(sel, { quiet, keep } = {}) {
     const had = !!this.sel;
     if (sel) {
       let a = this.clampT(Math.min(sel.a, sel.b)), b = this.clampT(Math.max(sel.a, sel.b));
-      sel = b - a >= 0.01 ? { a, b } : null;
+      if (b - a < MIN_SEL && keep && this.seconds >= MIN_SEL) {
+        if (a + MIN_SEL <= this.seconds) b = a + MIN_SEL; else a = b - MIN_SEL;
+      }
+      sel = b - a >= MIN_SEL ? { a, b } : null;
     }
     this.sel = sel;
     this.audio.loop = $("#w-loop").checked && !sel;
@@ -344,7 +355,7 @@ const Editor = {
     if (e.shiftKey && this.sel) {
       const edge = Math.abs(tm - this.sel.a) < Math.abs(tm - this.sel.b) ? "a" : "b";
       this.drag = { mode: "edge", edge };
-      this.setSel({ ...this.sel, [edge]: tm });
+      this.setSel({ ...this.sel, [edge]: tm }, { keep: true });
     } else {
       this.drag = { mode: "pending", x0: e.clientX, anchor: tm };
     }
@@ -363,7 +374,7 @@ const Editor = {
     else if (d.mode === "edge" && this.sel) {
       const other = d.edge === "a" ? this.sel.b : this.sel.a;
       if ((d.edge === "a" && tm > other) || (d.edge === "b" && tm < other)) d.edge = d.edge === "a" ? "b" : "a";
-      this.setSel(d.edge === "a" ? { a: tm, b: other } : { a: other, b: tm });
+      this.setSel(d.edge === "a" ? { a: tm, b: other } : { a: other, b: tm }, { keep: true });
     }
   },
   pointerUp(e) {
@@ -399,12 +410,18 @@ const Editor = {
   },
   handleKey(e, edge) {
     if (!this.sel) return;
-    const step = e.shiftKey ? 0.1 : 0.01;
-    const d = e.key === "ArrowRight" || e.key === "ArrowUp" ? step : e.key === "ArrowLeft" || e.key === "ArrowDown" ? -step : 0;
-    if (!d) return;
+    const step = e.shiftKey ? 0.1 : 0.01, { a, b } = this.sel;
+    let v;
+    if (e.key === "ArrowRight" || e.key === "ArrowUp") v = this.sel[edge] + step;
+    else if (e.key === "ArrowLeft" || e.key === "ArrowDown") v = this.sel[edge] - step;
+    else if (e.key === "Home") v = edge === "a" ? 0 : a + MIN_SEL;
+    else if (e.key === "End") v = edge === "b" ? this.seconds : b - MIN_SEL;
+    else return;
     e.preventDefault();
     e.stopPropagation();
-    this.setSel({ ...this.sel, [edge]: this.sel[edge] + d });
+    // an edge stops at the other one (the selection never disappears from a key press)
+    v = edge === "a" ? Math.min(v, b - MIN_SEL) : Math.max(v, a + MIN_SEL);
+    this.setSel(edge === "a" ? { a: v, b } : { a, b: v }, { keep: true });
   },
   globalKey(e) {
     if (!this.visible || !this.file || typing(e) || e.altKey) return;
@@ -440,7 +457,8 @@ const Editor = {
     if (this.sel && (start < this.sel.a || start >= this.sel.b - 0.01)) start = this.sel.a;
     else if (!this.sel && start >= this.seconds - 0.01) start = 0;
     this.playSel = !!this.sel;
-    if (a.readyState < 1) await new Promise((r) => a.addEventListener("loadedmetadata", r, { once: true }));
+    const file = this.file;
+    if (!(await whenReady(a)) || file !== this.file) return;
     a.currentTime = start;
     this.playhead = start;
     try { await a.play(); } catch { /* interrupted */ }
@@ -515,7 +533,7 @@ const Editor = {
   outLen() {
     const trim = this.xField("trim_selection").checked && this.sel;
     let len = trim ? this.sel.b - this.sel.a : this.seconds;
-    if (this.xField("loop").checked) len -= Number(this.xField("loop_crossfade_ms").value) / 1000 || 0;
+    if (this.xField("loop").checked) len -= (Number(this.xField("loop_crossfade_ms").value) || 200) / 1000;
     return Math.max(0, len);
   },
   // Fades never take more than a quarter of the output each (a 2 s fade on a 0.4 s clip silences it).
@@ -547,8 +565,10 @@ const Editor = {
       "aria-pressed": String(Math.abs(target - Math.ceil(this.seconds + d)) < 0.01), text: `+${d} s`,
       onclick: () => { dur.value = Math.ceil(this.seconds + d); this.updateAiForm(); } })));
     // submit label states what will happen
+    const atMax = this.seconds >= this.max() - 0.5;  // nothing left to extend
+    if (mode === "continue" && atMax) $("#extend-hint").textContent = t("edit.atMax", { max: this.max() });
     const btn = $("#ai-submit");
-    btn.disabled = !this.file || (mode === "inpaint" && !this.sel);
+    btn.disabled = !this.file || (mode === "inpaint" && !this.sel) || (mode === "continue" && atMax);
     if (mode === "variation") btn.textContent = n > 1 ? t("edit.submitVariationN", { n }) : t("edit.submitVariation");
     else if (mode === "inpaint") btn.textContent = this.sel ? t("edit.submitInpaint", { range: this.selText() }) : t("mode.inpaint");
     else btn.textContent = t("edit.submitContinue", { len: target > 0 ? `${target} s` : "—" });
@@ -556,7 +576,7 @@ const Editor = {
     // AI edits of an export (mono, resampled, normalized) are better done on its original
     const m = (this.item && this.item.meta) || {};
     const exp = $("#export-note");
-    exp.hidden = !(m.kind === "process" && m.input_audio);
+    exp.hidden = !(m.kind === "process" && this.inOutputDir(m.input_audio));
     if (!exp.hidden) {
       const orig = baseName(m.input_audio);
       exp.replaceChildren(el("span", { text: t("edit.isExport") }), " ",
@@ -657,9 +677,9 @@ const Editor = {
     if (trim.checked) parts.push(t("sum.trim", { range: this.selText() }));
     if (this.xField("trim_silence").checked) parts.push(t("sum.silence"));
     if (this.xField("mono").checked) parts.push(t("sum.mono"));
-    if (norm === "peak") parts.push(t("sum.peak", { db: this.xField("peak_ceiling_db").value }));
-    if (norm === "loudness") parts.push(t("sum.lufs", { lufs: this.xField("target_lufs").value }));
-    if (this.xField("loop").checked) parts.push(t("sum.loop", { ms: this.xField("loop_crossfade_ms").value }));
+    if (norm === "peak") parts.push(t("sum.peak", { db: this.xField("peak_ceiling_db").value || "-1" }));
+    if (norm === "loudness") parts.push(t("sum.lufs", { lufs: this.xField("target_lufs").value || "-16" }));
+    if (this.xField("loop").checked) parts.push(t("sum.loop", { ms: this.xField("loop_crossfade_ms").value || "200" }));
     const { fi, fo, clamped } = this.fades();
     if (fi || fo) parts.push(t(clamped ? "sum.fadeShort" : "sum.fade", { a: fi, b: fo }));
     const fmt = String(this.xField("format").value).toUpperCase(), sr = Number(this.xField("sample_rate").value) / 1000;
@@ -670,13 +690,16 @@ const Editor = {
   async submitExport() {
     const f = $("#export-form");
     clearErrors(f, $("#x-error"));
-    const num = (k) => Number(this.xField(k).value);
+    const { fi, fo } = this.fades();
     const args = { input_audio: this.file, trim_silence: this.xField("trim_silence").checked, mono: this.xField("mono").checked,
-      normalize: this.xField("normalize").value, peak_ceiling_db: num("peak_ceiling_db"), loop: this.xField("loop").checked,
-      fade_in_ms: this.fades().fi, fade_out_ms: this.fades().fo, format: this.xField("format").value,
-      sample_rate: num("sample_rate") };
-    if (args.normalize === "loudness") args.target_lufs = num("target_lufs");
-    if (args.loop) args.loop_crossfade_ms = num("loop_crossfade_ms");
+      normalize: this.xField("normalize").value, loop: this.xField("loop").checked,
+      fade_in_ms: fi, fade_out_ms: fo, format: this.xField("format").value,
+      sample_rate: Number(this.xField("sample_rate").value) };
+    // an emptied field means "the tool's default", not 0
+    const num = (k, name = k) => { const raw = this.xField(k).value.trim(); if (raw !== "") args[name] = Number(raw); };
+    num("peak_ceiling_db");
+    if (args.normalize === "loudness") num("target_lufs");
+    if (args.loop) num("loop_crossfade_ms");
     if (this.xField("trim_selection").checked && this.sel) {
       args.start_seconds = +this.sel.a.toFixed(3);
       args.end_seconds = +this.sel.b.toFixed(3);

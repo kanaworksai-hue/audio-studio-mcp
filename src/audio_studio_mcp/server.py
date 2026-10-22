@@ -44,6 +44,7 @@ IDLE_UNLOAD_MIN = float(os.environ.get("AUDIO_STUDIO_IDLE_UNLOAD_MIN", "10"))
 # The MLX backend chdirs into its runtime; resolve relative inputs against the
 # directory the server was started from instead.
 _START_CWD = Path.cwd()
+MAX_STEM_BYTES = 160  # UTF-8; Japanese names take 3 bytes a character
 
 _backend: Backend | None = None
 
@@ -73,6 +74,11 @@ def _out_path(stem: str, ext: str = ".wav") -> Path:
     server processes sharing the folder never pick the same name."""
     OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
     stem = re.sub(r'[\\/:*?"<>|\s]+', "_", stem).strip("_") or "audio"
+    # chained edits append _inpaint, _proc, … to the input's name; keep room for
+    # _vN_N.ext.json under the 255-byte file name limit (and Windows paths)
+    base, suffix = re.fullmatch(r"(.*?)(_v\d+)?", stem).groups(default="")  # keep the candidate number
+    base = base.encode()[:MAX_STEM_BYTES - len(suffix)].decode(errors="ignore").strip("_") or "audio"
+    stem = base + suffix
     n = 1
     while True:
         path = OUTPUT_DIR / (f"{stem}{ext}" if n == 1 else f"{stem}_{n}{ext}")

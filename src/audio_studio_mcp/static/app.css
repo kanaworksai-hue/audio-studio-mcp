@@ -153,6 +153,7 @@ input.num { width: 96px; flex: none; }
 .sfx-fields { border: 1px solid var(--border); border-radius: 6px; padding: 8px 10px; }
 .sfx-fields summary { cursor: pointer; font-weight: 550; font-size: 13px; color: var(--muted); }
 .sfx-fields[open] summary { margin-bottom: 8px; color: var(--text); }
+.row.top { align-items: start; }
 .sfx-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
 .mod-dot { display: inline-block; width: 7px; height: 7px; border-radius: 50%; background: var(--accent); margin-left: 6px; vertical-align: middle; }
 .advanced .link-btn { margin-top: 8px; }

@@ -191,13 +191,25 @@ function openEditor(file) {
 }
 function route() {
   const h = location.hash;
-  if (h.startsWith("#edit/")) openEditor(decodeURIComponent(h.slice(6)));
+  let file = null;
+  if (h.startsWith("#edit/")) {
+    try { file = decodeURIComponent(h.slice(6)); } catch { file = null; }  // malformed link
+  }
+  if (file) openEditor(file);
   else showPage(h === "#library" ? "library" : h === "#edit" ? "edit" : "generate", false);
 }
 function initTabs() {
   document.querySelectorAll(".tabs [role=tab]").forEach((b) => b.addEventListener("click", () => showPage(b.dataset.page)));
   window.addEventListener("hashchange", route);  // typed or pasted links
   route();
+  // arrow keys move between tabs (WAI-ARIA tabs pattern)
+  document.querySelectorAll("[role=tablist]").forEach((list) => list.addEventListener("keydown", (e) => {
+    if (e.key !== "ArrowLeft" && e.key !== "ArrowRight") return;
+    const tabs = [...list.querySelectorAll("[role=tab]")], i = tabs.indexOf(document.activeElement);
+    if (i < 0) return;
+    const next = tabs[(i + (e.key === "ArrowRight" ? 1 : tabs.length - 1)) % tabs.length];
+    next.focus(); next.click(); e.preventDefault();
+  }));
 }
 
 // ── status bar ───────────────────────────────────────────────────────────────
@@ -435,7 +447,7 @@ function jobBadge(job) {
 }
 const LETTERS = "ABCD";
 function candidateCard(c, i, job) {
-  const file = baseName(c.path), mini = new MiniWave(file, c.seconds);
+  const file = baseName(c.path), mini = new MiniWave(file, c.seconds, Math.round(job.finished || 0));
   const many = job.result.candidates.length > 1;
   return el("div", { class: "cand", dataset: { index: i } },
     el("div", { class: "cand-head", title: c.seed != null ? t("cand.seed", { seed: c.seed }) : null },
@@ -543,6 +555,8 @@ function renderJobList(box, list) {
     updateProgress(card, job);
     return card;
   });
+  const keep = new Set(nodes);
+  for (const old of existing.values()) if (!keep.has(old)) disposeMinis(old);
   nodes.forEach((n, i) => { if (box.children[i] !== n) box.insertBefore(n, box.children[i] || null); });
   while (box.children.length > nodes.length) box.lastChild.remove();
 }
@@ -567,7 +581,8 @@ async function pollJobs() {
     while ([...state.jobs.values()].some((j) => j.status === "queued" || j.status === "running")) {
       let finished = false;
       try {
-        const r = await api("/api/jobs");
+        const waiting = [...state.jobs.values()].filter((j) => j.status === "queued" || j.status === "running");
+        const r = await api(`/api/jobs?ids=${waiting.map((j) => j.id).join(",")}`);
         state.loaded = r.loaded;
         const seen = new Set();
         for (const j of r.items) {
@@ -622,7 +637,7 @@ function metaRows(item) {
     [t("meta.strength"), m.strength], [t("meta.region"), Array.isArray(m.region) ? m.region.map((x) => `${x}s`).join(" – ") : null],
     [t("meta.negative"), m.negative_prompt],
     [t("meta.stepsDone"), Array.isArray(m.steps) ? m.steps.join(" → ") : null],
-    [t("meta.format"), m.kind === "process" ? `${String(m.format || "").toUpperCase()} · ${m.sample_rate} Hz · ${m.channels === 1 ? "mono" : "stereo"}` : null],
+    [t("meta.format"), m.kind === "process" ? `${String(m.format || "").toUpperCase()} · ${m.sample_rate} Hz · ${m.channels === 1 ? t("edit.mono") : t("edit.stereo")}` : null],
     [t("meta.loudness"), m.output_lufs != null ? `${m.output_lufs} LUFS` : null],
     [t("meta.peak"), m.peak_dbfs != null ? `${m.peak_dbfs} dBFS` : null],
     [t("meta.model"), m.model ? `${m.model} (${m.backend})` : null],
@@ -664,7 +679,7 @@ function libraryItem(item) {
   const badges = [m.audio_type ? t(`type.${m.audio_type}`) : null,
     kind.startsWith("edit") ? t(`mode.${kind.split(":")[1]}`) : kind === "process" ? t("kind.process") : null,
     kind === "process" || !m.kind ? item.format.toUpperCase() : null].filter(Boolean);
-  const mini = new MiniWave(item.file, item.seconds);
+  const mini = new MiniWave(item.file, item.seconds, Math.round(item.mtime));
   return el("article", { class: "panel item" },
     el("div", { class: "item-main" },
       el("div", { class: "item-title", title: title, text: title }),
@@ -690,6 +705,7 @@ function prefixSound(sf) {
 }
 function renderLibrary() {
   const box = $("#library"), L = state.lib;
+  disposeMinis(box);
   box.replaceChildren(...L.items.map(libraryItem));
   $("#lib-count").textContent = t("lib.count", { n: L.total });
   $("#lib-empty").hidden = L.items.length > 0;

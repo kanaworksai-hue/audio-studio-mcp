@@ -224,6 +224,11 @@ def test_generate_and_library_flow(web, browser, shots):
     page.wait_for_selector("#lib-empty:not([hidden])")
     page.click("#lib-empty-btn")  # clear search
     page.wait_for_function("document.querySelectorAll('.item').length === 5")
+    # re-rendering the library does not keep old thumbnails alive
+    for q in ("glass", "piano", "", "glass", ""):
+        page.fill("#lib-search", q)
+        page.wait_for_timeout(350)
+    assert page.evaluate("Player.listeners.size") <= page.evaluate("document.querySelectorAll('.mini-wave').length")
     assert not errors, errors
 
 
@@ -321,6 +326,27 @@ def test_editor_flow(web, browser, shots):
     page.click("#w-zoom-fit")
     assert page.evaluate("Editor.view") == {"s": 0, "e": page.evaluate("Editor.seconds")}
 
+    # handles: arrow keys stop at the other edge instead of dropping the selection
+    page.fill("#w-start", "1")
+    page.press("#w-start", "Enter")
+    page.fill("#w-end", "1.05")
+    page.press("#w-end", "Enter")
+    page.focus("#w-h-start")
+    for _ in range(10):
+        page.keyboard.press("ArrowRight")
+    assert page.evaluate("Editor.sel") == {"a": pytest.approx(1.04), "b": pytest.approx(1.05)}
+    page.keyboard.press("Home")
+    assert page.evaluate("Editor.sel.a") == 0
+    # an emptied number field means the tool's default, not 0
+    page.click("#st-export")
+    page.click("label.preset:has(input[value=game_sfx])")
+    page.fill("#x-peak", "")
+    page.click("#x-submit")
+    page.wait_for_function("[...state.jobs.values()].filter(j => j.tool === 'process_audio' && j.status === 'done').length === 3", timeout=10000)
+    last = page.evaluate("[...state.jobs.values()].filter(j => j.tool === 'process_audio').sort((a, b) => b.created - a.created)[0]")
+    assert "peak_ceiling_db" not in last["arguments"] and last["result"]["peak_dbfs"] <= -0.99
+    page.click("#st-ai")
+
     # keys: Esc clears, click moves the playhead, Space plays and pauses
     page.click("#w-wave")
     page.keyboard.press("Escape")
@@ -339,11 +365,14 @@ def test_editor_flow(web, browser, shots):
     # the library filters by type
     page.click("#tab-library")
     page.click("#lib-kinds >> text=Exports")
-    page.wait_for_function("document.querySelectorAll('.item').length === 2")
+    page.wait_for_function("document.querySelectorAll('.item').length === 3")
     assert all(f.endswith(".ogg") or f.endswith(".wav") for f in page.locator(".item-file").all_text_contents())
     page.click("#lib-kinds >> text=AI edits")
     page.wait_for_function("document.querySelectorAll('.item').length === 2")
     page.click("#lib-kinds >> text=All")
+    page.evaluate("location.hash = '#edit/%E0%A4%A'")  # malformed link: no exception
+    page.wait_for_selector("#page-generate:not([hidden])")
+    assert not errors, errors
     page.goto(web + "/#edit/missing.wav")
     page.wait_for_selector("#edit-empty:not([hidden])")
     page.wait_for_selector("#toast >> text=missing.wav is not in the output folder")

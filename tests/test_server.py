@@ -230,3 +230,13 @@ async def test_sidecars_are_utf8_whatever_the_locale(fake):
     p = await call("process_audio", {"input_audio": r["candidates"][0]["path"], "sample_rate": 48000})
     meta = json.loads(Path(p["metadata"]).read_bytes().decode("utf-8"))
     assert meta["source"]["original_idea"] == idea and any("→" in s for s in meta["steps"])
+
+
+def test_output_names_stay_short(fake):
+    """Chained edits keep appending to the input name; it is capped (bytes)."""
+    long = "あ" * 100 + "_" + "x" * 200
+    p1, p2 = server._out_path(long + "_v1"), server._out_path(long + "_v2")
+    for p in (p1, p2):
+        assert len(p.name.encode()) <= server.MAX_STEM_BYTES + 4
+        p.with_suffix(".wav.json").write_text("{}")  # the sidecar name fits too
+    assert p1.stem.endswith("_v1") and p2.stem.endswith("_v2")

@@ -5,8 +5,8 @@
 
 const Peaks = {
   cache: new Map(),  // key -> Promise of the /api/peaks answer
-  get(file, n, start, end) {
-    const q = `n=${n}` + (start != null ? `&start=${start.toFixed(4)}&end=${end.toFixed(4)}` : "");
+  get(file, n, start, end, version) {
+    const q = `n=${n}` + (start != null ? `&start=${start.toFixed(4)}&end=${end.toFixed(4)}` : "") + (version ? `&v=${version}` : "");
     const key = `${file}?${q}`;
     if (!this.cache.has(key)) {
       if (this.cache.size > 200) this.cache.clear();
@@ -75,7 +75,7 @@ const Player = {
   },
   // all = every thumbnail (resize, theme); otherwise only the playing one and the previous one
   emit(all) {
-    if (all) { for (const m of this.listeners) m.render(); return; }
+    if (all) { for (const m of [...this.listeners]) m.render(); return; }
     for (const m of [this.owner, this.prev]) if (m) m.render();
   },
   async play(mini, at) {
@@ -86,8 +86,8 @@ const Player = {
     }
     if (this.owner !== mini) { this.prev = this.owner; this.owner = mini; }
     if (at != null) {
-      if (a.readyState < 1) await new Promise((r) => a.addEventListener("loadedmetadata", r, { once: true }));
-      a.currentTime = Math.min(at, (a.duration || at) - 0.01);
+      if (!(await whenReady(a)) || this.owner !== mini) return;
+      a.currentTime = Math.max(0, Math.min(at, (a.duration || at) - 0.01));
     }
     try { await a.play(); } catch { /* interrupted by another play() */ }
     this.emit(false);
@@ -99,8 +99,9 @@ const Player = {
 
 // Compact player: play button + waveform thumbnail (click / arrow keys seek) + time.
 class MiniWave {
-  constructor(file, seconds) {
+  constructor(file, seconds, version) {
     this.file = file;
+    this.version = version;
     this.seconds = seconds || 0;
     this.peaks = null;
     this.btn = el("button", { class: "play-btn", type: "button", "aria-label": t("player.play"), onclick: () => this.toggle() });
@@ -117,10 +118,15 @@ class MiniWave {
   async load() {
     if (this.peaks) return;
     try {
-      this.peaks = await Peaks.get(this.file, 240);
+      this.peaks = await Peaks.get(this.file, 240, null, null, this.version);
       this.seconds = this.peaks.seconds;
     } catch { this.peaks = { min: [], max: [] }; }
     this.render();
+  }
+  // Called when the card is removed or re-rendered.
+  dispose() {
+    Player.listeners.delete(this);
+    MiniWave.observer.unobserve(this.node);
   }
   toggle() { Player.isPlaying(this) ? Player.pause() : Player.play(this, Player.owner === this ? null : 0); }
   seekTo(sec) { Player.play(this, Math.max(0, Math.min(this.seconds, sec))); }
@@ -140,7 +146,7 @@ class MiniWave {
   }
   render() {
     if (!this.node.isConnected) {  // card removed from the page: forget it
-      if (this.attached) Player.listeners.delete(this);
+      if (this.attached) this.dispose();
       return this.update();
     }
     this.attached = true;
@@ -167,6 +173,22 @@ class MiniWave {
 MiniWave.observer = new IntersectionObserver((entries) => {
   for (const e of entries) if (e.isIntersecting) { e.target.mini.load(); MiniWave.observer.unobserve(e.target); }
 }, { rootMargin: "200px" });
+
+// Resolves true once the element knows its duration, false on an error or after 10 s.
+function whenReady(a) {
+  if (a.readyState >= 1) return Promise.resolve(true);
+  return new Promise((resolve) => {
+    const done = (ok) => { clearTimeout(timer); a.removeEventListener("loadedmetadata", yes); a.removeEventListener("error", no); resolve(ok); };
+    const yes = () => done(true), no = () => done(false);
+    const timer = setTimeout(no, 10000);
+    a.addEventListener("loadedmetadata", yes);
+    a.addEventListener("error", no);
+  });
+}
+// Dispose the thumbnails inside nodes that are being removed or replaced.
+function disposeMinis(root) {
+  root.querySelectorAll(".mini-wave").forEach((n) => n.mini && n.mini.dispose());
+}
 
 // m:ss.t for waveform times, m:ss for card lengths
 function fmtClock(sec, decimals = 0) {

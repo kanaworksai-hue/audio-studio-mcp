@@ -19,6 +19,7 @@ from __future__ import annotations
 import asyncio
 import itertools
 import json
+import math
 import os
 import secrets
 import stat
@@ -119,14 +120,13 @@ class JobQueue:
         self._prune()
         return job
 
-    def position(self, job: Job) -> int | None:
-        """1-based place among queued jobs, None once it has started."""
-        if job.status != "queued":
-            return None
-        return 1 + sum(1 for j in self.jobs.values() if j.status == "queued" and j.seq < job.seq)
+    def positions(self) -> dict[str, int]:
+        """1-based place of each queued job (started jobs have none)."""
+        queued = sorted((j for j in self.jobs.values() if j.status == "queued"), key=lambda j: j.seq)
+        return {j.id: i for i, j in enumerate(queued, 1)}
 
-    def view(self, job: Job) -> dict:
-        return job.view(self.position(job))
+    def view(self, job: Job, positions: dict[str, int] | None = None) -> dict:
+        return job.view((positions if positions is not None else self.positions()).get(job.id))
 
     def cancel(self, job: Job) -> bool:
         """Drop a job that has not started yet (a running model call cannot stop)."""
@@ -190,7 +190,7 @@ def _output_dir() -> Path:
 
 def _safe_audio_path(name: str) -> Path | None:
     """An audio file directly inside OUTPUT_DIR, or None (no traversal, no symlink escape)."""
-    if not name or "/" in name or "\\" in name or name in (".", "..") or "\0" in name:
+    if not name or "/" in name or "\\" in name or name.startswith(".") or "\0" in name:
         return None
     root = _output_dir().resolve()
     path = (root / name)
@@ -200,7 +200,8 @@ def _safe_audio_path(name: str) -> Path | None:
         resolved = path.resolve(strict=True)
     except (OSError, RuntimeError):
         return None
-    if resolved.parent != root or not resolved.is_file():
+    # a symlink must stay in the folder and point at audio as well
+    if resolved.parent != root or resolved.suffix.lower() not in AUDIO_EXTS or not resolved.is_file():
         return None
     return resolved
 
@@ -298,6 +299,8 @@ def list_library(query: str = "", offset: int = 0, limit: int = 100, kind: str =
         if p.suffix.lower() not in AUDIO_EXTS or p.name.startswith("."):
             continue
         try:
+            if p.is_symlink() and _safe_audio_path(p.name) is None:
+                continue  # points outside the folder or at something that is not audio
             st = p.stat()
         except OSError:  # deleted while we scan
             continue
@@ -316,43 +319,64 @@ def list_library(query: str = "", offset: int = 0, limit: int = 100, kind: str =
 
 
 # ── waveform peaks ───────────────────────────────────────────────────────────
-# Decoded on the server so every format the tools read draws in every browser
-# (Safari cannot decode OGG Vorbis). A few decoded clips are kept for zooming.
-_decoded: dict[tuple, tuple] = {}
-_decoded_lock = threading.Lock()
-_DECODED_KEEP = 4
+# Read on the server so every format the tools read draws in every browser
+# (Safari cannot decode OGG Vorbis). Each file is summarized once, streaming,
+# into min/max per PEAK_BLOCK frames (380 s stereo → ~0.5 MB instead of a
+# 127 MB decode); windows finer than that read just their frames from the file.
+PEAK_BLOCK = 256
+_summaries: dict[tuple, tuple] = {}   # (path, mtime, size) -> (sr, channels, frames, mins, maxs)
+_summary_lock = threading.Lock()      # one summary at a time; also dedupes parallel requests
+_SUMMARY_KEEP = 64
 
 
-def _decode(path: Path) -> tuple:
+def _summary(path: Path) -> tuple:
+    import soundfile as sf
     st = path.stat()
     key = (str(path), st.st_mtime_ns, st.st_size)
-    with _decoded_lock:
-        hit = _decoded.pop(key, None)
-    if hit is None:
-        hit = post.read(path)
-    with _decoded_lock:
-        _decoded[key] = hit  # most recent last
-        while len(_decoded) > _DECODED_KEEP:
-            del _decoded[next(iter(_decoded))]
+    with _summary_lock:
+        hit = _summaries.pop(key, None)
+        if hit is None:
+            mins, maxs = [], []
+            with sf.SoundFile(str(path)) as f:
+                sr, channels = f.samplerate, f.channels
+                for block in f.blocks(blocksize=PEAK_BLOCK * 4096, dtype="float32", always_2d=True):
+                    lo, hi = block.min(axis=1), block.max(axis=1)
+                    idx = np.arange(0, len(lo), PEAK_BLOCK)
+                    mins.append(np.minimum.reduceat(lo, idx))
+                    maxs.append(np.maximum.reduceat(hi, idx))
+                frames = f.frames if f.frames > 0 else sum(len(m) for m in mins) * PEAK_BLOCK
+            empty = np.zeros(0, dtype=np.float32)
+            hit = (sr, channels, frames, np.concatenate(mins) if mins else empty,
+                   np.concatenate(maxs) if maxs else empty)
+        _summaries[key] = hit  # most recent last
+        while len(_summaries) > _SUMMARY_KEEP:
+            del _summaries[next(iter(_summaries))]
     return hit
+
+
+def _buckets(lo: np.ndarray, hi: np.ndarray, n: int) -> tuple[np.ndarray, np.ndarray]:
+    """Reduce per-frame (or per-block) min/max to n buckets. A bucket narrower
+    than one input value (zoomed past sample level) repeats the value it starts on."""
+    idx = (np.arange(n) * len(lo)) // n
+    return np.minimum.reduceat(lo, idx), np.maximum.reduceat(hi, idx)
 
 
 def peaks(path: Path, n: int, start: float | None = None, end: float | None = None) -> dict:
     """Min/max of all channels in n equal buckets over [start, end] seconds."""
-    audio, sr = _decode(path)
-    total = audio.shape[-1]
-    seconds = total / sr
+    sr, channels, total, bmin, bmax = _summary(path)
     s = 0 if start is None else min(total, max(0, int(start * sr)))
     e = total if end is None else min(total, max(s, int(end * sr)))
-    seg = audio[:, s:e]
     lo = hi = np.zeros(0, dtype=np.float32)
-    if seg.shape[-1] and n:
-        # reduceat over bucket starts; a bucket narrower than one sample
-        # (zoomed past sample level) repeats the sample it starts on
-        idx = (np.arange(n) * seg.shape[-1]) // n
-        lo = np.minimum.reduceat(seg.min(axis=0), idx)
-        hi = np.maximum.reduceat(seg.max(axis=0), idx)
-    return {"seconds": round(seconds, 4), "sample_rate": sr, "channels": int(audio.shape[0]),
+    if e > s and n:
+        if (e - s) >= n * PEAK_BLOCK:  # coarse enough for the summary
+            b0, b1 = s // PEAK_BLOCK, min(len(bmin), -(-e // PEAK_BLOCK))
+            lo, hi = _buckets(bmin[b0:b1], bmax[b0:b1], n)
+        else:
+            import soundfile as sf
+            seg = sf.read(str(path), start=s, stop=e, dtype="float32", always_2d=True)[0]
+            if len(seg):
+                lo, hi = _buckets(seg.min(axis=1), seg.max(axis=1), n)
+    return {"seconds": round(total / sr, 4), "sample_rate": sr, "channels": channels,
             "start": round(s / sr, 4), "end": round(e / sr, 4),
             "min": [round(float(v), 4) for v in lo], "max": [round(float(v), 4) for v in hi]}
 
@@ -466,10 +490,15 @@ async def api_jobs_create(request: Request) -> Response:
     return JSONResponse(jobs.view(job), status_code=202)
 
 
-async def api_jobs_list(_: Request) -> Response:
+async def api_jobs_list(request: Request) -> Response:
     items = sorted(jobs.jobs.values(), key=lambda j: j.seq, reverse=True)
+    ids = request.query_params.get("ids")
+    if ids is not None:  # the page polls only the jobs it is waiting for
+        wanted = set(ids.split(","))
+        items = [j for j in items if j.id in wanted]
+    pos = jobs.positions()
     # `loaded` lets the page tell "loading the model" from "generating"
-    return JSONResponse({"items": [jobs.view(j) for j in items], **jobs.counts(),
+    return JSONResponse({"items": [jobs.view(j, pos) for j in items], **jobs.counts(),
                          "loaded": bool(server.get_backend().loaded())})
 
 
@@ -529,8 +558,10 @@ async def api_peaks(request: Request) -> Response:
         n = min(MAX_PEAKS, max(1, int(q.get("n", 2000))))
         start = float(q["start"]) if q.get("start") else None
         end = float(q["end"]) if q.get("end") else None
+        if not all(math.isfinite(v) for v in (start, end) if v is not None):
+            raise ValueError
     except ValueError:
-        return _err(400, "n/start/end must be numbers")
+        return _err(400, "n/start/end must be finite numbers")
     try:
         return JSONResponse(await asyncio.to_thread(peaks, path, n, start, end))
     except Exception as e:  # unreadable or truncated file
@@ -577,16 +608,16 @@ def serve(port: int, open_browser: bool = True) -> None:
     url = f"http://127.0.0.1:{port}/"
     config = uvicorn.Config(create_app(port), host="127.0.0.1", port=port, log_level="info",
                             access_log=False)  # the page polls; keep the console readable
-    srv = uvicorn.Server(config)
 
-    def announce():
-        while not srv.started:
-            if srv.should_exit:
-                return
-            time.sleep(0.1)
-        print(f"[audio-studio] web UI: {url}   MCP: {url}mcp", flush=True)
-        if open_browser:
-            webbrowser.open(url)
+    class Server(uvicorn.Server):
+        # Announce from the startup itself: a watcher thread can be killed
+        # before it prints when the server is stopped right away (uvicorn
+        # re-raises SIGTERM after shutting down).
+        async def startup(self, sockets=None):
+            await super().startup(sockets=sockets)
+            if self.started:
+                print(f"[audio-studio] web UI: {url}   MCP: {url}mcp", flush=True)
+                if open_browser:
+                    threading.Thread(target=webbrowser.open, args=(url,), daemon=True, name="open-browser").start()
 
-    threading.Thread(target=announce, daemon=True, name="open-browser").start()
-    srv.run()
+    Server(config).run()

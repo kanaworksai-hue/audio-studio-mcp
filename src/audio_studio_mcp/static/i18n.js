@@ -1,7 +1,7 @@
 // UI strings: English, Japanese, Simplified Chinese. {name} = placeholder.
 window.I18N = {
   en: {
-    "settings.toDark": "Switch to dark mode", "settings.toLight": "Switch to light mode",
+    "settings.theme": "Theme", "settings.light": "Light", "settings.system": "Follow the system", "settings.dark": "Dark",
     "nav.generate": "Generate", "nav.edit": "Edit", "nav.library": "Library",
     "status.unload": "Unload model", "status.unloadHint": "Frees the 5–7 GB the model uses. It loads again on the next generation.",
     "status.loaded": "Model ready", "status.notLoaded": "Model loads on first use", "status.working": "Working",
@@ -146,7 +146,7 @@ window.I18N = {
     "sum.fadeShort": "fade {a}/{b} ms (shortened to fit)",
   },
   ja: {
-    "settings.toDark": "ダークモードに切り替え", "settings.toLight": "ライトモードに切り替え",
+    "settings.theme": "テーマ", "settings.light": "ライト", "settings.system": "システムに合わせる", "settings.dark": "ダーク",
     "nav.generate": "生成", "nav.edit": "編集", "nav.library": "ライブラリ",
     "status.unload": "モデルを解放", "status.unloadHint": "モデルが使っている 5〜7 GB のメモリを解放します。次の生成でまた読み込みます。",
     "status.loaded": "モデル準備完了", "status.notLoaded": "初回の生成時にモデルを読み込みます", "status.working": "処理中",
@@ -291,7 +291,7 @@ window.I18N = {
     "sum.fadeShort": "フェード {a}/{b} ms（長さに合わせて短縮）",
   },
   zh: {
-    "settings.toDark": "切换到深色模式", "settings.toLight": "切换到浅色模式",
+    "settings.theme": "主题", "settings.light": "浅色", "settings.system": "跟随系统", "settings.dark": "深色",
     "nav.generate": "生成", "nav.edit": "编辑", "nav.library": "作品库",
     "status.unload": "卸载模型", "status.unloadHint": "释放模型占用的 5–7 GB 内存，下次生成时会重新加载。",
     "status.loaded": "模型已就绪", "status.notLoaded": "首次生成时加载模型", "status.working": "处理中",

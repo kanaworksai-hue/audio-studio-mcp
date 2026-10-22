@@ -424,20 +424,23 @@ def test_languages_and_themes(web, browser, shots, lang, theme):
 def test_manual_theme_and_language_switch(web, browser):
     errors: list[str] = []
     page = _page(browser, web, "en", "light", errors)
-    assert page.get_attribute("#theme", "aria-label") == "Switch to dark mode"
-    page.click("#theme")  # sun → moon
+    # three icons: light / follow the system (default) / dark
+    assert page.get_attribute("#theme [data-mode=system]", "aria-checked") == "true"
+    assert page.get_attribute("#theme [data-mode=system]", "aria-label") == "Follow the system"
+    page.click("#theme [data-mode=dark]")
     assert page.evaluate("document.documentElement.dataset.theme") == "dark"
-    assert page.get_attribute("#theme", "aria-pressed") == "true"
-    assert page.is_visible("#theme .icon-moon") and not page.is_visible("#theme .icon-sun")
+    assert page.get_attribute("#theme [data-mode=dark]", "aria-checked") == "true"
+    assert page.get_attribute("#theme [data-mode=system]", "aria-checked") == "false"
     bg = page.evaluate("getComputedStyle(document.body).backgroundColor")
     page.select_option("#lang", "ja")
     assert page.text_content("#tab-library") == "ライブラリ"
-    assert page.get_attribute("#theme", "aria-label") == "ライトモードに切り替え"
+    assert page.get_attribute("#theme [data-mode=system]", "title") == "システムに合わせる"
     page.reload()  # both choices persist
     assert page.evaluate("document.documentElement.dataset.theme") == "dark"
     assert page.evaluate("getComputedStyle(document.body).backgroundColor") == bg
     assert page.text_content("#tab-library") == "ライブラリ"
-    page.click("#theme")  # back to the system's look = follow the system again
+    page.focus("#theme [data-mode=dark]")
+    page.keyboard.press("ArrowLeft")  # arrow keys move within the group: dark → system
     page.select_option("#lang", "auto")
     assert page.evaluate("document.documentElement.dataset.theme") is None
     assert page.evaluate("localStorage.getItem('as.theme')") is None

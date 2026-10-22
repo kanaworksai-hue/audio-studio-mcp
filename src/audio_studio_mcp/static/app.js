@@ -157,17 +157,22 @@ document.addEventListener("keydown", (e) => {
 
 // ── theme / language settings ────────────────────────────────────────────────
 function initSettings() {
-  // Sun / moon toggle. Only a choice that differs from the system is saved, so
-  // switching back to the system's look means "follow the system" again.
-  const systemDark = matchMedia("(prefers-color-scheme: dark)");
-  $("#theme").addEventListener("click", () => {
-    const next = isDark() ? "light" : "dark";
-    if ((next === "dark") === systemDark.matches) { delete document.documentElement.dataset.theme; localStorage.removeItem("as.theme"); }
-    else { document.documentElement.dataset.theme = next; localStorage.setItem("as.theme", next); }
+  // Light / follow the system / dark. "system" is the default and is not saved.
+  const buttons = [...$("#theme").querySelectorAll("[role=radio]")];
+  const setMode = (mode) => {
+    if (mode === "system") { delete document.documentElement.dataset.theme; localStorage.removeItem("as.theme"); }
+    else { document.documentElement.dataset.theme = mode; localStorage.setItem("as.theme", mode); }
     renderThemeButton();
     window.dispatchEvent(new Event("as:theme"));
+  };
+  buttons.forEach((btn, i) => {
+    btn.addEventListener("click", () => setMode(btn.dataset.mode));
+    btn.addEventListener("keydown", (e) => {  // radio group: arrows move and select
+      if (e.key !== "ArrowLeft" && e.key !== "ArrowRight") return;
+      const next = buttons[(i + (e.key === "ArrowRight" ? 1 : buttons.length - 1)) % buttons.length];
+      next.focus(); setMode(next.dataset.mode); e.preventDefault();
+    });
   });
-  systemDark.addEventListener("change", renderThemeButton);
   const lang = localStorage.getItem("as.lang") || "auto";
   $("#lang").value = lang;
   state.lang = pickLang(lang);
@@ -179,15 +184,13 @@ function initSettings() {
   });
 }
 
-function isDark() {
-  const forced = document.documentElement.dataset.theme;
-  return forced ? forced === "dark" : matchMedia("(prefers-color-scheme: dark)").matches;
-}
 function renderThemeButton() {
-  const b = $("#theme"), dark = isDark(), label = t(dark ? "settings.toLight" : "settings.toDark");
-  b.setAttribute("aria-pressed", String(dark));
-  b.setAttribute("aria-label", label);
-  b.title = label;
+  const mode = document.documentElement.dataset.theme || "system";
+  for (const btn of $("#theme").querySelectorAll("[role=radio]")) {
+    const on = btn.dataset.mode === mode;
+    btn.setAttribute("aria-checked", String(on));
+    btn.tabIndex = on ? 0 : -1;
+  }
 }
 
 // ── pages ────────────────────────────────────────────────────────────────────

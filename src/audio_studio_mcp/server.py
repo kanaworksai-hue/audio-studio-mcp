@@ -12,6 +12,7 @@ process forever is not an option on a 16 GB Mac).
 
 Run:  audio-studio-mcp              (stdio, what MCP clients launch)
       audio-studio-mcp --http 8765  (one shared streamable-HTTP server on 127.0.0.1)
+      audio-studio-mcp --web 8765   (the same /mcp plus the web UI at http://127.0.0.1:8765/; see web.py)
 """
 from __future__ import annotations
 
@@ -404,8 +405,13 @@ async def unload_models() -> dict:
 def main(argv: list[str] | None = None) -> None:
     global _preload_when_ready
     ap = argparse.ArgumentParser(prog="audio-studio-mcp", description=__doc__.split("\n")[0])
-    ap.add_argument("--http", type=int, metavar="PORT",
-                    help="serve streamable HTTP on 127.0.0.1:PORT instead of stdio (local only)")
+    mode = ap.add_mutually_exclusive_group()
+    mode.add_argument("--http", type=int, metavar="PORT",
+                      help="serve streamable HTTP on 127.0.0.1:PORT instead of stdio (local only)")
+    mode.add_argument("--web", type=int, metavar="PORT",
+                      help="serve the web UI at http://127.0.0.1:PORT/ and MCP at /mcp on the same "
+                           "port, sharing one loaded model (local only)")
+    ap.add_argument("--no-browser", action="store_true", help="with --web: do not open a browser")
     ap.add_argument("--preload", action="store_true", help="load models at startup")
     args = ap.parse_args(argv)
 
@@ -416,12 +422,15 @@ def main(argv: list[str] | None = None) -> None:
         sys.exit(1)
     backend.start_idle_reaper(IDLE_UNLOAD_MIN)
     if args.preload:
-        if args.http:
+        if args.http or args.web:
             backend.preload()
         else:
             _preload_when_ready = True
 
-    if args.http:
+    if args.web:
+        from . import web
+        web.serve(args.web, open_browser=not args.no_browser)
+    elif args.http:
         server.run("streamable-http", host="127.0.0.1", port=args.http)
     else:
         server.run()

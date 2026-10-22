@@ -1,0 +1,151 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="color-scheme" content="light dark">
+<title>Audio Studio</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%232563eb'/%3E%3Cpath d='M7 16v0M11 11v10M15 7v18M19 12v8M23 9v14M25 16v0' stroke='white' stroke-width='2.4' stroke-linecap='round'/%3E%3C/svg%3E">
+<link rel="stylesheet" href="/static/app.css">
+<script>
+  // Apply the saved theme before first paint (no flash).
+  (function () { var t = localStorage.getItem("as.theme"); if (t === "light" || t === "dark") document.documentElement.dataset.theme = t; })();
+</script>
+</head>
+<body>
+<header class="topbar">
+  <div class="brand">
+    <svg class="logo" viewBox="0 0 32 32" aria-hidden="true"><rect width="32" height="32" rx="7"/><path d="M11 11v10M15 7v18M19 12v8M23 9v14" /></svg>
+    <span class="brand-name">Audio Studio</span>
+    <span class="version" id="version"></span>
+  </div>
+  <nav class="tabs" role="tablist">
+    <button role="tab" id="tab-generate" aria-controls="page-generate" aria-selected="true" data-page="generate" data-i18n="nav.generate">Generate</button>
+    <button role="tab" id="tab-library" aria-controls="page-library" aria-selected="false" data-page="library" data-i18n="nav.library">Library</button>
+  </nav>
+  <div class="status" id="statusbar">
+    <span class="model-state" id="model-state" role="status" aria-live="polite">
+      <span class="dot"></span><span id="model-text">…</span>
+    </span>
+    <button class="btn btn-quiet btn-sm" id="unload" data-i18n="status.unload" data-i18n-title="status.unloadHint">Free memory</button>
+    <label class="sr-only" for="lang" data-i18n="settings.language">Language</label>
+    <select id="lang" class="select-sm">
+      <option value="auto" data-i18n="settings.auto">Auto</option>
+      <option value="ja">日本語</option>
+      <option value="en">English</option>
+      <option value="zh">简体中文</option>
+    </select>
+    <label class="sr-only" for="theme" data-i18n="settings.theme">Theme</label>
+    <select id="theme" class="select-sm">
+      <option value="system" data-i18n="settings.system">System</option>
+      <option value="light" data-i18n="settings.light">Light</option>
+      <option value="dark" data-i18n="settings.dark">Dark</option>
+    </select>
+  </div>
+</header>
+
+<main>
+  <!-- Generate -->
+  <section id="page-generate" class="page" role="tabpanel" aria-labelledby="tab-generate">
+    <form id="gen-form" class="panel form" novalidate>
+      <h1 class="panel-title" data-i18n="gen.title">New sound</h1>
+
+      <fieldset class="field">
+        <legend data-i18n="gen.type">Type</legend>
+        <div class="segmented" id="type-seg">
+          <label><input type="radio" name="audio_type" value="music" checked><span data-i18n="type.music">Music</span></label>
+          <label><input type="radio" name="audio_type" value="instrument"><span data-i18n="type.instrument">Instrument</span></label>
+          <label><input type="radio" name="audio_type" value="sfx"><span data-i18n="type.sfx">Sound effect</span></label>
+        </div>
+      </fieldset>
+
+      <div class="field">
+        <label for="prompt" id="prompt-label" data-i18n="gen.prompt.music">Description (English)</label>
+        <textarea id="prompt" name="prompt" rows="3" spellcheck="false"></textarea>
+        <p class="hint" id="prompt-hint" data-i18n="gen.promptHint.music"></p>
+      </div>
+
+      <div class="sfx-fields" id="sfx-fields" hidden>
+        <div class="field"><label for="sound_source" data-i18n="sfx.source">Source</label><input id="sound_source" name="sound_source" type="text" data-i18n-placeholder="sfx.sourcePh"></div>
+        <div class="field"><label for="sound_action" data-i18n="sfx.action">Action</label><input id="sound_action" name="sound_action" type="text" data-i18n-placeholder="sfx.actionPh"></div>
+        <div class="field"><label for="sound_material" data-i18n="sfx.material">Material</label><input id="sound_material" name="sound_material" type="text" data-i18n-placeholder="sfx.materialPh"></div>
+        <div class="field"><label for="sound_space" data-i18n="sfx.space">Space</label><input id="sound_space" name="sound_space" type="text" data-i18n-placeholder="sfx.spacePh"></div>
+      </div>
+
+      <div class="row">
+        <div class="field">
+          <label for="duration_seconds" data-i18n="gen.duration">Duration (s)</label>
+          <input id="duration_seconds" name="duration_seconds" type="number" min="0.5" max="380" step="0.5" inputmode="decimal">
+        </div>
+        <div class="field" id="bpm-field">
+          <label for="bpm" data-i18n="gen.bpm">BPM</label>
+          <input id="bpm" name="bpm" type="number" min="30" max="300" step="1" inputmode="numeric" data-i18n-placeholder="gen.optional">
+        </div>
+        <fieldset class="field">
+          <legend data-i18n="gen.variations">Candidates</legend>
+          <div class="segmented compact">
+            <label><input type="radio" name="variations" value="1" checked><span>1</span></label>
+            <label><input type="radio" name="variations" value="2"><span>2</span></label>
+            <label><input type="radio" name="variations" value="3"><span>3</span></label>
+            <label><input type="radio" name="variations" value="4"><span>4</span></label>
+          </div>
+        </fieldset>
+      </div>
+
+      <div class="field">
+        <label for="title" data-i18n="gen.name">File name</label>
+        <input id="title" name="title" type="text" data-i18n-placeholder="gen.namePh">
+      </div>
+
+      <details class="advanced" id="advanced">
+        <summary data-i18n="gen.advanced">Advanced</summary>
+        <div class="row">
+          <div class="field"><label for="seed" data-i18n="adv.seed">Seed</label><input id="seed" name="seed" type="number" min="-1" step="1" inputmode="numeric" data-i18n-placeholder="adv.seedPh"></div>
+          <div class="field"><label for="cfg" data-i18n="adv.cfg">CFG</label><input id="cfg" name="cfg" type="number" min="0" max="15" step="0.5" placeholder="1.0"></div>
+          <div class="field"><label for="steps" data-i18n="adv.steps">Steps</label><input id="steps" name="steps" type="number" min="1" max="50" step="1" placeholder="8"></div>
+          <div class="field"><label for="peak_ceiling_db" data-i18n="adv.ceiling">Peak ceiling (dBFS)</label><input id="peak_ceiling_db" name="peak_ceiling_db" type="number" min="-24" max="0" step="0.5" placeholder="-1.0"></div>
+        </div>
+        <div class="field">
+          <label for="negative_prompt" data-i18n="adv.negative">Negative prompt</label>
+          <input id="negative_prompt" name="negative_prompt" type="text" data-i18n-placeholder="adv.negativePh">
+          <p class="hint" data-i18n="adv.hint"></p>
+        </div>
+      </details>
+
+      <p class="form-error" id="form-error" role="alert" hidden></p>
+      <div class="actions">
+        <button type="submit" class="btn btn-primary" id="gen-submit" data-i18n="gen.submit">Generate</button>
+        <button type="button" class="btn btn-quiet" id="gen-reset" data-i18n="gen.reset">Reset</button>
+      </div>
+    </form>
+
+    <div class="results">
+      <div class="results-head">
+        <h2 data-i18n="jobs.title">Results</h2>
+        <span class="muted small" id="queue-info"></span>
+      </div>
+      <div id="jobs" class="jobs"></div>
+      <p class="empty" id="jobs-empty" data-i18n="jobs.empty">Generated sounds appear here.</p>
+    </div>
+  </section>
+
+  <!-- Library -->
+  <section id="page-library" class="page" role="tabpanel" aria-labelledby="tab-library" hidden>
+    <div class="library-bar">
+      <label class="sr-only" for="lib-search" data-i18n="lib.search">Search</label>
+      <input id="lib-search" type="search" data-i18n-placeholder="lib.searchPh" autocomplete="off">
+      <button class="btn btn-quiet" id="lib-refresh" data-i18n="lib.refresh">Refresh</button>
+      <span class="muted small" id="lib-count"></span>
+    </div>
+    <p class="muted small folder" id="lib-folder"></p>
+    <div id="library" class="library"></div>
+    <p class="empty" id="lib-empty" hidden data-i18n="lib.empty">No audio files yet.</p>
+    <div class="more"><button class="btn btn-quiet" id="lib-more" hidden data-i18n="lib.more">Show more</button></div>
+  </section>
+</main>
+
+<div class="toast" id="toast" role="status" aria-live="polite" hidden></div>
+<script src="/static/i18n.js"></script>
+<script src="/static/app.js"></script>
+</body>
+</html>

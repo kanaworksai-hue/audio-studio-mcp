@@ -57,6 +57,44 @@ CONTRAST_JS = r"""
 KEYS_JS = r"""() => [...document.querySelectorAll("body *")].filter((n) => n.children.length === 0
   && /^[a-z]+\.[a-zA-Z.]+$/.test(n.textContent.trim()) && !n.closest("[hidden]")).map((n) => n.textContent.trim())"""
 
+# Help texts whose last line is one or two characters ("す。"), and task cards
+# whose description wraps (that makes the whole row of cards taller).
+ORPHANS_JS = r"""
+() => {
+  const lineTexts = (el) => {
+    const chars = [];
+    const walker = document.createTreeWalker(el, NodeFilter.SHOW_TEXT);
+    while (walker.nextNode()) {
+      const n = walker.currentNode;
+      for (let i = 0; i < n.length; i++) {
+        if (/\s/.test(n.data[i])) continue;
+        const r = document.createRange(); r.setStart(n, i); r.setEnd(n, i + 1);
+        const b = r.getBoundingClientRect();
+        if (b.width) chars.push([b.top + b.height / 2, n.data[i]]);
+      }
+    }
+    const lines = [];
+    for (const [y, c] of chars) {
+      const last = lines[lines.length - 1];
+      if (last && Math.abs(last.y - y) < 4) last.text += c; else lines.push({ y, text: c });
+    }
+    return lines.map((l) => l.text);
+  };
+  const out = [];
+  const blocks = "p, .hint, .note, .mode-desc, .mode-scope, .summary, .tip > span, .job-foot > span, .range-labels > span, label, legend, h1, h2, .task-title, .empty-title, .steps li span";
+  for (const el of document.querySelectorAll(blocks)) {
+    if (!el.offsetWidth || el.closest("[hidden]") || el.closest(".item, .job") && !el.closest(".job-foot")) continue;
+    if ([...el.querySelectorAll(blocks)].length) continue;  // check the innermost block
+    const lines = lineTexts(el);
+    if (lines.length < 2) continue;
+    if (el.matches(".mode-desc")) out.push({ kind: "wrapped-task", text: el.textContent.trim() });
+    const tail = lines[lines.length - 1].replace(/[。、．.,!?！？」』）)…:：]/g, "");
+    if ([...tail].length <= 2) out.push({ kind: "orphan", text: el.textContent.trim() });
+  }
+  return out;
+}
+"""
+
 
 def _free_port() -> int:
     with socket.socket() as s:
@@ -278,6 +316,7 @@ def test_editor_flow(web, browser, shots):
     page.fill("#w-end", "3")
     page.press("#w-end", "Enter")
     assert page.evaluate("Editor.sel") == {"a": 1.5, "b": 3}
+    assert page.text_content("#w-play-text") == "Play selection"  # without touching the waveform
     page.click("#ai-submit")
     page.wait_for_selector("#edit-jobs .job[data-status=done]", timeout=15000)
     job = page.evaluate("[...state.jobs.values()].find(j => j.tool === 'edit_audio')")
@@ -361,6 +400,7 @@ def test_editor_flow(web, browser, shots):
     page.click("#w-wave")
     page.keyboard.press("Escape")
     assert page.evaluate("Editor.sel") is None
+    assert page.text_content("#w-play-text") == "Play"
     _drag(page, "#w-wave", 0.6, 0.6)  # a click, not a drag
     assert page.evaluate("Editor.playhead") == pytest.approx(2.4, abs=0.05)
     page.keyboard.press("Space")
@@ -498,4 +538,84 @@ def test_jobs_queued_while_polling_are_not_lost(web, browser):
                            timeout=30000)
     statuses = page.evaluate("[...state.jobs.values()].filter((j) => (j.arguments.prompt || '').startsWith('race')).map((j) => j.status)")
     assert statuses == ["done"] * 5, statuses
+    assert not errors, errors
+
+
+def test_layout_polish(web, browser, shots):
+    """Titles on results, prompts never cut off, edit results in rows, no
+    one-character last lines or wrapped task cards in any language."""
+    errors: list[str] = []
+    page = _page(browser, web, "ja", "light", errors)
+    page.wait_for_selector("#examples .chip")
+    page.fill("#prompt", "untitled hum")
+    page.fill("#duration_seconds", "1")
+    page.click("#gen-form label:has(input[name=variations][value='1'])")
+    page.click("#gen-submit")
+    page.locator("#examples .chip").first.click()  # the long lo-fi example
+    page.fill("#duration_seconds", "3")
+    page.click("#advanced summary")
+    page.fill("#title", "雨の夜のカフェ")
+    page.click("#gen-submit")
+    card = page.locator("#jobs .job[data-status=done]", has_text="雨の夜のカフェ")
+    card.wait_for(timeout=15000)
+    assert card.locator(".job-prompt").text_content() == "雨の夜のカフェ"
+    assert card.locator(".job-sub").text_content().startswith("Lo-fi hip-hop")
+    # untitled results keep the prompt as their heading, without a subtitle
+    page.wait_for_selector("#jobs .job[data-status=done] >> text=untitled hum")
+    untitled = page.evaluate("""[...document.querySelectorAll('#jobs .job')].filter((n) => !state.jobs.get(n.dataset.id).arguments.title)
+        .map((n) => n.querySelectorAll('.job-sub').length)""")
+    assert untitled and not any(untitled)
+    for width in (1280, 1000, 800):  # the one-line prompt under the title never widens the page
+        page.set_viewport_size({"width": width, "height": 900})
+        assert page.evaluate("document.documentElement.scrollWidth <= innerWidth"), width
+    page.set_viewport_size({"width": 1360, "height": 900})
+    fits = "(sel) => { const t = document.querySelector(sel); return t.scrollHeight <= t.clientHeight + 1; }"
+    assert page.evaluate(fits, "#prompt")
+
+    card.locator(".cand-actions button").first.click()
+    page.wait_for_selector("#w-loading", state="hidden")
+    assert page.input_value("#ai-prompt").startswith("Lo-fi hip-hop")
+    assert page.evaluate(fits, "#ai-prompt"), "edit description is cut off"
+    page.fill("#ai-prompt", "x " * 400)  # very long text: grows only up to a limit
+    assert page.evaluate("document.querySelector('#ai-prompt').offsetHeight <= innerHeight * 0.4 + 1")
+    page.click("label.mode-card:has(input[value=variation])")
+    page.click("#ai-form label:has(input[name=variations][value='3'])")
+    page.fill("#ai-prompt", "rain")
+    page.click("#ai-submit")
+    page.wait_for_selector("#edit-jobs .job[data-status=done]", timeout=15000)
+    # original + A, B, C: one row each, waveforms starting at the same x
+    rows = page.evaluate("""[...document.querySelectorAll('#edit-jobs .job:first-child :is(.orig, .cand)')].map((n) => {
+        const r = n.getBoundingClientRect(), w = n.querySelector('.mini-wave-track').getBoundingClientRect();
+        return { top: r.top, left: r.left, width: r.width, wave: w.left }; })""")
+    assert len(rows) == 4
+    assert all(b["top"] > a["top"] for a, b in zip(rows, rows[1:]))
+    assert len({round(r["left"]) for r in rows}) == 1 and len({round(r["width"]) for r in rows}) == 1
+    assert len({round(r["wave"]) for r in rows}) == 1
+    page.screenshot(path=str(shots / "layout-edit-ja.png"), full_page=True)
+    # in a narrow results column (two-column page just above 900 px, or a phone) nothing overlaps
+    for width in (920, 1000, 600, 390):
+        page.set_viewport_size({"width": width, "height": 900})
+        assert page.evaluate("document.documentElement.scrollWidth <= innerWidth"), width
+        overlap = page.evaluate("""[...document.querySelectorAll('#edit-jobs .cand')].some((n) => {
+            const w = n.querySelector('.mini-wave-track').getBoundingClientRect(), tm = n.querySelector('.mini-time').getBoundingClientRect();
+            const a = n.querySelector('.cand-actions').getBoundingClientRect();
+            return w.width < 80 || (tm.right > a.left + 1 && tm.bottom > a.top + 1); })""")
+        assert not overlap, width
+    page.set_viewport_size({"width": 1360, "height": 900})
+
+    if sys.platform != "darwin":  # line breaks depend on the installed CJK fonts; checked on macOS
+        return
+
+    for lang in LANGS:
+        page.select_option("#lang", lang)
+        for width in (1280, 1440):
+            page.set_viewport_size({"width": width, "height": 900})
+            for mode in ("variation", "inpaint", "continue"):
+                page.click(f"label.mode-card:has(input[value={mode}])")
+                page.evaluate("Editor.setSel({ a: 0.5, b: 1.5 })")
+                bad = page.evaluate(ORPHANS_JS)
+                assert not bad, f"{lang} {width} {mode}: {bad}"
+            page.click("#st-export")
+            assert not page.evaluate(ORPHANS_JS), f"{lang} {width} export"
+    page.select_option("#lang", "auto")
     assert not errors, errors

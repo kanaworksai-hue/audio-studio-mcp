@@ -350,6 +350,7 @@ const Editor = {
     this.audio.loop = $("#w-loop").checked && !sel;
     if (!!sel !== had) $("#x-trim-sel").checked = !!sel;  // a new selection is usually what to export
     this.renderSelection(quiet);
+    this.renderTransport();  // "Play" ↔ "Play selection"
     this.draw();
     this.updateAiForm();
     this.updateExportForm();

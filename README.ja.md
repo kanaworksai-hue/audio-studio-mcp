@@ -189,6 +189,18 @@ macOS ではダウンロードにログインは不要で、`hf auth login` で�
 
 チャットよりクリックで操作したい場合は、同じサーバーに付属するローカルの Web ページが使えます。BGM や効果音の生成、候補の聴き比べ、編集（バリエーション、一部の差し替え、延長）、ゲームや動画向けの書き出し、これまで作った音を一覧できるライブラリまで、ブラウザで操作できます。
 
+<p align="center">
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="docs/assets/webui-generate-ja-dark.png">
+  <img src="docs/assets/webui-generate-ja-light.png" alt="Web UI の生成ページ：lo-fi 曲の 2 バージョンの聴き比べと、足音の効果音" width="820">
+</picture>
+<br><br>
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="docs/assets/webui-edit-ja-dark.png">
+  <img src="docs/assets/webui-edit-ja-light.png" alt="Web UI の編集ページ：波形の選択範囲を差し替え、元の音と新しい 2 バージョンを聴き比べ" width="820">
+</picture>
+</p>
+
 ```bash
 .venv/bin/audio-studio-mcp --web 8765
 ```

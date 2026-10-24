@@ -182,6 +182,18 @@ Generated files are 44.1 kHz 24-bit stereo WAV, written to `outputs/` in this fo
 
 Prefer clicking to chatting? The same server comes with a local web page. Generate BGM and sound effects, compare the candidates, edit them (make a variation, replace a part, extend), export them for your game or video, and browse everything you've made in the library.
 
+<p align="center">
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="docs/assets/webui-generate-en-dark.png">
+  <img src="docs/assets/webui-generate-en-light.png" alt="Web UI, Generate page: two versions of a lo-fi track to compare, and a footstep sound effect" width="820">
+</picture>
+<br><br>
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="docs/assets/webui-edit-en-dark.png">
+  <img src="docs/assets/webui-edit-en-light.png" alt="Web UI, Edit page: a selected part of the waveform will be replaced, with the original and two new versions to compare" width="820">
+</picture>
+</p>
+
 ```bash
 .venv/bin/audio-studio-mcp --web 8765
 ```

@@ -260,3 +260,22 @@ def _umask() -> int:
     m = os.umask(0)
     os.umask(m)
     return m
+
+
+def test_candidates_of_one_call_share_a_name(fake):
+    """Same title twice: X_v1, X_v2 then X_2_v1, X_2_v2 (not X_v1_2)."""
+    first = server._out_paths("same", count=2)
+    second = server._out_paths("same", count=2)
+    assert [p.stem for p in first] == ["same_v1", "same_v2"]
+    assert [p.stem for p in second] == ["same_2_v1", "same_2_v2"]
+    (server.OUTPUT_DIR / "solo_v2.wav").touch()  # one of the set is taken: the set moves on
+    assert [p.stem for p in server._out_paths("solo", count=2)] == ["solo_2_v1", "solo_2_v2"]
+    assert not (server.OUTPUT_DIR / "solo_v1.wav").exists()
+
+
+def test_cut_names_keep_the_inputs_counter(fake):
+    """Exports of A and A_2 with long names stay apart (the _2 is not cut)."""
+    long = "あ" * 100
+    a = server._out_path(long, ".ogg", "_proc")
+    b = server._out_path(long + "_2", ".ogg", "_proc")
+    assert b.stem.endswith("_2_proc") and a.stem != b.stem and not b.stem.endswith("_proc_2")

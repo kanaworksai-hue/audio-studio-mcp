@@ -141,6 +141,20 @@ Step "Installing Python dependencies into .venv (PyTorch + CUDA, ~3 GB)"
 Push-Location $RepoDir
 try { uv sync --extra cuda; Check "uv sync" } finally { Pop-Location }
 $Py = Join-Path $RepoDir ".venv\Scripts\python.exe"
+# uv writes the path of src\ into an editable-install .pth file as UTF-8, but
+# Python 3.11 reads .pth files in the Windows code page (cp932 on Japanese
+# Windows), so a folder name with Japanese characters stops Python from
+# starting. A path relative to site-packages is plain ASCII and always works.
+$Site = Join-Path $RepoDir ".venv\Lib\site-packages"
+Get-ChildItem -LiteralPath $Site -Filter "_editable_impl_audio_studio_mcp*.pth" -ErrorAction SilentlyContinue | ForEach-Object {
+    $line = [IO.File]::ReadAllText($_.FullName, [Text.Encoding]::UTF8).Trim()
+    if ($line -match '[^\x00-\x7F]') { [IO.File]::WriteAllText($_.FullName, "..\..\..\src`r`n", [Text.Encoding]::ASCII) }
+}
+& $Py -c "import audio_studio_mcp" 2>$null
+if ($LASTEXITCODE -ne 0) {
+    & $Py -c "import audio_studio_mcp"
+    Die "the Python in .venv cannot start or cannot import audio_studio_mcp (see the error above). If the folder path ($RepoDir) has non-English characters, try a folder such as C:\audio-studio-mcp."
+}
 $cuda = (& $Py -c "import torch; print(torch.cuda.get_device_name(0) if torch.cuda.is_available() else '')" 2>$null) -join ""
 if ($cuda) { Ok ".venv ready (CUDA: $cuda)" } else { Ok ".venv ready"; Warn "PyTorch cannot see a CUDA GPU; generation will run on the CPU." }
 
@@ -221,4 +235,5 @@ Write-Host ""
 Write-Host "  claude mcp add --scope user audio-studio $EnvArg-- `"$Bin`""
 Write-Host ""
 Write-Host "Other MCP clients (Claude Desktop, Cursor, ...): command = $Bin"
+Write-Host "Web UI:   & `"$Bin`" --web 8765   (opens http://127.0.0.1:8765/ in your browser)"
 Write-Host "Test it:  & `"$Py`" `"$(Join-Path $RepoDir 'scripts\smoke_test.py')`""

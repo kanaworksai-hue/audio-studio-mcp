@@ -583,8 +583,27 @@ async def api_peaks(request: Request) -> Response:
         return _err(422, f"cannot read audio: {e}")
 
 
+# Fixed types for the page's own files. mimetypes reads the Windows registry,
+# where some programs set .js to text/plain; with nosniff the browser would
+# then refuse to run the scripts.
+STATIC_TYPES = {".html": "text/html; charset=utf-8", ".js": "text/javascript; charset=utf-8",
+                ".css": "text/css; charset=utf-8", ".woff2": "font/woff2", ".png": "image/png",
+                ".md": "text/markdown; charset=utf-8", ".txt": "text/plain; charset=utf-8"}
+
+
+class _StaticFiles(StaticFiles):
+    def file_response(self, full_path, stat_result, scope, status_code=200):
+        response = super().file_response(full_path, stat_result, scope, status_code)
+        media_type = STATIC_TYPES.get(Path(full_path).suffix.lower())
+        if media_type:
+            response.media_type = media_type
+            response.headers["content-type"] = media_type
+        return response
+
+
 async def index(_: Request) -> Response:
-    return FileResponse(STATIC_DIR / "index.html", headers={"Cache-Control": "no-cache"})
+    return FileResponse(STATIC_DIR / "index.html", media_type=STATIC_TYPES[".html"],
+                        headers={"Cache-Control": "no-cache"})
 
 
 API_ROUTES = [
@@ -609,7 +628,7 @@ def create_app(port: int | None = None) -> Starlette:
     app.router.routes.extend([
         *API_ROUTES,
         Route("/", index, methods=["GET"]),
-        Mount("/static", StaticFiles(directory=STATIC_DIR), name="static"),
+        Mount("/static", _StaticFiles(directory=STATIC_DIR), name="static"),
     ])
     app.add_middleware(LocalOnly, port=port)
     return app

@@ -67,28 +67,41 @@ def _slug(text: str, n: int = 48) -> str:
     return re.sub(r"[^\w\-]+", "_", text)[:n].strip("_")
 
 
-def _out_path(stem: str, ext: str = ".wav", tail: str = "") -> Path:
-    """Reserve a new file name in OUTPUT_DIR (stem.ext, stem_2.ext, …).
+def _out_paths(stem: str, ext: str = ".wav", tail: str = "", count: int = 1) -> list[Path]:
+    """Reserve `count` new file names in OUTPUT_DIR: stem+tail, or stem+tail_v1 …
+    _vN for several candidates. When one is taken the whole set moves on to
+    stem+tail_2(_vN), so the candidates of one call keep one name.
 
-    `tail` (ASCII: _seed, _inpaint, _v2, …) is never cut when a long stem is
-    shortened. The empty file is created atomically, so parallel tool calls and
-    other server processes sharing the folder never pick the same name."""
+    `tail` (ASCII: _seed, _inpaint, …) and the input's own trailing numbers
+    (_v2, _3, a seed) are never cut when a long stem is shortened. The empty
+    files are created atomically, so parallel tool calls and other server
+    processes sharing the folder never pick the same name."""
     OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
     stem = re.sub(r'[\\/:*?"<>|\s]+', "_", stem).strip("_") or "audio"
     # chained edits append _inpaint, _proc, … to the input's name; keep room for
-    # _vN_N.ext.json under the 255-byte file name limit (and Windows paths)
-    base, suffix = re.fullmatch(r"(.*?)(_v\d+)?", stem).groups(default="")  # keep the candidate number
-    suffix += tail
+    # _N_vN.ext.json under the 255-byte file name limit (and Windows paths)
+    base, keep = re.fullmatch(r"(.*?)((?:_v?\d{1,12}){0,3})", stem).groups()
+    suffix = keep + tail
     base = base.encode()[:MAX_STEM_BYTES - len(suffix)].decode(errors="ignore").strip("_") or "audio"
     stem = base + suffix
+    variants = [f"_v{i}" for i in range(1, count + 1)] if count > 1 else [""]
     n = 1
     while True:
-        path = OUTPUT_DIR / (f"{stem}{ext}" if n == 1 else f"{stem}_{n}{ext}")
+        paths = [OUTPUT_DIR / f"{stem}{'' if n == 1 else f'_{n}'}{v}{ext}" for v in variants]
+        made = []
         try:
-            os.close(os.open(path, os.O_CREAT | os.O_EXCL | os.O_WRONLY, 0o644))
-            return path
+            for path in paths:
+                os.close(os.open(path, os.O_CREAT | os.O_EXCL | os.O_WRONLY, 0o644))
+                made.append(path)
+            return paths
         except FileExistsError:
+            for path in made:
+                path.unlink(missing_ok=True)
             n += 1
+
+
+def _out_path(stem: str, ext: str = ".wav", tail: str = "") -> Path:
+    return _out_paths(stem, ext, tail)[0]
 
 
 def _auto_stem(title: str | None, prompt: str, seed: int) -> tuple[str, str]:
@@ -242,8 +255,8 @@ async def generate_audio(
             "cfg": cfg, "steps": steps, "variations": variations}
     stem, tail = _auto_stem(title, text, seeds[0])
     candidates = []
-    for i, (sd, audio) in enumerate(zip(seeds, res.audios)):
-        path = _out_path(stem, tail=tail if variations == 1 else f"{tail}_v{i + 1}")
+    paths = _out_paths(stem, tail=tail, count=variations)
+    for i, (sd, audio, path) in enumerate(zip(seeds, res.audios, paths)):
         candidates.append(_save_generated(backend, audio, path, peak_ceiling_db,
                                           {**meta, "seed": sd, "candidate": i + 1}))
     return {**_summary(backend, text, seconds, variations, res.wall_seconds,
@@ -320,8 +333,8 @@ async def edit_audio(
             "input_audio": str(src), "source": _load_sidecar(src), **extra}
     stem, tail = (_slug(title, 80), "") if title else (src.stem, f"_{mode}")
     candidates = []
-    for i, (sd, audio) in enumerate(zip(seeds, res.audios)):
-        path = _out_path(stem, tail=tail if variations == 1 else f"{tail}_v{i + 1}")
+    paths = _out_paths(stem, tail=tail, count=variations)
+    for i, (sd, audio, path) in enumerate(zip(seeds, res.audios, paths)):
         candidates.append(_save_generated(backend, audio, path, peak_ceiling_db,
                                           {**meta, "seed": sd, "candidate": i + 1}))
     return {**_summary(backend, text, seconds, variations, res.wall_seconds,

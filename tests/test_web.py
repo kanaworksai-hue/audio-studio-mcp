@@ -608,7 +608,29 @@ def test_input_checked_again_when_the_job_starts(client, fake, tmp_path):
     r = client.post("/api/jobs", json={"tool": "process_audio", "arguments": {"input_audio": "swap.wav"}})
     assert r.status_code == 202  # passed the submit check
     src.unlink()
-    src.symlink_to(outside)
+    try:
+        src.symlink_to(outside)
+    except OSError:  # Windows without developer mode or admin rights
+        gate.set()
+        pytest.skip("symlinks not available")
     gate.set()
     j = wait_job(client, r.json()["id"])
     assert j["status"] == "error" and "output folder" in j["error"]
+
+
+def test_static_types_do_not_depend_on_the_system(client):
+    """Windows can map .js to text/plain in the registry; with nosniff the
+    browser would refuse the scripts."""
+    import mimetypes
+    before = {ext: mimetypes.guess_type("x" + ext)[0] for ext in (".js", ".css", ".html")}
+    for ext in before:
+        mimetypes.add_type("text/plain", ext)  # what such a registry gives
+    try:
+        for f, t in (("app.js", "text/javascript"), ("app.css", "text/css"),
+                     ("fonts/ibm-plex-sans-latin.woff2", "font/woff2"), ("brand/kana.png", "image/png")):
+            r = client.get(f"/static/{f}")
+            assert r.status_code == 200 and r.headers["content-type"].startswith(t), (f, r.headers["content-type"])
+        assert client.get("/").headers["content-type"].startswith("text/html")
+    finally:
+        for ext, t in before.items():
+            mimetypes.add_type(t, ext)

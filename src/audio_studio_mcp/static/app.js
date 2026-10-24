@@ -375,7 +375,9 @@ function clearErrors(f = form(), box = $("#form-error")) {
 // Show an API error next to the form; mark the fields it names.
 function showFormError(msg, fields, f = form(), box = $("#form-error"), adv = $("#advanced")) {
   // the server's field messages are English; lead with a translated sentence
-  if (fields && fields.length) msg = `${t("err.invalidFields")} (${fields.map((fe) => `${fe.field}: ${fe.message}`).join("; ")})`;
+  if (fields && fields.some((fe) => f.elements.namedItem(fe.field))) {
+    msg = `${t("err.invalidFields")} (${fields.map((fe) => `${fe.field}: ${fe.message}`).join("; ")})`;
+  }
   box.textContent = msg; box.hidden = false;
   for (const fe of fields || []) {
     const input = f.elements.namedItem(fe.field);

@@ -12,6 +12,7 @@ process forever is not an option on a 16 GB Mac).
 
 Run:  audio-studio-mcp              (stdio, what MCP clients launch)
       audio-studio-mcp --http 8765  (one shared streamable-HTTP server on 127.0.0.1)
+      audio-studio-mcp --web 8765   (the same /mcp plus the web UI at http://127.0.0.1:8765/; see web.py)
 """
 from __future__ import annotations
 
@@ -43,6 +44,7 @@ IDLE_UNLOAD_MIN = float(os.environ.get("AUDIO_STUDIO_IDLE_UNLOAD_MIN", "10"))
 # The MLX backend chdirs into its runtime; resolve relative inputs against the
 # directory the server was started from instead.
 _START_CWD = Path.cwd()
+MAX_STEM_BYTES = 160  # UTF-8; Japanese names take 3 bytes a character
 
 _backend: Backend | None = None
 
@@ -65,27 +67,48 @@ def _slug(text: str, n: int = 48) -> str:
     return re.sub(r"[^\w\-]+", "_", text)[:n].strip("_")
 
 
-def _out_path(stem: str, ext: str = ".wav") -> Path:
-    """Reserve a new file name in OUTPUT_DIR (stem.ext, stem_2.ext, …).
+def _out_paths(stem: str, ext: str = ".wav", tail: str = "", count: int = 1) -> list[Path]:
+    """Reserve `count` new file names in OUTPUT_DIR: stem+tail, or stem+tail_v1 …
+    _vN for several candidates. When one is taken the whole set moves on to
+    stem+tail_2(_vN), so the candidates of one call keep one name.
 
-    The empty file is created atomically, so parallel tool calls and other
-    server processes sharing the folder never pick the same name."""
+    `tail` (ASCII: _seed, _inpaint, …) and the input's own trailing numbers
+    (_v2, _3, a seed) are never cut when a long stem is shortened. The empty
+    files are created atomically, so parallel tool calls and other server
+    processes sharing the folder never pick the same name."""
     OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
     stem = re.sub(r'[\\/:*?"<>|\s]+', "_", stem).strip("_") or "audio"
+    # chained edits append _inpaint, _proc, … to the input's name; keep room for
+    # _N_vN.ext.json under the 255-byte file name limit (and Windows paths)
+    base, keep = re.fullmatch(r"(.*?)((?:_v?\d{1,12}){0,3})", stem).groups()
+    suffix = keep + tail
+    base = base.encode()[:MAX_STEM_BYTES - len(suffix)].decode(errors="ignore").strip("_") or "audio"
+    stem = base + suffix
+    variants = [f"_v{i}" for i in range(1, count + 1)] if count > 1 else [""]
     n = 1
     while True:
-        path = OUTPUT_DIR / (f"{stem}{ext}" if n == 1 else f"{stem}_{n}{ext}")
+        paths = [OUTPUT_DIR / f"{stem}{'' if n == 1 else f'_{n}'}{v}{ext}" for v in variants]
+        made = []
         try:
-            os.close(os.open(path, os.O_CREAT | os.O_EXCL | os.O_WRONLY))
-            return path
+            for path in paths:
+                os.close(os.open(path, os.O_CREAT | os.O_EXCL | os.O_WRONLY, 0o644))
+                made.append(path)
+            return paths
         except FileExistsError:
+            for path in made:
+                path.unlink(missing_ok=True)
             n += 1
 
 
-def _auto_stem(title: str | None, prompt: str, seed: int) -> str:
+def _out_path(stem: str, ext: str = ".wav", tail: str = "") -> Path:
+    return _out_paths(stem, ext, tail)[0]
+
+
+def _auto_stem(title: str | None, prompt: str, seed: int) -> tuple[str, str]:
+    """(stem, tail) for _out_path: the seed stays in the name when it is cut."""
     if title:
-        return _slug(title, 80)
-    return f"{datetime.now():%Y%m%d-%H%M%S}_{_slug(strip_prefix(prompt)) or 'audio'}_{seed}"
+        return _slug(title, 80), ""
+    return f"{datetime.now():%Y%m%d-%H%M%S}_{_slug(strip_prefix(prompt)) or 'audio'}", f"_{seed}"
 
 
 def _input_path(p: str) -> Path:
@@ -230,10 +253,10 @@ async def generate_audio(
             "sound_fields": dict(zip(("source", "action", "material", "space"), sfx_fields)),
             "bpm": bpm, "seconds": seconds, "negative_prompt": negative_prompt,
             "cfg": cfg, "steps": steps, "variations": variations}
-    stem = _auto_stem(title, text, seeds[0])
+    stem, tail = _auto_stem(title, text, seeds[0])
     candidates = []
-    for i, (sd, audio) in enumerate(zip(seeds, res.audios)):
-        path = _out_path(stem if variations == 1 else f"{stem}_v{i + 1}")
+    paths = _out_paths(stem, tail=tail, count=variations)
+    for i, (sd, audio, path) in enumerate(zip(seeds, res.audios, paths)):
         candidates.append(_save_generated(backend, audio, path, peak_ceiling_db,
                                           {**meta, "seed": sd, "candidate": i + 1}))
     return {**_summary(backend, text, seconds, variations, res.wall_seconds,
@@ -308,10 +331,10 @@ async def edit_audio(
             "bpm": bpm, "seconds": seconds, "negative_prompt": negative_prompt,
             "cfg": cfg, "steps": steps, "variations": variations,
             "input_audio": str(src), "source": _load_sidecar(src), **extra}
-    stem = _slug(title, 80) if title else f"{src.stem}_{mode}"
+    stem, tail = (_slug(title, 80), "") if title else (src.stem, f"_{mode}")
     candidates = []
-    for i, (sd, audio) in enumerate(zip(seeds, res.audios)):
-        path = _out_path(stem if variations == 1 else f"{stem}_v{i + 1}")
+    paths = _out_paths(stem, tail=tail, count=variations)
+    for i, (sd, audio, path) in enumerate(zip(seeds, res.audios, paths)):
         candidates.append(_save_generated(backend, audio, path, peak_ceiling_db,
                                           {**meta, "seed": sd, "candidate": i + 1}))
     return {**_summary(backend, text, seconds, variations, res.wall_seconds,
@@ -377,7 +400,7 @@ async def process_audio(
                 steps_done.append(f"peak ceiling {peak_ceiling_db} dBFS ({gain:+.2f} dB)")
 
         ext = {"wav": ".wav", "ogg": ".ogg", "flac": ".flac"}[format]
-        path = _out_path(_slug(title, 80) if title else f"{src.stem}_proc", ext)
+        path = _out_path(_slug(title, 80), ext) if title else _out_path(src.stem, ext, "_proc")
         post.write(path, audio, sr, format, ogg_quality)
         st = post.stats(audio)
         result = {"path": str(path), "format": format, "sample_rate": sr,
@@ -401,11 +424,23 @@ async def unload_models() -> dict:
     return {"unloaded": await _backend.unload()}
 
 
+def _port(text: str) -> int:
+    port = int(text)
+    if not 1 <= port <= 65535:
+        raise argparse.ArgumentTypeError(f"port must be 1-65535, got {port}")
+    return port
+
+
 def main(argv: list[str] | None = None) -> None:
     global _preload_when_ready
     ap = argparse.ArgumentParser(prog="audio-studio-mcp", description=__doc__.split("\n")[0])
-    ap.add_argument("--http", type=int, metavar="PORT",
-                    help="serve streamable HTTP on 127.0.0.1:PORT instead of stdio (local only)")
+    mode = ap.add_mutually_exclusive_group()
+    mode.add_argument("--http", type=int, metavar="PORT",
+                      help="serve streamable HTTP on 127.0.0.1:PORT instead of stdio (local only)")
+    mode.add_argument("--web", type=_port, metavar="PORT",
+                      help="serve the web UI at http://127.0.0.1:PORT/ and MCP at /mcp on the same "
+                           "port, sharing one loaded model (local only)")
+    ap.add_argument("--no-browser", action="store_true", help="with --web: do not open a browser")
     ap.add_argument("--preload", action="store_true", help="load models at startup")
     args = ap.parse_args(argv)
 
@@ -416,12 +451,15 @@ def main(argv: list[str] | None = None) -> None:
         sys.exit(1)
     backend.start_idle_reaper(IDLE_UNLOAD_MIN)
     if args.preload:
-        if args.http:
+        if args.http or args.web is not None:
             backend.preload()
         else:
             _preload_when_ready = True
 
-    if args.http:
+    if args.web is not None:
+        from . import web
+        web.serve(args.web, open_browser=not args.no_browser)
+    elif args.http:
         server.run("streamable-http", host="127.0.0.1", port=args.http)
     else:
         server.run()

@@ -16,7 +16,7 @@
 
 **English** | [简体中文](README.zh-CN.md) | [日本語](README.ja.md)
 
-[🎧 Listen to samples](https://kanaworksai-hue.github.io/audio-studio-mcp/) · [Quick start](#-quick-start) · [Tools](#-tools) · [FAQ](#-faq) · [⭐ Star](#-like-it-star-it)
+[🎧 Listen to samples](https://kanaworksai-hue.github.io/audio-studio-mcp/) · [Quick start](#-quick-start) · [Tools](#-tools) · [Web UI](#-web-ui) · [FAQ](#-faq) · [⭐ Star](#-like-it-star-it)
 
 </div>
 
@@ -178,6 +178,28 @@ Then just ask:
 Generated files are 44.1 kHz 24-bit stereo WAV, written to `outputs/` in this folder. Each one has a `<name>.json` next to it. Processed files keep the original generation info under `source`.
 </details>
 
+## 🌐 Web UI
+
+Prefer clicking to chatting? The same server comes with a local web page. Generate BGM and sound effects, compare the candidates, edit them (make a variation, replace a part, extend), export them for your game or video, and browse everything you've made in the library.
+
+```bash
+.venv/bin/audio-studio-mcp --web 8765
+```
+
+Your browser opens http://127.0.0.1:8765/. Add `--no-browser` to start without opening it, or `--preload` to load the model at startup. Press Ctrl+C to stop it. On Windows: `.venv\Scripts\audio-studio-mcp.exe --web 8765`.
+
+The page and your MCP clients can share one process and one loaded model: the same port also serves MCP at `/mcp`. Register it once and use both at the same time. Requests from the page and from agents wait in one queue.
+
+```bash
+claude mcp add --scope user --transport http audio-studio http://127.0.0.1:8765/mcp
+```
+
+- Files are written to the output folder (`outputs/`, or `AUDIO_STUDIO_OUTPUT_DIR`). The library shows that folder, and the editor works on the files in it.
+- The page is in English, Japanese and Chinese and follows your browser's language. You can change it in the settings.
+
+> [!WARNING]
+> The web UI is for your own computer only. It listens on `127.0.0.1` only and has no login. Don't make it reachable from other machines (port forwarding, a reverse proxy or a tunnel): anyone who can open it can use your GPU and write files to your output folder.
+
 ## ⚙️ Configuration
 
 <details>
@@ -208,6 +230,8 @@ claude mcp add --scope user --transport http audio-studio http://127.0.0.1:8765/
 ```
 
 On Windows, start it with `.venv\Scripts\audio-studio-mcp.exe --http 8765 --preload`.
+
+`--web 8765` does the same and adds the [web UI](#-web-ui) on the same port.
 </details>
 
 ## ⚡ Performance
@@ -297,6 +321,7 @@ Use WAV or OGG for loops. MP3 adds padding at the start and end, so it can't loo
 
 - [x] Apple Silicon backend (Stable Audio 3, MLX)
 - [x] Windows backend for NVIDIA GPUs (Stable Audio 3, PyTorch)
+- [x] Local web UI (`--web`)
 - [ ] LoRA support (the upstream runtime already has it)
 
 Issues and pull requests are welcome.
@@ -327,6 +352,8 @@ src/audio_studio_mcp/
   backends/base.py     backend interface
   backends/sa3_mlx.py  Stable Audio 3 on Apple Silicon (MLX)
   backends/sa3_torch.py  Stable Audio 3 on NVIDIA GPUs (PyTorch)
+  web.py               web UI server (--web) and its JSON API
+  static/              web UI (HTML/JS/CSS, no build step)
 ```
 
 A new platform is added as another backend in `backends/`.
@@ -337,6 +364,7 @@ A new platform is added as another backend in `backends/`.
 - **Stable Audio 3 runtime:** downloaded into `vendor/` at install time. It is © Stability AI and MIT-licensed.
 - **Model weights:** licensed under the [Stability AI Community License](https://huggingface.co/stabilityai/stable-audio-3-optimized). They are downloaded from Hugging Face (macOS: `stable-audio-3-optimized`; Windows: `stable-audio-3-medium` and the small models), not distributed here.
 - **Brand:** the KanaWorks_AI name, logo and the Kana character are © 東京AI映像合同会社 (Tokyo AI Visuals LLC) and are **not** covered by the MIT license. See [docs/brand](docs/brand/README.md).
+- **Fonts:** the web UI ships IBM Plex Sans, © IBM Corp., under the SIL Open Font License 1.1 ([`OFL.txt`](src/audio_studio_mcp/static/fonts/OFL.txt)). The Kana images in the web UI ([`static/brand`](src/audio_studio_mcp/static/brand/README.md)) are covered by the Brand note above.
 - **Built on:** [Stable Audio 3](https://github.com/Stability-AI/stable-audio-3), [MLX](https://github.com/ml-explore/mlx), [PyTorch](https://pytorch.org) and the [Model Context Protocol](https://modelcontextprotocol.io).
 
 This is an independent project. It is not affiliated with or endorsed by Stability AI, Apple, NVIDIA or Anthropic.

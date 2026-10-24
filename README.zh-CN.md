@@ -16,7 +16,7 @@
 
 [English](README.md) | **简体中文** | [日本語](README.ja.md)
 
-[🎧 试听样例](https://kanaworksai-hue.github.io/audio-studio-mcp/) · [快速开始](#-快速开始) · [工具](#-工具) · [常见问题](#-常见问题) · [⭐ 点个 Star](#-点个-star-支持一下)
+[🎧 试听样例](https://kanaworksai-hue.github.io/audio-studio-mcp/) · [快速开始](#-快速开始) · [工具](#-工具) · [Web UI](#-web-ui) · [常见问题](#-常见问题) · [⭐ 点个 Star](#-点个-star-支持一下)
 
 </div>
 
@@ -185,6 +185,28 @@ macOS 上下载不需要登录，用 `hf auth login` 登录后 Hugging Face 的�
 生成的文件是 44.1 kHz 24-bit 立体声 WAV，写到本目录的 `outputs/`，旁边各有一个 `<文件名>.json`。处理后的文件会在 `source` 里保留原始生成信息。
 </details>
 
+## 🌐 Web UI
+
+比起聊天更想直接点按钮？同一个服务器还自带一个本地网页：生成 BGM 和音效、对比候选、编辑（生成变体、替换其中一段、延长）、导出给游戏或视频使用，还能在作品库里浏览做过的所有声音。
+
+```bash
+.venv/bin/audio-studio-mcp --web 8765
+```
+
+浏览器会打开 http://127.0.0.1:8765/。加 `--no-browser` 可以只启动不打开浏览器，加 `--preload` 会在启动时加载模型。按 Ctrl+C 停止。Windows 上用 `.venv\Scripts\audio-studio-mcp.exe --web 8765` 启动。
+
+同一个端口的 `/mcp` 也提供 MCP 服务，所以网页和 MCP 客户端可以共用一个进程和已加载的模型。注册一次就能同时使用两者，网页和 agent 的请求在同一个队列里依次处理。
+
+```bash
+claude mcp add --scope user --transport http audio-studio http://127.0.0.1:8765/mcp
+```
+
+- 文件写入输出目录（`outputs/`，或 `AUDIO_STUDIO_OUTPUT_DIR`）。作品库显示的就是这个目录，编辑的也是其中的文件。
+- 界面支持英文、日文和中文，默认跟随浏览器语言，也可以在设置里切换。
+
+> [!WARNING]
+> Web UI 只适合在自己的电脑上使用：它只监听 `127.0.0.1`，没有登录验证。不要通过端口转发、反向代理或隧道让其他机器访问它，否则任何能打开页面的人都能使用你的 GPU，并向你的输出目录写入文件。
+
 ## ⚙️ 配置
 
 <details>
@@ -215,6 +237,8 @@ claude mcp add --scope user --transport http audio-studio http://127.0.0.1:8765/
 ```
 
 Windows 上用 `.venv\Scripts\audio-studio-mcp.exe --http 8765 --preload` 启动。
+
+`--web 8765` 的效果相同，并在同一端口提供 [Web UI](#-web-ui)。
 </details>
 
 ## ⚡ 性能
@@ -304,6 +328,7 @@ Windows + RTX 3060 12 GB，medium 模型：
 
 - [x] Apple Silicon 后端（Stable Audio 3、MLX）
 - [x] 面向 NVIDIA 显卡的 Windows 后端（Stable Audio 3、PyTorch）
+- [x] 本地 Web UI（`--web`）
 - [ ] LoRA 支持（上游运行时已经支持）
 
 欢迎提 Issue 和 Pull Request。
@@ -334,6 +359,8 @@ src/audio_studio_mcp/
   backends/base.py     后端接口
   backends/sa3_mlx.py  Apple Silicon 上的 Stable Audio 3（MLX）
   backends/sa3_torch.py  NVIDIA 显卡上的 Stable Audio 3（PyTorch）
+  web.py               Web UI 服务（--web）及其 JSON API
+  static/              Web UI（HTML/JS/CSS，无需构建）
 ```
 
 新平台以新后端的形式加到 `backends/` 里。
@@ -344,6 +371,7 @@ src/audio_studio_mcp/
 - **Stable Audio 3 运行时：** 安装时下载到 `vendor/`，© Stability AI，MIT 协议。
 - **模型权重：** 适用 [Stability AI Community License](https://huggingface.co/stabilityai/stable-audio-3-optimized)。权重从 Hugging Face 下载（macOS：`stable-audio-3-optimized`；Windows：`stable-audio-3-medium` 及小模型），本项目不分发。
 - **品牌：** KanaWorks_AI 名称、logo 和 Kana 形象版权归东京AI映像合同会社所有，**不在** MIT 授权范围内。详见 [docs/brand](docs/brand/README.md)。
+- **字体：** Web UI 附带 IBM Plex Sans 字体，© IBM Corp.，采用 SIL Open Font License 1.1（[`OFL.txt`](src/audio_studio_mcp/static/fonts/OFL.txt)）。Web UI 中的 Kana 图片（[`static/brand`](src/audio_studio_mcp/static/brand/README.md)）适用上面“品牌”一条。
 - **基于：** [Stable Audio 3](https://github.com/Stability-AI/stable-audio-3)、[MLX](https://github.com/ml-explore/mlx)、[PyTorch](https://pytorch.org) 和 [Model Context Protocol](https://modelcontextprotocol.io)。
 
 本项目是独立项目，与 Stability AI、Apple、NVIDIA、Anthropic 都没有关联，也未获其背书。

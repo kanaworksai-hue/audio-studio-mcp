@@ -16,7 +16,7 @@
 
 [English](README.md) | [简体中文](README.zh-CN.md) | **日本語**
 
-[🎧 サンプルを聴く](https://kanaworksai-hue.github.io/audio-studio-mcp/) · [クイックスタート](#-クイックスタート) · [ツール](#-ツール) · [FAQ](#-faq) · [⭐ Star で応援](#-star-で応援する)
+[🎧 サンプルを聴く](https://kanaworksai-hue.github.io/audio-studio-mcp/) · [クイックスタート](#-クイックスタート) · [ツール](#-ツール) · [Web UI](#-web-ui) · [FAQ](#-faq) · [⭐ Star で応援](#-star-で応援する)
 
 </div>
 
@@ -185,6 +185,28 @@ macOS ではダウンロードにログインは不要で、`hf auth login` で�
 生成ファイルは 44.1 kHz 24-bit ステレオ WAV で、このフォルダの `outputs/` に保存され、それぞれ隣に `<ファイル名>.json` が付きます。後処理したファイルには、元の生成情報が `source` として残ります。
 </details>
 
+## 🌐 Web UI
+
+チャットよりクリックで操作したい場合は、同じサーバーに付属するローカルの Web ページが使えます。BGM や効果音の生成、候補の聴き比べ、編集（バリエーション、一部の差し替え、延長）、ゲームや動画向けの書き出し、これまで作った音を一覧できるライブラリまで、ブラウザで操作できます。
+
+```bash
+.venv/bin/audio-studio-mcp --web 8765
+```
+
+ブラウザで http://127.0.0.1:8765/ が開きます。ブラウザを開かずに起動するには `--no-browser`、起動時にモデルを読み込むには `--preload` を付けます。止めるときは Ctrl+C です。Windows では `.venv\Scripts\audio-studio-mcp.exe --web 8765` で起動します。
+
+同じポートの `/mcp` で MCP も提供されるので、ページと MCP クライアントで 1 つのプロセスと読み込み済みのモデルを共有できます。一度登録すれば両方を同時に使えます。ページからのリクエストとエージェントからのリクエストは 1 つのキューで順番に処理されます。
+
+```bash
+claude mcp add --scope user --transport http audio-studio http://127.0.0.1:8765/mcp
+```
+
+- ファイルは出力フォルダ（`outputs/`、または `AUDIO_STUDIO_OUTPUT_DIR`）に書き出されます。ライブラリにはこのフォルダの中身が表示され、編集もこのフォルダ内のファイルが対象です。
+- 表示言語は英語・日本語・中国語で、ブラウザの言語に合わせて切り替わります。設定から変更することもできます。
+
+> [!WARNING]
+> Web UI は自分のパソコンだけで使うためのものです。待ち受けは `127.0.0.1` のみで、ログイン機能はありません。ポート転送、リバースプロキシ、トンネルなどで他のマシンから開けるようにしないでください。開ける人は誰でも GPU を使い、出力フォルダにファイルを書き込めてしまいます。
+
 ## ⚙️ 設定
 
 <details>
@@ -215,6 +237,8 @@ claude mcp add --scope user --transport http audio-studio http://127.0.0.1:8765/
 ```
 
 Windows では `.venv\Scripts\audio-studio-mcp.exe --http 8765 --preload` で起動します。
+
+`--web 8765` でも同じように動き、同じポートで [Web UI](#-web-ui) も使えます。
 </details>
 
 ## ⚡ パフォーマンス
@@ -304,6 +328,7 @@ Rosetta で動く x86_64 版の Python（たとえば `/usr/local` にある Int
 
 - [x] Apple Silicon バックエンド（Stable Audio 3、MLX）
 - [x] NVIDIA GPU 向けの Windows バックエンド（Stable Audio 3、PyTorch）
+- [x] ローカル Web UI（`--web`）
 - [ ] LoRA 対応（上流のランタイムは対応済み）
 
 Issue やプルリクエストを歓迎します。
@@ -334,6 +359,8 @@ src/audio_studio_mcp/
   backends/base.py     バックエンドのインターフェース
   backends/sa3_mlx.py  Apple Silicon 上の Stable Audio 3（MLX）
   backends/sa3_torch.py  NVIDIA GPU 上の Stable Audio 3（PyTorch）
+  web.py               Web UI のサーバー（--web）と JSON API
+  static/              Web UI（HTML/JS/CSS、ビルド不要）
 ```
 
 新しいプラットフォームは、`backends/` にバックエンドとして追加します。
@@ -344,6 +371,7 @@ src/audio_studio_mcp/
 - **Stable Audio 3 ランタイム：** インストール時に `vendor/` へダウンロードされます。© Stability AI、MIT ライセンスです。
 - **モデルの重み：** [Stability AI Community License](https://huggingface.co/stabilityai/stable-audio-3-optimized) が適用されます。重みは Hugging Face からダウンロードされ（macOS：`stable-audio-3-optimized`、Windows：`stable-audio-3-medium` と小型モデル）、本プロジェクトでは配布していません。
 - **ブランド：** KanaWorks_AI の名称、ロゴ、Kana のキャラクターの権利は東京AI映像合同会社に帰属し、MIT ライセンスの対象**外**です。詳しくは [docs/brand](docs/brand/README.md) を参照してください。
+- **フォント：** Web UI には IBM Plex Sans（© IBM Corp.、SIL Open Font License 1.1）を同梱しています（[`OFL.txt`](src/audio_studio_mcp/static/fonts/OFL.txt)）。Web UI の Kana の画像（[`static/brand`](src/audio_studio_mcp/static/brand/README.md)）には上記「ブランド」の項が適用されます。
 - **使用している技術：** [Stable Audio 3](https://github.com/Stability-AI/stable-audio-3)、[MLX](https://github.com/ml-explore/mlx)、[PyTorch](https://pytorch.org)、[Model Context Protocol](https://modelcontextprotocol.io)
 
 本プロジェクトは独立したプロジェクトであり、Stability AI、Apple、NVIDIA、Anthropic とは関係がなく、その承認も受けていません。

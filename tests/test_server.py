@@ -1,5 +1,6 @@
 """Tool-level tests through an in-process MCP client, with a fake backend."""
 import json
+import os
 import shutil
 from pathlib import Path
 
@@ -230,3 +231,51 @@ async def test_sidecars_are_utf8_whatever_the_locale(fake):
     p = await call("process_audio", {"input_audio": r["candidates"][0]["path"], "sample_rate": 48000})
     meta = json.loads(Path(p["metadata"]).read_bytes().decode("utf-8"))
     assert meta["source"]["original_idea"] == idea and any("→" in s for s in meta["steps"])
+
+
+def test_output_names_stay_short(fake):
+    """Chained edits keep appending to the input name; it is capped (bytes)."""
+    long = "あ" * 100 + "_" + "x" * 200
+    p1, p2 = server._out_path(long + "_v1"), server._out_path(long + "_v2")
+    for p in (p1, p2):
+        assert len(p.name.encode()) <= server.MAX_STEM_BYTES + 4
+        p.with_suffix(".wav.json").write_text("{}")  # the sidecar name fits too
+    assert p1.stem.endswith("_v1") and p2.stem.endswith("_v2")
+
+
+def test_cut_names_keep_their_tail(fake):
+    """A long name loses its middle, not the seed / edit mode / candidate number."""
+    long = "あ" * 100
+    p = server._out_path(long, tail="_inpaint_v2")
+    assert p.stem.endswith("_inpaint_v2") and len(p.stem.encode()) <= server.MAX_STEM_BYTES
+    q = server._out_path(p.stem, ".ogg", "_proc")  # edit of a cut name: v2 and the new step stay
+    assert q.stem.endswith("_v2_proc") and len(q.stem.encode()) <= server.MAX_STEM_BYTES
+    stem, tail = server._auto_stem(None, "冷たい" * 40, 6)
+    assert server._out_path(stem, tail=tail).stem.endswith("_6")
+    if os.name != "nt":  # Windows has no POSIX permission bits
+        assert oct(p.stat().st_mode & 0o777) == oct(0o644 & ~_umask())
+
+
+def _umask() -> int:
+    m = os.umask(0)
+    os.umask(m)
+    return m
+
+
+def test_candidates_of_one_call_share_a_name(fake):
+    """Same title twice: X_v1, X_v2 then X_2_v1, X_2_v2 (not X_v1_2)."""
+    first = server._out_paths("same", count=2)
+    second = server._out_paths("same", count=2)
+    assert [p.stem for p in first] == ["same_v1", "same_v2"]
+    assert [p.stem for p in second] == ["same_2_v1", "same_2_v2"]
+    (server.OUTPUT_DIR / "solo_v2.wav").touch()  # one of the set is taken: the set moves on
+    assert [p.stem for p in server._out_paths("solo", count=2)] == ["solo_2_v1", "solo_2_v2"]
+    assert not (server.OUTPUT_DIR / "solo_v1.wav").exists()
+
+
+def test_cut_names_keep_the_inputs_counter(fake):
+    """Exports of A and A_2 with long names stay apart (the _2 is not cut)."""
+    long = "あ" * 100
+    a = server._out_path(long, ".ogg", "_proc")
+    b = server._out_path(long + "_2", ".ogg", "_proc")
+    assert b.stem.endswith("_2_proc") and a.stem != b.stem and not b.stem.endswith("_proc_2")

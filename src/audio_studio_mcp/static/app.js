@@ -490,7 +490,12 @@ function jobTitle(job) {
     if (a.mode === "continue") return t("edit.jobContinue", { len: a.duration_seconds ? `${a.duration_seconds} s` : "—" });
     return t(`mode.${a.mode}`);
   }
-  return promptLabel(a) || "—";
+  return (a.title && a.title.trim()) || promptLabel(a) || "—";
+}
+// Under a titled result: the prompt it was made from.
+function jobSubtitle(job) {
+  const a = job.arguments || {};
+  return job.tool === "generate_audio" && a.title && a.title.trim() ? promptLabel(a) : "";
 }
 // Full detail for the title tooltip: the prompt, the input, the processing steps.
 function jobDetail(job) {
@@ -546,7 +551,9 @@ function jobCard(job) {
   const active = job.status === "queued" || job.status === "running";
   const head = el("div", { class: "job-head" },
     el("span", { class: "badge", text: jobBadge(job) }),
-    el("span", { class: "job-prompt", title: jobDetail(job), text: jobTitle(job) }),
+    el("div", { class: "job-text", title: jobDetail(job) },
+      el("span", { class: "job-prompt", text: jobTitle(job) }),
+      jobSubtitle(job) ? el("span", { class: "job-sub", text: jobSubtitle(job) }) : null),
     el("span", { class: "job-state" }, active ? el("span", { class: "spinner", "aria-hidden": "true" }) : null,
       el("span", { class: "job-state-text", text: jobStateText(job) })));
   const card = el("article", { class: "panel job", dataset: { status: job.status, id: job.id, tool: job.tool }, onkeydown: (e) => abKeys(e, card) }, head);
@@ -848,7 +855,41 @@ function initLibrary() {
   });
 }
 
+// Description boxes grow with their text (up to 40% of the window) so a long
+// prompt is never cut off. Values are also set from code (examples, reuse,
+// opening a sound), so the value setter refits too; a width change (window,
+// a page becoming visible) refits through the ResizeObserver.
+function fitTextarea(ta) {
+  if (!ta.offsetWidth) return;  // hidden: refit when it gets a width
+  const cs = getComputedStyle(ta);
+  ta.style.height = "auto";
+  const h = ta.scrollHeight + parseFloat(cs.borderTopWidth) + parseFloat(cs.borderBottomWidth);
+  ta.style.height = `${Math.ceil(Math.min(h, window.innerHeight * 0.4))}px`;
+}
+function initAutoGrow() {
+  const value = Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, "value");
+  const widths = new WeakMap();
+  const ro = new ResizeObserver((entries) => {
+    for (const { target } of entries) {
+      if (widths.get(target) === target.offsetWidth) continue;  // our own height change
+      widths.set(target, target.offsetWidth);
+      fitTextarea(target);
+    }
+  });
+  for (const ta of document.querySelectorAll("textarea")) {
+    Object.defineProperty(ta, "value", {
+      configurable: true, get() { return value.get.call(this); },
+      set(v) { value.set.call(this, v); fitTextarea(this); },
+    });
+    ta.addEventListener("input", () => fitTextarea(ta));
+    ta.form && ta.form.addEventListener("reset", () => setTimeout(() => fitTextarea(ta)));
+    ro.observe(ta);
+  }
+  document.fonts.ready.then(() => document.querySelectorAll("textarea").forEach(fitTextarea));
+}
+
 // ── boot ─────────────────────────────────────────────────────────────────────
+initAutoGrow();
 Player.init();
 initSettings();
 initForm();

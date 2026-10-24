@@ -1,5 +1,6 @@
 """Tool-level tests through an in-process MCP client, with a fake backend."""
 import json
+import os
 import shutil
 from pathlib import Path
 
@@ -251,11 +252,11 @@ def test_cut_names_keep_their_tail(fake):
     assert q.stem.endswith("_v2_proc") and len(q.stem.encode()) <= server.MAX_STEM_BYTES
     stem, tail = server._auto_stem(None, "冷たい" * 40, 6)
     assert server._out_path(stem, tail=tail).stem.endswith("_6")
-    assert oct(p.stat().st_mode & 0o777) == oct(0o644 & ~_umask())
+    if os.name != "nt":  # Windows has no POSIX permission bits
+        assert oct(p.stat().st_mode & 0o777) == oct(0o644 & ~_umask())
 
 
 def _umask() -> int:
-    import os
     m = os.umask(0)
     os.umask(m)
     return m

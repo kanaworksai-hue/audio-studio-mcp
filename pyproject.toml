@@ -15,6 +15,7 @@ classifiers = [
     "Topic :: Multimedia :: Sound/Audio",
 ]
 dependencies = [
+    "editables>=0.5",  # import hook of the editable install, see dev-mode-exact below
     "mcp>=2.3,<3",
     "numpy>=1.24",
     "pydantic>=2",
@@ -69,6 +70,11 @@ build-backend = "hatchling.build"
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/audio_studio_mcp"]
+# Editable installs (uv sync) load the package through an import hook (the
+# `editables` dependency) instead of a .pth file holding the checkout's path:
+# Python before 3.13 reads .pth files in the locale encoding, so on Windows a
+# non-ASCII path (e.g. a Japanese user name) stops the venv's Python from starting.
+dev-mode-exact = true
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

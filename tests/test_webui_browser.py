@@ -462,3 +462,40 @@ def test_manual_theme_and_language_switch(web, browser):
     pad = page.evaluate("parseFloat(getComputedStyle(document.querySelector('#lang')).paddingRight)")
     assert pad >= 24
     assert not errors, errors
+
+
+def test_keyboard_focus_survives_rerenders(web, browser):
+    errors: list[str] = []
+    page = _page(browser, web, "en", "light", errors)
+    page.wait_for_selector("#durations .chip")
+    page.focus("#durations .chip:nth-child(2)")
+    page.evaluate("refreshStatus()")  # the status refresh rebuilds the chips
+    page.wait_for_timeout(300)
+    assert page.evaluate("document.activeElement.matches('#durations .chip:nth-child(2)')")
+    page.keyboard.press("Enter")  # its own click rebuilds them too
+    assert page.evaluate("document.activeElement.matches('#durations .chip:nth-child(2)')")
+    assert not errors, errors
+
+
+def test_jobs_queued_while_polling_are_not_lost(web, browser):
+    """A job added while a poll is in flight is not in that poll's answer."""
+    errors: list[str] = []
+    page = _page(browser, web, "en", "light", errors)
+    page.wait_for_function("state.status !== undefined && state.status !== null")
+    page.evaluate("""async () => {
+      // slow polls, so the jobs below are queued while one is in flight
+      const orig = window.fetch;
+      window.fetch = async (url, init) => {
+        if (String(url).includes("/api/jobs?ids=")) await new Promise((r) => setTimeout(r, 500));
+        return orig(url, init);
+      };
+      for (let i = 0; i < 5; i++) {
+        await queueJob("generate_audio", { prompt: `race ${i}`, duration_seconds: 1, seed: i });
+        await new Promise((r) => setTimeout(r, 300));
+      }
+    }""")
+    page.wait_for_function("[...state.jobs.values()].every((j) => j.status !== 'queued' && j.status !== 'running')",
+                           timeout=30000)
+    statuses = page.evaluate("[...state.jobs.values()].filter((j) => (j.arguments.prompt || '').startsWith('race')).map((j) => j.status)")
+    assert statuses == ["done"] * 5, statuses
+    assert not errors, errors

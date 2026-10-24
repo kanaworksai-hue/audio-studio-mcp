@@ -120,7 +120,7 @@ const Editor = {
       if (seq !== this.openSeq) return;
       this.file = null;
       this.audio.removeAttribute("src");
-      toast(e.status === 404 ? t("edit.notFound", { file }) : e.message);
+      toast(e.status === 404 ? t("edit.notFound", { file }) : e.status === 422 ? t("edit.unreadable", { file }) : e.message);
       this.showEmpty();
       if (location.hash.startsWith("#edit/")) history.replaceState(null, "", "#edit");
       return;
@@ -596,7 +596,7 @@ const Editor = {
     const target = parseFloat(dur.value);
     $("#extend-hint").textContent = t("edit.extendHint", { now: this.fmt(this.seconds), max: this.max() });
     const adds = [5, 10, 30, 60].filter((d) => this.seconds + d <= this.max());
-    $("#extend-chips").replaceChildren(...adds.map((d) => el("button", { type: "button", class: "chip",
+    replaceKeepFocus($("#extend-chips"), ...adds.map((d) => el("button", { type: "button", class: "chip",
       "aria-pressed": String(Math.abs(target - Math.ceil(this.seconds + d)) < 0.01), text: `+${d} s`,
       onclick: () => { dur.value = Math.ceil(this.seconds + d); this.updateAiForm(); } })));
     // submit label states what will happen
@@ -669,7 +669,7 @@ const Editor = {
     const box = $("#presets");
     if (!box) return;
     const cur = this.preset || "original";
-    box.replaceChildren(...PRESET_ORDER.map((p) => el("label", { class: `preset${p === cur ? " checked" : ""}` },
+    replaceKeepFocus(box, ...PRESET_ORDER.map((p) => el("label", { class: `preset${p === cur ? " checked" : ""}` },
       el("input", { type: "radio", name: "preset", value: p, checked: p === cur }),
       el("span", { class: "preset-name", text: t(`preset.${p}`) }))));
     $("#preset-desc").textContent = t(`preset.${cur}Desc`);

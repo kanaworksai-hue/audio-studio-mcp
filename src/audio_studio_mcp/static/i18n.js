@@ -72,12 +72,14 @@ window.I18N = {
     "kind.generate": "Generated", "kind.edit": "Edit", "kind.process": "Export",
     "err.network": "Cannot reach the server. Is audio-studio-mcp --web still running?",
     "err.emptyPrompt": "Describe the sound first (or click an example).",
+    "err.invalidFields": "Check the highlighted fields.",
 
     "player.play": "Play", "player.pause": "Pause", "player.position": "Playback position",
 
     "edit.emptyTitle": "Open a sound to edit it",
     "edit.emptyHint": "Click “Edit” on a result or in the library. You can make variations, replace a part, extend it, or export it for a game or video.",
     "edit.browse": "Browse the library", "edit.recent": "Recent sounds", "edit.notFound": "{file} is not in the output folder.",
+    "edit.unreadable": "{file} can't be read as audio (damaged or unsupported).",
     "edit.mono": "mono", "edit.stereo": "stereo", "edit.madeFrom": "Made from",
     "edit.aiTab": "Change with AI", "edit.exportTab": "Export", "edit.mode": "What to do",
     "mode.variation": "Make a variation", "mode.variationDesc": "Same idea, new take on the whole sound",
@@ -157,7 +159,7 @@ window.I18N = {
     "settings.language": "言語", "settings.auto": "自動",
 
     "gen.title": "新しい音", "gen.type": "何を作りますか？",
-    "type.music": "音楽", "type.instrument": "楽器ソロ／ループ", "type.sfx": "効果音", "type.raw": "Raw",
+    "type.music": "音楽", "type.instrument": "楽器ソロ／ループ", "type.sfx": "効果音", "type.raw": "指定なし",
     "type.musicHint": "BGM：複数の楽器による 1 曲。",
     "type.instrumentHint": "単一の楽器や短いループ（ドラムビート、ギターのフレーズなど）。",
     "type.sfxHint": "足音、衝撃音、UI 音、環境音など。",
@@ -218,12 +220,14 @@ window.I18N = {
     "kind.generate": "生成", "kind.edit": "編集", "kind.process": "書き出し",
     "err.network": "サーバーに接続できません。audio-studio-mcp --web が起動しているか確認してください。",
     "err.emptyPrompt": "まず音の説明を入力してください（例をクリックしても OK）。",
+    "err.invalidFields": "印の付いた項目を確認してください。",
 
     "player.play": "再生", "player.pause": "一時停止", "player.position": "再生位置",
 
     "edit.emptyTitle": "編集する音を開いてください",
     "edit.emptyHint": "結果やライブラリの「編集」をクリックします。バリエーション作成、一部の差し替え、延長、ゲームや動画向けの書き出しができます。",
     "edit.browse": "ライブラリを見る", "edit.recent": "最近の音", "edit.notFound": "{file} は出力フォルダにありません。",
+    "edit.unreadable": "{file} を音声として読み込めません（壊れているか未対応の形式です）。",
     "edit.mono": "モノラル", "edit.stereo": "ステレオ", "edit.madeFrom": "元の音：",
     "edit.aiTab": "AI で変える", "edit.exportTab": "書き出し", "edit.mode": "操作",
     "mode.variation": "バリエーション", "mode.variationDesc": "同じアイデアで全体を作り直す",
@@ -303,7 +307,7 @@ window.I18N = {
     "settings.language": "语言", "settings.auto": "自动",
 
     "gen.title": "新建声音", "gen.type": "想做什么？",
-    "type.music": "音乐", "type.instrument": "单乐器 / 循环", "type.sfx": "音效", "type.raw": "Raw",
+    "type.music": "音乐", "type.instrument": "单乐器 / 循环", "type.sfx": "音效", "type.raw": "未指定",
     "type.musicHint": "背景音乐：多种乐器组成的完整曲子。",
     "type.instrumentHint": "单一乐器或短循环，例如鼓点、吉他乐句。",
     "type.sfxHint": "脚步声、撞击声、UI 音、环境音等。",
@@ -364,12 +368,14 @@ window.I18N = {
     "kind.generate": "生成", "kind.edit": "编辑", "kind.process": "导出",
     "err.network": "无法连接服务器。请确认 audio-studio-mcp --web 仍在运行。",
     "err.emptyPrompt": "请先描述声音（也可以点一个示例）。",
+    "err.invalidFields": "请检查标出的项目。",
 
     "player.play": "播放", "player.pause": "暂停", "player.position": "播放位置",
 
     "edit.emptyTitle": "打开一个声音来编辑",
     "edit.emptyHint": "在结果或作品库中点击“编辑”。可以生成变体、替换其中一段、延长，或导出给游戏和视频使用。",
     "edit.browse": "浏览作品库", "edit.recent": "最近的声音", "edit.notFound": "输出文件夹中没有 {file}。",
+    "edit.unreadable": "无法读取 {file}（文件已损坏或格式不支持）。",
     "edit.mono": "单声道", "edit.stereo": "立体声", "edit.madeFrom": "来源：",
     "edit.aiTab": "用 AI 修改", "edit.exportTab": "导出", "edit.mode": "操作",
     "mode.variation": "生成变体", "mode.variationDesc": "同样的想法，整体重新演绎",

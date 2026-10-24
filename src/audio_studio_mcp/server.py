@@ -67,32 +67,35 @@ def _slug(text: str, n: int = 48) -> str:
     return re.sub(r"[^\w\-]+", "_", text)[:n].strip("_")
 
 
-def _out_path(stem: str, ext: str = ".wav") -> Path:
+def _out_path(stem: str, ext: str = ".wav", tail: str = "") -> Path:
     """Reserve a new file name in OUTPUT_DIR (stem.ext, stem_2.ext, …).
 
-    The empty file is created atomically, so parallel tool calls and other
-    server processes sharing the folder never pick the same name."""
+    `tail` (ASCII: _seed, _inpaint, _v2, …) is never cut when a long stem is
+    shortened. The empty file is created atomically, so parallel tool calls and
+    other server processes sharing the folder never pick the same name."""
     OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
     stem = re.sub(r'[\\/:*?"<>|\s]+', "_", stem).strip("_") or "audio"
     # chained edits append _inpaint, _proc, … to the input's name; keep room for
     # _vN_N.ext.json under the 255-byte file name limit (and Windows paths)
     base, suffix = re.fullmatch(r"(.*?)(_v\d+)?", stem).groups(default="")  # keep the candidate number
+    suffix += tail
     base = base.encode()[:MAX_STEM_BYTES - len(suffix)].decode(errors="ignore").strip("_") or "audio"
     stem = base + suffix
     n = 1
     while True:
         path = OUTPUT_DIR / (f"{stem}{ext}" if n == 1 else f"{stem}_{n}{ext}")
         try:
-            os.close(os.open(path, os.O_CREAT | os.O_EXCL | os.O_WRONLY))
+            os.close(os.open(path, os.O_CREAT | os.O_EXCL | os.O_WRONLY, 0o644))
             return path
         except FileExistsError:
             n += 1
 
 
-def _auto_stem(title: str | None, prompt: str, seed: int) -> str:
+def _auto_stem(title: str | None, prompt: str, seed: int) -> tuple[str, str]:
+    """(stem, tail) for _out_path: the seed stays in the name when it is cut."""
     if title:
-        return _slug(title, 80)
-    return f"{datetime.now():%Y%m%d-%H%M%S}_{_slug(strip_prefix(prompt)) or 'audio'}_{seed}"
+        return _slug(title, 80), ""
+    return f"{datetime.now():%Y%m%d-%H%M%S}_{_slug(strip_prefix(prompt)) or 'audio'}", f"_{seed}"
 
 
 def _input_path(p: str) -> Path:
@@ -237,10 +240,10 @@ async def generate_audio(
             "sound_fields": dict(zip(("source", "action", "material", "space"), sfx_fields)),
             "bpm": bpm, "seconds": seconds, "negative_prompt": negative_prompt,
             "cfg": cfg, "steps": steps, "variations": variations}
-    stem = _auto_stem(title, text, seeds[0])
+    stem, tail = _auto_stem(title, text, seeds[0])
     candidates = []
     for i, (sd, audio) in enumerate(zip(seeds, res.audios)):
-        path = _out_path(stem if variations == 1 else f"{stem}_v{i + 1}")
+        path = _out_path(stem, tail=tail if variations == 1 else f"{tail}_v{i + 1}")
         candidates.append(_save_generated(backend, audio, path, peak_ceiling_db,
                                           {**meta, "seed": sd, "candidate": i + 1}))
     return {**_summary(backend, text, seconds, variations, res.wall_seconds,
@@ -315,10 +318,10 @@ async def edit_audio(
             "bpm": bpm, "seconds": seconds, "negative_prompt": negative_prompt,
             "cfg": cfg, "steps": steps, "variations": variations,
             "input_audio": str(src), "source": _load_sidecar(src), **extra}
-    stem = _slug(title, 80) if title else f"{src.stem}_{mode}"
+    stem, tail = (_slug(title, 80), "") if title else (src.stem, f"_{mode}")
     candidates = []
     for i, (sd, audio) in enumerate(zip(seeds, res.audios)):
-        path = _out_path(stem if variations == 1 else f"{stem}_v{i + 1}")
+        path = _out_path(stem, tail=tail if variations == 1 else f"{tail}_v{i + 1}")
         candidates.append(_save_generated(backend, audio, path, peak_ceiling_db,
                                           {**meta, "seed": sd, "candidate": i + 1}))
     return {**_summary(backend, text, seconds, variations, res.wall_seconds,
@@ -384,7 +387,7 @@ async def process_audio(
                 steps_done.append(f"peak ceiling {peak_ceiling_db} dBFS ({gain:+.2f} dB)")
 
         ext = {"wav": ".wav", "ogg": ".ogg", "flac": ".flac"}[format]
-        path = _out_path(_slug(title, 80) if title else f"{src.stem}_proc", ext)
+        path = _out_path(_slug(title, 80), ext) if title else _out_path(src.stem, ext, "_proc")
         post.write(path, audio, sr, format, ogg_quality)
         st = post.stats(audio)
         result = {"path": str(path), "format": format, "sample_rate": sr,

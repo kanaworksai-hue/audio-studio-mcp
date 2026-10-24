@@ -11,7 +11,7 @@ const Peaks = {
     if (!this.cache.has(key)) {
       if (this.cache.size > 200) this.cache.clear();
       const p = fetch(`/api/peaks/${encodeURIComponent(file)}?${q}`).then((r) => {
-        if (!r.ok) throw new Error(`peaks ${r.status}`);
+        if (!r.ok) { const e = new Error(`peaks ${r.status}`); e.status = r.status; throw e; }
         return r.json();
       });
       p.catch(() => this.cache.delete(key));

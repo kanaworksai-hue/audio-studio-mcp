@@ -240,3 +240,22 @@ def test_output_names_stay_short(fake):
         assert len(p.name.encode()) <= server.MAX_STEM_BYTES + 4
         p.with_suffix(".wav.json").write_text("{}")  # the sidecar name fits too
     assert p1.stem.endswith("_v1") and p2.stem.endswith("_v2")
+
+
+def test_cut_names_keep_their_tail(fake):
+    """A long name loses its middle, not the seed / edit mode / candidate number."""
+    long = "あ" * 100
+    p = server._out_path(long, tail="_inpaint_v2")
+    assert p.stem.endswith("_inpaint_v2") and len(p.stem.encode()) <= server.MAX_STEM_BYTES
+    q = server._out_path(p.stem, ".ogg", "_proc")  # edit of a cut name: v2 and the new step stay
+    assert q.stem.endswith("_v2_proc") and len(q.stem.encode()) <= server.MAX_STEM_BYTES
+    stem, tail = server._auto_stem(None, "冷たい" * 40, 6)
+    assert server._out_path(stem, tail=tail).stem.endswith("_6")
+    assert oct(p.stat().st_mode & 0o777) == oct(0o644 & ~_umask())
+
+
+def _umask() -> int:
+    import os
+    m = os.umask(0)
+    os.umask(m)
+    return m

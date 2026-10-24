@@ -89,6 +89,13 @@ function el(tag, attrs = {}, ...children) {
   for (const c of children.flat()) if (c != null) n.append(c);
   return n;
 }
+// replaceChildren that keeps keyboard focus on the same position (chips and
+// radios are rebuilt on every change and status refresh)
+function replaceKeepFocus(box, ...children) {
+  const i = [...box.querySelectorAll("button, input")].indexOf(document.activeElement);
+  box.replaceChildren(...children);
+  if (i >= 0) { const n = box.querySelectorAll("button, input")[i]; if (n) n.focus({ preventScroll: true }); }
+}
 function fmtTime(sec) {
   sec = Math.max(0, Math.round(sec || 0));
   const m = Math.floor(sec / 60), s = sec % 60;
@@ -280,7 +287,7 @@ function updateDurationUI() {
   $("#duration-hint").textContent = t("gen.durationHint", { def: d ?? "—", max });
   const empty = input.value.trim() === "", cur = Number(input.value), auto = empty || cur === d;
   input.title = t("gen.durationHint", { def: d ?? "—", max });
-  $("#durations").replaceChildren(
+  replaceKeepFocus($("#durations"),
     el("button", { type: "button", class: "chip", "aria-pressed": String(auto), text: t("gen.durationAuto", { def: d ?? "—" }),
       onclick: () => { input.value = ""; updateDurationUI(); } }),
     ...DURATIONS[type].filter((s) => s <= max && s !== d).map((s) =>
@@ -367,6 +374,8 @@ function clearErrors(f = form(), box = $("#form-error")) {
 }
 // Show an API error next to the form; mark the fields it names.
 function showFormError(msg, fields, f = form(), box = $("#form-error"), adv = $("#advanced")) {
+  // the server's field messages are English; lead with a translated sentence
+  if (fields && fields.length) msg = `${t("err.invalidFields")} (${fields.map((fe) => `${fe.field}: ${fe.message}`).join("; ")})`;
   box.textContent = msg; box.hidden = false;
   for (const fe of fields || []) {
     const input = f.elements.namedItem(fe.field);
@@ -492,7 +501,7 @@ function jobBadge(job) {
 }
 const LETTERS = "ABCD";
 function candidateCard(c, i, job) {
-  const file = baseName(c.path), mini = new MiniWave(file, c.seconds, Math.round(job.finished || 0));
+  const file = baseName(c.path), mini = new MiniWave(file, c.seconds ?? job.result.seconds, Math.round(job.finished || 0));
   const many = job.result.candidates.length > 1 || job.tool === "edit_audio";
   const exported = job.tool === "process_audio";
   return el("div", { class: "cand", dataset: { index: i } },
@@ -661,7 +670,8 @@ async function pollJobs() {
       let finished = false;
       try {
         const waiting = [...state.jobs.values()].filter((j) => j.status === "queued" || j.status === "running");
-        const r = await api(`/api/jobs?ids=${waiting.map((j) => j.id).join(",")}`);
+        const asked = new Set(waiting.map((j) => j.id));
+        const r = await api(`/api/jobs?ids=${[...asked].join(",")}`);
         state.loaded = r.loaded;
         const seen = new Set();
         for (const j of r.items) {
@@ -674,9 +684,10 @@ async function pollJobs() {
           if (prev || j.status === "queued" || j.status === "running") state.jobs.set(j.id, j);
           seen.add(j.id);
         }
-        // The server restarted and forgot these: stop waiting for them.
+        // The server restarted and forgot these: stop waiting for them. Only jobs
+        // this request asked about (one queued meanwhile is not in the answer).
         for (const j of state.jobs.values()) {
-          if (!seen.has(j.id) && (j.status === "queued" || j.status === "running")) {
+          if (asked.has(j.id) && !seen.has(j.id) && (j.status === "queued" || j.status === "running")) {
             state.jobs.set(j.id, { ...j, status: "error", position: null, error: t("jobs.lost") });
           }
         }
@@ -815,7 +826,7 @@ async function loadLibrary(reset) {
 // Type filter chips above the library list.
 const LIB_KINDS = ["", "music", "instrument", "sfx", "edit", "process"];
 function renderKinds() {
-  $("#lib-kinds").replaceChildren(...LIB_KINDS.map((k) => el("button", { type: "button", class: "chip",
+  replaceKeepFocus($("#lib-kinds"), ...LIB_KINDS.map((k) => el("button", { type: "button", class: "chip",
     "aria-pressed": String(state.lib.kind === k), text: t(`lib.kind.${k || "all"}`),
     onclick: () => { state.lib.kind = k; renderKinds(); loadLibrary(true); } })));
 }

@@ -50,6 +50,7 @@ JOB_TOOLS = {"generate_audio", "edit_audio", "process_audio"}
 INPUT_TOOLS = {"edit_audio", "process_audio"}
 MAX_FINISHED_JOBS = 200
 MAX_PEAKS = 20000
+MAX_BODY = 1 << 20  # bytes; a job request is a few hundred
 
 
 # ── jobs ─────────────────────────────────────────────────────────────────────
@@ -154,6 +155,9 @@ class JobQueue:
                 continue
             job.status, job.started = "running", time.time()
             try:
+                if job.tool in INPUT_TOOLS and resolve_input(job.arguments.get("input_audio")) is None:
+                    # checked at submit time; the file may have been replaced since
+                    raise ValueError("input_audio must be an audio file in the output folder")
                 job.result = _tool_result(await server.server.call_tool(job.tool, job.arguments))
                 job.status = "done"
             except Exception as e:  # ToolError carries the same text MCP clients see
@@ -333,6 +337,9 @@ def _summary(path: Path) -> tuple:
     import soundfile as sf
     st = path.stat()
     key = (str(path), st.st_mtime_ns, st.st_size)
+    hit = _summaries.get(key)
+    if hit is not None:  # cached: don't wait behind another file being summarized
+        return hit
     with _summary_lock:
         hit = _summaries.pop(key, None)
         if hit is None:
@@ -393,7 +400,8 @@ class LocalOnly:
 
     LOOPBACK = ("127.0.0.1", "localhost", "::1")
     FRAME_HEADERS = [(b"x-frame-options", b"DENY"),
-                     (b"content-security-policy", b"frame-ancestors 'none'")]
+                     (b"content-security-policy", b"frame-ancestors 'none'"),
+                     (b"x-content-type-options", b"nosniff")]
 
     def __init__(self, app, port: int | None) -> None:
         self.app, self.port = app, port
@@ -415,10 +423,10 @@ class LocalOnly:
         if headers.get("sec-fetch-site", "same-origin") not in ("same-origin", "none"):
             return "cross-site request refused"
         if scope["method"] not in ("GET", "HEAD"):
-            origin = headers.get("origin")
-            if origin is None or not self._host_ok(origin.split("://", 1)[-1]):
+            origin = headers.get("origin", "")
+            if not origin.startswith("http://") or not self._host_ok(origin[len("http://"):]):
                 return "cross-origin request refused"
-            if not headers.get("content-type", "").startswith("application/json"):
+            if headers.get("content-type", "").split(";")[0].strip().lower() != "application/json":
                 return "expected application/json"
         return None
 
@@ -457,9 +465,14 @@ async def api_unload(_: Request) -> Response:
 
 
 async def _json_body(request: Request) -> dict:
+    raw = b""
+    async for chunk in request.stream():
+        raw += chunk
+        if len(raw) > MAX_BODY:
+            raise ValueError("request body too large")
     try:
-        body = await request.json()
-    except ValueError:
+        body = json.loads(raw)
+    except (ValueError, RecursionError):
         raise ValueError("invalid JSON body")
     if not isinstance(body, dict):
         raise ValueError("JSON body must be an object")
@@ -472,7 +485,7 @@ async def api_jobs_create(request: Request) -> Response:
     except ValueError as e:
         return _err(400, str(e))
     tool, arguments = body.get("tool", "generate_audio"), body.get("arguments", {})
-    if tool not in JOB_TOOLS:
+    if not isinstance(tool, str) or tool not in JOB_TOOLS:
         return _err(400, f"tool not available from the web UI: {tool!r}")
     if not isinstance(arguments, dict):
         return _err(400, "arguments must be an object")
@@ -560,6 +573,8 @@ async def api_peaks(request: Request) -> Response:
         end = float(q["end"]) if q.get("end") else None
         if not all(math.isfinite(v) for v in (start, end) if v is not None):
             raise ValueError
+        # keep int(seconds * rate) finite (a week is longer than any file here)
+        start, end = (None if v is None else min(max(v, 0.0), 604800.0) for v in (start, end))
     except ValueError:
         return _err(400, "n/start/end must be finite numbers")
     try:

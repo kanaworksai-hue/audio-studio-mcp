@@ -562,3 +562,53 @@ def test_web_opens_browser_once_started(monkeypatch, capsys):
     FakeServer.fail = True
     web.serve(8123, open_browser=True)
     assert opened == [] and "web UI" not in capsys.readouterr().out
+
+
+def test_bad_job_requests_are_400_not_500(client):
+    assert client.post("/api/jobs", json={"tool": ["x"]}).status_code == 400
+    deep = '{"a":' * 100000
+    r = client.post("/api/jobs", content=deep, headers={"Content-Type": "application/json"})
+    assert r.status_code == 400
+    big = '{"tool": "generate_audio", "arguments": {"prompt": "' + "x" * (web.MAX_BODY + 1) + '"}}'
+    r = client.post("/api/jobs", content=big, headers={"Content-Type": "application/json"})
+    assert r.status_code == 400 and "too large" in r.json()["error"]
+
+
+def test_header_checks_are_exact(client):
+    ok = client.post("/api/jobs", content="{}", headers={"Content-Type": "Application/JSON; charset=utf-8"})
+    assert ok.status_code != 403
+    for origin in ("https://127.0.0.1", "evil://127.0.0.1"):
+        assert client.post("/api/jobs", json={}, headers={"Origin": origin}).status_code == 403
+    r = client.post("/api/jobs", content="{}", headers={"Content-Type": "application/jsonx"})
+    assert r.status_code == 403
+    assert client.get("/api/status").headers["x-content-type-options"] == "nosniff"
+
+
+def test_peaks_with_a_huge_end(client, fake):
+    sf_path = server.OUTPUT_DIR / "tone.wav"
+    server.OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
+    import soundfile as sf
+    sf.write(sf_path, sine(1.0).T, 44100)
+    r = client.get("/api/peaks/tone.wav?n=10&start=0&end=1e308")
+    assert r.status_code == 200 and r.json()["end"] == pytest.approx(1.0, abs=0.01)
+
+
+def test_input_checked_again_when_the_job_starts(client, fake, tmp_path):
+    """A file swapped for a link out of the folder after queueing is refused."""
+    import soundfile as sf
+    server.OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
+    src = server.OUTPUT_DIR / "swap.wav"
+    sf.write(src, sine(1.0).T, 44100)
+    outside = tmp_path / "outside.wav"
+    sf.write(outside, sine(1.0).T, 44100)
+    gate = threading.Event()
+    orig = fake._generate
+    fake._generate = lambda seeds, req: (gate.wait(10), orig(seeds, req))[1]
+    client.post("/api/jobs", json={"arguments": {"prompt": "slow", "duration_seconds": 1}})
+    r = client.post("/api/jobs", json={"tool": "process_audio", "arguments": {"input_audio": "swap.wav"}})
+    assert r.status_code == 202  # passed the submit check
+    src.unlink()
+    src.symlink_to(outside)
+    gate.set()
+    j = wait_job(client, r.json()["id"])
+    assert j["status"] == "error" and "output folder" in j["error"]

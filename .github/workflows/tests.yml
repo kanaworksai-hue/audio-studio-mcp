@@ -20,7 +20,13 @@ jobs:
         shell: bash
         run: |
           if [ "$RUNNER_OS" = "macOS" ]; then brew install ffmpeg
-          elif [ "$RUNNER_OS" = "Windows" ]; then choco install ffmpeg -y --no-progress
+          elif [ "$RUNNER_OS" = "Windows" ]; then
+            # the Chocolatey feed sometimes answers 406 and choco still exits 0: retry, then check
+            for i in 1 2 3; do
+              choco install ffmpeg -y --no-progress && command -v ffmpeg && break
+              sleep 20
+            done
           else sudo apt-get update && sudo apt-get install -y ffmpeg; fi
+          ffmpeg -version > /dev/null && echo "ffmpeg found: $(command -v ffmpeg)"
       - run: uv sync
       - run: uv run pytest -v

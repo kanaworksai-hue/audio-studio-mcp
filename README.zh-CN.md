@@ -189,6 +189,18 @@ macOS 上下载不需要登录，用 `hf auth login` 登录后 Hugging Face 的�
 
 比起聊天更想直接点按钮？同一个服务器还自带一个本地网页：生成 BGM 和音效、对比候选、编辑（生成变体、替换其中一段、延长）、导出给游戏或视频使用，还能在作品库里浏览做过的所有声音。
 
+<p align="center">
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="docs/assets/webui-generate-zh-dark.png">
+  <img src="docs/assets/webui-generate-zh-light.png" alt="Web UI 生成页：对比 lo-fi 曲子的两个版本，以及一段脚步声音效" width="820">
+</picture>
+<br><br>
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="docs/assets/webui-edit-zh-dark.png">
+  <img src="docs/assets/webui-edit-zh-light.png" alt="Web UI 编辑页：替换波形中选中的一段，并对比原始声音和两个新版本" width="820">
+</picture>
+</p>
+
 ```bash
 .venv/bin/audio-studio-mcp --web 8765
 ```

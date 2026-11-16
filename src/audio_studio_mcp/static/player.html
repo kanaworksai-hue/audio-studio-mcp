@@ -321,6 +321,29 @@ function progress(node, text) {
   return () => clearInterval(timer);
 }
 
+// The JSON object a tool result carries as text. Hosts may add their own text
+// after it (Claude Desktop adds a note for the model), in the same block or another one.
+function resultJson(res) {
+  if (res && res.structuredContent) return res.structuredContent;
+  for (const b of (res && res.content) || []) {
+    if (b.type !== "text" || typeof b.text !== "string") continue;
+    const s = b.text;
+    for (let start = s.indexOf("{"); start >= 0; start = s.indexOf("{", start + 1)) {
+      let depth = 0, inStr = false, esc = false;
+      for (let i = start; i < s.length; i++) {
+        const c = s[i];
+        if (inStr) { if (esc) esc = false; else if (c === "\\") esc = true; else if (c === '"') inStr = false; continue; }
+        if (c === '"') inStr = true;
+        else if (c === "{") depth++;
+        else if (c === "}" && --depth === 0) {
+          try { return JSON.parse(s.slice(start, i + 1)); } catch { break; }
+        }
+      }
+    }
+  }
+  return null;
+}
+
 // ── host bridge: JSON-RPC 2.0 over postMessage ───────────────────────────
 const Host = {
   nextId: 1, pending: new Map(), caps: {}, ctx: {}, ready: false, handlers: {},
@@ -384,7 +407,9 @@ const Host = {
     const r = await this.request("tools/call", { name, arguments: args }, timeoutMs);
     const text = ((r && r.content) || []).filter((b) => b.type === "text").map((b) => b.text).join("");
     if (r && r.isError) throw new Error(text || `${name} failed`);
-    return r.structuredContent || JSON.parse(text);
+    const json = resultJson(r);
+    if (!json) throw new Error(text || `${name}: no result`);
+    return json;
   },
 };
 
@@ -781,8 +806,7 @@ const UI = {
   onResult(res) {
     const text = ((res && res.content) || []).filter((b) => b.type === "text").map((b) => b.text).join("");
     if (res && res.isError) { this.header(); this.status(`${t("error")} ${text}`, { error: true }); return; }
-    let r = res && res.structuredContent;
-    if (!r) { try { r = JSON.parse(text); } catch { r = null; } }
+    const r = resultJson(res);
     if (!r) { this.status(text, { error: true }); return; }
     this.result = r;
     this.canAct = !!Host.caps.serverTools;

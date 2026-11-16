@@ -290,6 +290,28 @@ def test_error_result_and_host_without_tool_calls(browser, loop, fake):
     page.close()
 
 
+# Claude Desktop (Windows, 2026-11) adds a note for the model to the result it gives the app
+HOST_NOTE = ("[This tool call rendered an interactive widget in the chat. The user can already see the "
+             "result — do not repeat it in text or call a visualization tool.]")
+
+
+@pytest.mark.parametrize("where", ["same-block", "own-block", "before"])
+def test_result_with_a_host_note(browser, loop, fake, where):
+    args, result = generate(loop)
+    result = json.loads(json.dumps(result))
+    if where == "own-block":
+        result["content"].append({"type": "text", "text": HOST_NOTE})
+    elif where == "same-block":
+        result["content"][0]["text"] += HOST_NOTE
+    else:  # a note with braces in front of the JSON
+        result["content"][0]["text"] = "[note: {not json}] " + result["content"][0]["text"]
+    page, frame = open_player(browser, loop, args=args, result=result)
+    wait_ready(page, 2)
+    assert not player(page).evaluate("document.getElementById('status').classList.contains('error')")
+    assert not page.errors, page.errors
+    page.close()
+
+
 @pytest.mark.parametrize("theme", ["light", "dark"])
 @pytest.mark.parametrize("locale", ["en-US", "ja-JP", "zh-CN"])
 def test_languages_and_themes(browser, loop, fake, shots, locale, theme):

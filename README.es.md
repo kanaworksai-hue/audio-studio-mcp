@@ -22,31 +22,31 @@
 
 </div>
 
-**Audio Studio MCP** le da a Claude Code, Claude Desktop, Cursor y cualquier otro cliente [MCP](https://modelcontextprotocol.io) un estudio de sonido que se ejecuta en tu propia Mac o PC con Windows. Pide música de fondo o un efecto de sonido en lenguaje natural; el modelo lo genera localmente con [Stable Audio 3](https://github.com/Stability-AI/stable-audio-3). Después puede convertirlo en loop, normalizar la sonoridad y exportarlo para tu motor de juego o editor de video. No hay servicio en la nube ni clave de API, y generar no cuesta nada.
+**Audio Studio MCP** le da a Claude Code, Claude Desktop, Cursor y cualquier otro cliente [MCP](https://modelcontextprotocol.io) un estudio de sonido que se ejecuta en tu propia Mac o PC con Windows. Pide música de fondo o un efecto de sonido en lenguaje natural; el modelo lo genera localmente con [Stable Audio 3](https://github.com/Stability-AI/stable-audio-3). Después puedes pedirle que lo convierta en loop, normalice la sonoridad y lo exporte para tu motor de juego o editor de video. No hay servicio en la nube ni clave de API, y generar no cuesta nada.
 
 <p align="center">
-  <img src="docs/assets/demo-en.png" alt="Una sesión real de Claude Code: una sola solicitud produce dos candidatos de música de fondo lo-fi y un loop OGG sin cortes para Godot" width="820">
-  <br><sub>Una sesión real (en inglés), resumida. Claude eligió una duración de loop de exactamente 11 compases para que el ritmo no se desfase al repetirse.</sub>
+  <img src="docs/assets/demo-en.png" alt="Una sesión real de Claude Code: una sola petición genera dos opciones de música de fondo lo-fi y un loop OGG sin cortes para Godot" width="820">
+  <br><sub>Una sesión real (en inglés), resumida. Claude ajustó el loop a exactamente 11 compases para que el ritmo no se desfase al repetirse.</sub>
 </p>
 
 ## ✨ Lo más destacado
 
 <table>
 <tr>
-<td align="center" width="25%"><img src="docs/assets/icon-generate.png" width="72" alt=""><br><b>Generar</b><br><sub>Música de fondo, loops de instrumentos y efectos de sonido a partir de una sola frase, de 1 a 4 candidatos por llamada</sub></td>
-<td align="center" width="25%"><img src="docs/assets/icon-edit.png" width="72" alt=""><br><b>Editar</b><br><sub>Cambia el estilo de un clip entero, regenera un rango de tiempo o extiende una pista</sub></td>
-<td align="center" width="25%"><img src="docs/assets/icon-process.png" width="72" alt=""><br><b>Finalizar</b><br><sub>Loops sin cortes, fundidos, sonoridad (LUFS), WAV / OGG / FLAC a 48 kHz</sub></td>
-<td align="center" width="25%"><img src="docs/assets/icon-local.png" width="72" alt=""><br><b>Local</b><br><sub>Funciona en Apple Silicon (MLX) o en una GPU NVIDIA (PyTorch). No se sube nada</sub></td>
+<td align="center" width="25%"><img src="docs/assets/icon-generate.png" width="72" alt=""><br><b>Generar</b><br><sub>Música de fondo, loops de instrumentos y efectos de sonido a partir de una sola frase, de 1 a 4 opciones por llamada</sub></td>
+<td align="center" width="25%"><img src="docs/assets/icon-edit.png" width="72" alt=""><br><b>Editar</b><br><sub>Cambia el estilo de un clip entero, regenera un tramo o extiende una pista</sub></td>
+<td align="center" width="25%"><img src="docs/assets/icon-process.png" width="72" alt=""><br><b>Pulir</b><br><sub>Loops sin cortes, fundidos, sonoridad (LUFS), WAV / OGG / FLAC a 48 kHz</sub></td>
+<td align="center" width="25%"><img src="docs/assets/icon-local.png" width="72" alt=""><br><b>Local</b><br><sub>Funciona en Apple Silicon (MLX) o en una GPU NVIDIA (PyTorch). Nada sale de tu computadora</sub></td>
 </tr>
 </table>
 
-- **Reproducible:** cada archivo incluye un `.json` complementario con su prompt, su semilla y su configuración.
+- **Reproducible:** cada archivo va acompañado de un `.json` con su prompt, su semilla y su configuración.
 - **Prompts integrados:** el servidor le enseña al cliente el formato de prompt oficial de Stable Audio 3, así que una petición como "que suene como una puerta que rechina" se convierte en un prompt que el modelo entiende.
-- **La misma salida que el proyecto original:** en una Mac, los resultados con la misma semilla son idénticos bit a bit a los del CLI oficial `sa3`. En Windows llama a la API oficial de PyTorch de Stable Audio 3.
+- **La misma salida que el proyecto original:** en una Mac, los resultados con la misma semilla son idénticos bit a bit a los del CLI oficial `sa3`. En Windows, usa directamente la API oficial de PyTorch de Stable Audio 3.
 
 ## 🎧 Escúchalo
 
-Todos estos ejemplos los generó este servidor en una Mac M1 y no se editaron a mano. **[Abrir la página de ejemplos →](https://kanaworksai-hue.github.io/audio-studio-mcp/)**
+Todos estos ejemplos los generó este servidor en una Mac M1, sin retoques a mano. **[Abrir la página de ejemplos →](https://kanaworksai-hue.github.io/audio-studio-mcp/)**
 
 | | Ejemplo | Prompt |
 |---|---|---|
@@ -63,7 +63,7 @@ Los MP3 están en [`docs/samples/`](docs/samples), y los prompts y las semillas,
 
 ```mermaid
 flowchart LR
-    U["Tú<br/>“haz música de fondo para un café acogedor”"] --> C["Claude Code · Desktop<br/>Cursor · cualquier cliente MCP"]
+    U["Tú<br/>“crea música de fondo para un café acogedor”"] --> C["Claude Code · Desktop<br/>Cursor · cualquier cliente MCP"]
     C -- "MCP" --> S["audio-studio-mcp<br/>generar · editar · procesar"]
     S --> M["Stable Audio 3<br/>MLX en Apple Silicon<br/>PyTorch en GPU NVIDIA"]
     M --> F["WAV / OGG / FLAC + .json<br/>listo para juegos y video"]
@@ -80,7 +80,7 @@ Necesitas [uv](https://docs.astral.sh/uv/) 0.9.20 o posterior y [ffmpeg](https:/
 | **uv y ffmpeg** | `brew install uv ffmpeg` | `winget install astral-sh.uv` y `winget install Gyan.FFmpeg` |
 | **Licencia del modelo** | No hay que hacer nada | Necesitas una cuenta gratuita de [Hugging Face](https://huggingface.co): abre [stabilityai/stable-audio-3-medium](https://huggingface.co/stabilityai/stable-audio-3-medium) y acepta la licencia una vez |
 
-**1. Configúralo una sola vez, en una terminal.** Esto revisa tu computadora, obtiene el runtime oficial de Stable Audio 3 en un commit probado, te dice cuánto pesa la descarga del modelo y te pregunta antes de descargarlo. Puedes volver a ejecutarlo sin problema; las descargas terminadas se conservan.
+**1. Configúralo una sola vez, en una terminal.** El comando revisa tu computadora, descarga el runtime oficial de Stable Audio 3 fijado en un commit probado, te dice cuánto pesa el modelo y te pregunta antes de descargarlo. Puedes volver a ejecutarlo sin problema: lo que ya se descargó se conserva.
 
 ```bash
 # macOS
@@ -92,9 +92,9 @@ uvx --python 3.11 audio-studio-mcp setup
 uvx --python 3.11 --torch-backend cu126 audio-studio-mcp setup
 ```
 
-`--torch-backend cu126` hace que uv instale la versión de PyTorch con CUDA (en PyPI solo está la versión para CPU en Windows), y `--python 3.11` evita que uv elija un Python que PyTorch todavía no admite. Si uvx responde `unexpected argument '--torch-backend'`, tu uv es demasiado antiguo: actualízalo con `winget upgrade astral-sh.uv` (o `uv self update`). En Windows, si aún no has iniciado sesión en Hugging Face, setup muestra los pasos: acepta la licencia en la página del modelo, luego inicia sesión **en tu propia terminal** con `uvx --from huggingface_hub hf auth login` y vuelve a ejecutar setup.
+`--torch-backend cu126` hace que uv instale la versión de PyTorch con CUDA (en PyPI solo está la versión para CPU en Windows), y `--python 3.11` evita que uv elija un Python que PyTorch todavía no admite. Si uvx responde `unexpected argument '--torch-backend'`, tu versión de uv es demasiado antigua: actualízala con `winget upgrade astral-sh.uv` (o `uv self update`). En Windows, si aún no has iniciado sesión en Hugging Face, setup te indica los pasos: acepta la licencia en la página del modelo, luego inicia sesión **en tu propia terminal** con `uvx --from huggingface_hub hf auth login` y vuelve a ejecutar setup.
 
-Setup descarga el modelo **medium**. Para los modelos pequeños y rápidos, agrega `--model sm-music`, `--model sm-sfx` o `--model all`, y define `AUDIO_STUDIO_SA3_MODEL` en la configuración de tu cliente (consulta [Configuración](#️-configuración)).
+De forma predeterminada, setup descarga el modelo **medium**. Si quieres los modelos pequeños y rápidos, agrega `--model sm-music`, `--model sm-sfx` o `--model all`, y define `AUDIO_STUDIO_SA3_MODEL` en la configuración de tu cliente (consulta [Configuración](#️-configuración)).
 
 **2. Regístralo en tu cliente MCP.** Usa el mismo comando sin `setup`:
 
@@ -108,7 +108,7 @@ claude mcp add --scope user audio-studio -- uvx --python 3.11 --torch-backend cu
 <details>
 <summary><b>Claude Desktop, Codex, VS Code, Cursor y otros clientes</b></summary>
 
-En Windows, agrega `"--torch-backend", "cu126"` después de `"3.11"` en cada uno de los ejemplos de abajo.
+En Windows, agrega `"--torch-backend", "cu126"` después de `"3.11"` en todos los ejemplos de abajo.
 
 **Claude Desktop** (`claude_desktop_config.json`), **Cursor** (`.cursor/mcp.json`) y la mayoría de los demás clientes:
 
@@ -123,9 +123,9 @@ En Windows, agrega `"--torch-backend", "cu126"` después de `"3.11"` en cada uno
 }
 ```
 
-Si el cliente dice que no encuentra `uvx`, pon su ruta completa en `command` (`which uvx` en macOS, `where uvx` en Windows). Reinicia Claude Desktop después de editar el archivo.
+Si el cliente no encuentra `uvx`, pon la ruta completa en `command` (`which uvx` en macOS, `where uvx` en Windows). Reinicia Claude Desktop después de editar el archivo.
 
-**Codex** (`~/.codex/config.toml`). De forma predeterminada, Codex solo espera 10 segundos a que arranque un servidor y 60 segundos a que termine una llamada a una herramienta; las pistas largas necesitan más:
+**Codex** (`~/.codex/config.toml`). De forma predeterminada, Codex solo espera 10 segundos a que arranque un servidor y 60 segundos a que termine una llamada a una herramienta; las pistas largas necesitan más tiempo:
 
 ```toml
 [mcp_servers.audio-studio]
@@ -150,20 +150,20 @@ tool_timeout_sec = 900
 ```
 </details>
 
-Los archivos generados se guardan en `~/AudioStudio` (define `AUDIO_STUDIO_OUTPUT_DIR` para cambiarlo). uvx conserva la versión que instaló; para actualizar, ejecuta `uv cache clean audio-studio-mcp` y luego vuelve a ejecutar setup.
+Los archivos generados se guardan en `~/AudioStudio` (define `AUDIO_STUDIO_OUTPUT_DIR` para cambiarlo). uvx se queda con la versión que instaló; para actualizar, ejecuta `uv cache clean audio-studio-mcp` y luego corre setup de nuevo.
 
 > [!TIP]
 > **Deja que tu agente lo instale.** Pega esto en Claude Code:
-> *"Instala el servidor Audio Studio MCP (https://github.com/kanaworksai-hue/audio-studio-mcp) siguiendo su README, incluidas las notas para agentes de IA."*
+> *"Instala Audio Studio MCP (https://github.com/kanaworksai-hue/audio-studio-mcp) siguiendo las instrucciones de su README, incluidas las notas para agentes de IA."*
 >
 > **Notas para agentes de IA:**
-> - Ejecuta tú mismo el comando de setup que corresponde al sistema operativo del usuario, agregando `-y`, y dale un tiempo de espera largo: descarga unos 7 GB en macOS y unos 13 GB en Windows (modelo y PyTorch). Si se interrumpe, vuelve a ejecutarlo; los archivos ya descargados se conservan. Después registra el servidor como se muestra arriba.
-> - En Windows, los pesos del modelo tienen acceso restringido y requieren que el usuario inicie sesión con su propia cuenta de Hugging Face. Si setup se detiene mostrando los pasos para iniciar sesión, pásaselos al usuario y espera a que te diga que terminó; luego vuelve a ejecutar setup. Nunca le pidas al usuario que pegue su token en el chat.
-> - Antes de que setup termine, el servidor arranca, pero cada llamada a una herramienta responde con el comando de setup que hay que ejecutar.
+> - Ejecuta tú mismo el comando de setup que corresponda al sistema operativo del usuario, con `-y`, y ponle un timeout largo: descarga unos 7 GB en macOS y unos 13 GB en Windows (modelo y PyTorch). Si se interrumpe, vuelve a ejecutarlo; los archivos ya descargados se conservan. Después registra el servidor como se muestra arriba.
+> - En Windows, los pesos del modelo tienen acceso restringido y requieren que el usuario inicie sesión con su propia cuenta de Hugging Face. Si setup se detiene y muestra los pasos para iniciar sesión, pásaselos al usuario y espera a que te confirme que terminó; luego vuelve a ejecutar setup. Nunca le pidas al usuario que pegue su token en el chat.
+> - Mientras setup no haya terminado, el servidor arranca igual, pero cada llamada a una herramienta devuelve el comando de setup que falta ejecutar.
 
 ### Alternativa: instalar desde el código fuente
 
-Los scripts de instalación de versiones anteriores siguen funcionando. Clonan el repositorio, ponen el runtime en `vendor/` y el audio en `outputs/` dentro de él, y se ejecutan desde `.venv/`.
+Los scripts de instalación de las versiones anteriores siguen funcionando: clonan el repositorio, dejan el runtime en `vendor/` y el audio en `outputs/` dentro del propio repositorio, y todo se ejecuta desde `.venv/`.
 
 #### macOS (Apple Silicon)
 
@@ -179,7 +179,7 @@ cd audio-studio-mcp
 ./install.sh
 ```
 
-El instalador configura [`uv`](https://docs.astral.sh/uv/) si hace falta, clona el runtime oficial de Stable Audio 3 en `vendor/` en un commit probado, crea `.venv/` y descarga el modelo **medium** (1.4B, ~6.9 GB) desde [Hugging Face](https://huggingface.co/stabilityai/stable-audio-3-optimized). Al terminar, muestra el comando exacto para registrar el servidor:
+El instalador instala [`uv`](https://docs.astral.sh/uv/) si hace falta, clona en `vendor/` el runtime oficial de Stable Audio 3 fijado en un commit probado, crea `.venv/` y descarga el modelo **medium** (1.4B, ~6.9 GB) desde [Hugging Face](https://huggingface.co/stabilityai/stable-audio-3-optimized). Al terminar, muestra el comando exacto para registrar el servidor:
 
 ```bash
 claude mcp add --scope user audio-studio -- /path/to/audio-studio-mcp/.venv/bin/audio-studio-mcp
@@ -200,13 +200,13 @@ cd audio-studio-mcp
 powershell -ExecutionPolicy Bypass -File install.ps1
 ```
 
-El instalador sigue los mismos pasos que en macOS, pero instala PyTorch con CUDA y descarga el checkpoint oficial de PyTorch del modelo **medium** (~10.4 GB). Si aún no has iniciado sesión en Hugging Face, te pide un token de acceso con permiso de lectura ([créalo aquí](https://huggingface.co/settings/tokens)). Cuando se ejecuta sin consola (por ejemplo, si lo inicia un agente de IA), nunca pregunta: muestra los pasos para iniciar sesión y se detiene, y tú lo vuelves a ejecutar después de iniciar sesión. Al terminar, muestra el comando para registrar el servidor:
+El instalador sigue los mismos pasos que en macOS, pero instala PyTorch con CUDA y descarga el checkpoint oficial de PyTorch del modelo **medium** (~10.4 GB). Si aún no has iniciado sesión en Hugging Face, te pide un token de acceso con permiso de lectura ([créalo aquí](https://huggingface.co/settings/tokens)). Si se ejecuta sin consola (por ejemplo, cuando lo inicia un agente de IA), no pregunta nada: muestra los pasos para iniciar sesión y se detiene; cuando hayas iniciado sesión, vuelve a ejecutarlo. Al terminar, muestra el comando para registrar el servidor:
 
 ```powershell
 claude mcp add --scope user audio-studio -- "C:\path\to\audio-studio-mcp\.venv\Scripts\audio-studio-mcp.exe"
 ```
 
-Flash Attention no es necesario. Sin él, el runtime usa la atención integrada de PyTorch.
+No hace falta Flash Attention: sin él, el runtime usa la implementación de atención integrada en PyTorch.
 
 <details>
 <summary><b>Claude Desktop, Cursor y otros clientes</b></summary>
@@ -229,7 +229,7 @@ En Windows, el comando es `C:\\path\\to\\audio-studio-mcp\\.venv\\Scripts\\audio
 <details>
 <summary><b>Opciones del instalador</b></summary>
 
-| macOS | Windows | Efecto |
+| macOS | Windows | Qué hace |
 |---|---|---|
 | `--model all` | `-Model all` | Descarga también los modelos pequeños y rápidos `sm-music` y `sm-sfx` (+2.6 GB en macOS, +7 GB en Windows) |
 | `--skip-weights` | `-SkipWeights` | No descarga los pesos ahora; se descargan en la primera generación |
@@ -238,18 +238,18 @@ En Windows, el comando es `C:\\path\\to\\audio-studio-mcp\\.venv\\Scripts\\audio
 En macOS, las descargas son anónimas; iniciar sesión con `hf auth login` aumenta el límite de solicitudes de Hugging Face. En Windows, los pesos de PyTorch tienen acceso restringido: acepta la licencia en la página de cada modelo que descargues ([medium](https://huggingface.co/stabilityai/stable-audio-3-medium), [small-music](https://huggingface.co/stabilityai/stable-audio-3-small-music), [small-sfx](https://huggingface.co/stabilityai/stable-audio-3-small-sfx)) e inicia sesión.
 </details>
 
-Después, solo tienes que pedirlo:
+Después, solo tienes que pedírselo:
 
-- "Crea un loop lo-fi de música de fondo de 60 segundos a 85 BPM para una escena en una cafetería; dame 3 opciones."
-- "Necesito el sonido de una pesada puerta de madera cerrándose de golpe en un pasillo de piedra. Expórtalo como OGG para Godot."
-- "Extiende esta pista a 90 segundos y normalízala a −16 LUFS."
+- "Hazme un loop lo-fi de 60 segundos a 85 BPM como música de fondo para una escena en una cafetería. Dame 3 opciones."
+- "Necesito el sonido de una puerta de madera pesada que se cierra de golpe en un pasillo de piedra. Expórtalo en OGG para Godot."
+- "Alarga esta pista a 90 segundos y normalízala a −16 LUFS."
 
 ## 🧰 Herramientas
 
 | Herramienta | Qué hace |
 |---|---|
-| `generate_audio` | De texto a música de fondo, loop/stem de instrumento o efecto de sonido. De 1 a 4 candidatos por llamada, `bpm`, campos estructurados para efectos de sonido |
-| `edit_audio` | `variation` (cambia el estilo del clip entero), `inpaint` (regenera un rango de tiempo), `continue` (extiende). De 1 a 4 candidatos |
+| `generate_audio` | Genera a partir de texto música de fondo, un loop/stem de instrumento o un efecto de sonido. De 1 a 4 opciones por llamada, `bpm` y campos estructurados para efectos de sonido |
+| `edit_audio` | `variation` (cambia el estilo del clip entero), `inpaint` (regenera un tramo), `continue` (extiende la pista). De 1 a 4 opciones |
 | `process_audio` | Recorte → recorte de silencios → mono → remuestreo / sonoridad → loop sin cortes → fundidos → normalización de picos o techo → WAV / OGG / FLAC. Nunca modifica el archivo de entrada |
 | `unload_models` | Libera de inmediato la memoria de los modelos |
 
@@ -257,17 +257,17 @@ Después, solo tienes que pedirlo:
 <summary><b>Notas sobre los parámetros</b></summary>
 
 - **`audio_type`**: `music` / `instrument` / `sfx` / `raw`. El servidor agrega el prefijo con el que se entrenó el modelo (`TrackType: Music, VocalType: Instrumental,` …). Sin el prefijo de SFX, los efectos de sonido suelen salir como música.
-- **`variations`**: de 1 a 4 candidatos con las semillas `seed, seed+1, …`. Usa `seed: -1` u omítelo para obtener una semilla aleatoria.
+- **`variations`**: de 1 a 4 opciones, con las semillas `seed, seed+1, …`. Usa `seed: -1` u omite `seed` para obtener una semilla aleatoria.
 - **`sound_source` / `sound_action` / `sound_material` / `sound_space`**: describen un efecto de sonido según qué lo produce, cómo evoluciona, su textura y el espacio en el que suena.
 - **`peak_ceiling_db`** (predeterminado −1): un techo de seguridad. Los picos que lo superan se bajan y el audio más silencioso nunca se amplifica. Usa `process_audio` para normalizar.
-- **Normalización de `process_audio`**: `peak` es lo habitual para efectos de sonido. `loudness` normaliza a un LUFS objetivo: −14 para streaming/video, −16 para música de fondo de juegos, −23 para transmisión (broadcast).
+- **Normalización de `process_audio`**: `peak` es lo habitual para efectos de sonido. `loudness` normaliza a un valor objetivo en LUFS: −14 para streaming/video, −16 para música de fondo de juegos, −23 para TV y radio (broadcast).
 
-Los archivos generados son WAV estéreo de 44.1 kHz y 24 bits, y se escriben en la carpeta de salida (`~/AudioStudio`, o `outputs/` en una instalación desde el código fuente; consulta `AUDIO_STUDIO_OUTPUT_DIR`). Cada uno tiene un `<name>.json` al lado. Los archivos procesados conservan la información de generación original en `source`.
+Los archivos generados son WAV estéreo de 44.1 kHz y 24 bits, y se guardan en la carpeta de salida (`~/AudioStudio`, o `outputs/` en una instalación desde el código fuente; consulta `AUDIO_STUDIO_OUTPUT_DIR`). Junto a cada uno hay un `<name>.json`. Los archivos procesados conservan la información de generación original en `source`.
 </details>
 
 ## 🌐 Interfaz web
 
-¿Prefieres hacer clic en lugar de chatear? El mismo servidor incluye una página web local. Genera música de fondo y efectos de sonido, compara los candidatos, edítalos (crea una variación, reemplaza una parte, extiéndelos), expórtalos para tu juego o video y explora en la biblioteca todo lo que has creado.
+¿Prefieres hacer clic en lugar de chatear? El mismo servidor incluye una página web local donde puedes generar música de fondo y efectos de sonido, comparar las opciones, editarlas (crear una variación, reemplazar una parte, extenderlas), exportarlas para tu juego o video y explorar en la biblioteca todo lo que has creado.
 
 <p align="center">
 <picture>
@@ -277,7 +277,7 @@ Los archivos generados son WAV estéreo de 44.1 kHz y 24 bits, y se escriben en 
 <br><br>
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="docs/assets/webui-edit-en-dark.png">
-  <img src="docs/assets/webui-edit-en-light.png" alt="Interfaz web, página de edición: se va a reemplazar una parte seleccionada de la forma de onda, con el original y dos versiones nuevas para comparar" width="820">
+  <img src="docs/assets/webui-edit-en-light.png" alt="Interfaz web, página de edición: una parte seleccionada de la forma de onda, lista para reemplazarse, con el original y dos versiones nuevas para comparar" width="820">
 </picture>
 </p>
 
@@ -287,27 +287,27 @@ uvx --python 3.11 audio-studio-mcp --web 8765
 
 Se abre http://127.0.0.1:8765/ en tu navegador. Agrega `--no-browser` para iniciarlo sin abrir el navegador, o `--preload` para cargar el modelo al arrancar. Presiona Ctrl+C para detenerlo. En Windows, agrega `--torch-backend cu126` después de `3.11`. Si instalaste desde el código fuente: `.venv/bin/audio-studio-mcp --web 8765` (Windows: `.venv\Scripts\audio-studio-mcp.exe --web 8765`).
 
-La página y tus clientes MCP pueden compartir un solo proceso y un solo modelo cargado: el mismo puerto también sirve MCP en `/mcp`. Regístralo una vez y usa ambos al mismo tiempo. Las solicitudes de la página y las de los agentes esperan en una misma cola.
+La página y tus clientes MCP pueden compartir un solo proceso y un solo modelo cargado: el mismo puerto también expone MCP en `/mcp`. Regístralo una vez y usa ambos al mismo tiempo. Las solicitudes de la página y las de los agentes comparten la misma cola.
 
 ```bash
 claude mcp add --scope user --transport http audio-studio http://127.0.0.1:8765/mcp
 ```
 
-- Los archivos se escriben en la carpeta de salida (`~/AudioStudio`, `outputs/` en una instalación desde el código fuente, o `AUDIO_STUDIO_OUTPUT_DIR`). La biblioteca muestra esa carpeta y el editor trabaja con los archivos que contiene.
-- La interfaz web está disponible en inglés, japonés y chino, y sigue el idioma de tu navegador; puedes cambiarlo en la configuración. Las capturas de pantalla la muestran en inglés, porque no está disponible en español.
+- Los archivos se guardan en la carpeta de salida (`~/AudioStudio`, `outputs/` en una instalación desde el código fuente, o `AUDIO_STUDIO_OUTPUT_DIR`). La biblioteca muestra esa carpeta y el editor trabaja con los archivos que contiene.
+- La interfaz web está disponible en inglés, japonés y chino, y usa el idioma de tu navegador; puedes cambiarlo en la configuración. Las capturas están en inglés porque la interfaz no está disponible en español.
 
 > [!WARNING]
-> La interfaz web es solo para tu propia computadora. Solo escucha en `127.0.0.1` y no tiene inicio de sesión. No la hagas accesible desde otras máquinas (redirección de puertos, un proxy inverso o un túnel): cualquiera que pueda abrirla puede usar tu GPU y escribir archivos en tu carpeta de salida.
+> La interfaz web es solo para uso en tu propia computadora: solo escucha en `127.0.0.1` y no pide iniciar sesión. No la expongas a otras máquinas (con redirección de puertos, un proxy inverso o un túnel): cualquiera que pueda abrirla puede usar tu GPU y escribir archivos en tu carpeta de salida.
 
 ## ⚙️ Configuración
 
 <details>
 <summary><b>Variables de entorno</b></summary>
 
-| Variable | Valor predeterminado | Significado |
+| Variable | Valor predeterminado | Descripción |
 |---|---|---|
-| `AUDIO_STUDIO_OUTPUT_DIR` | `~/AudioStudio` (instalación desde el código fuente: `<repo>/outputs`) | Dónde se escriben los archivos de audio |
-| `AUDIO_STUDIO_IDLE_UNLOAD_MIN` | `10` | Libera los modelos tras esta cantidad de minutos de inactividad (`0` = nunca) |
+| `AUDIO_STUDIO_OUTPUT_DIR` | `~/AudioStudio` (instalación desde el código fuente: `<repo>/outputs`) | Carpeta donde se guardan los archivos de audio |
+| `AUDIO_STUDIO_IDLE_UNLOAD_MIN` | `10` | Minutos de inactividad antes de liberar los modelos (`0` = nunca) |
 | `AUDIO_STUDIO_SA3_MODEL` | `medium` | `medium` (mejor calidad, hasta 380 s), `sm-music` o `sm-sfx` (pequeños y rápidos, hasta 120 s) |
 | `AUDIO_STUDIO_MLX_CACHE_GB` | `1` | macOS: límite de la caché de búferes de MLX. Sin él, una generación larga puede dejar ~6 GB en caché |
 | `AUDIO_STUDIO_DEVICE` | `cuda` si está disponible | Windows/Linux: dispositivo de PyTorch, p. ej. `cuda`, `cuda:1` o `cpu` |
@@ -322,7 +322,7 @@ Pásalas con `claude mcp add ... -e NAME=value` o en el bloque `env` de la confi
 <details>
 <summary><b>Compartir un servidor entre sesiones</b></summary>
 
-Normalmente, cada sesión de cliente inicia su propio proceso de servidor. Los modelos se cargan en la primera llamada y se liberan después del tiempo de inactividad. Para mantener un único proceso con el modelo listo para todas las sesiones, ejecútalo como servidor HTTP local. Solo escucha en `127.0.0.1`.
+Normalmente, cada sesión de cliente inicia su propio proceso de servidor. Los modelos se cargan en la primera llamada y se liberan después del tiempo de inactividad. Para tener un único proceso con el modelo ya cargado para todas las sesiones, ejecútalo como servidor HTTP local. Solo escucha en `127.0.0.1`.
 
 ```bash
 uvx --python 3.11 audio-studio-mcp --http 8765 --preload
@@ -368,7 +368,7 @@ En una Mac, los modelos cargados usan unos 5–7 GB de memoria. En la RTX 3060, 
 3. **Efectos de sonido:** completa la fuente (source), la acción (action), el material (material) y el espacio (space).
    > source: glass bottle / action: shattering on impact, fragments scattering / material: thick green glass, sharp bright transient / space: concrete floor, close-up, dry
 4. **Ajusta la duración al contenido:** impactos 1–3 s, acciones 3–6 s, ambientes 6–15 s o más, loops 6–20 s, pistas completas 120–300 s (máx. 380 s).
-5. **Las indicaciones de tiempo** como "clímax a los 15 s" no se respetan de forma fiable. Genera primero y luego usa `inpaint` o `continue`.
+5. **El modelo no siempre respeta las indicaciones de tiempo**, como "clímax a los 15 s". Genera primero y luego usa `inpaint` o `continue`.
 6. Los valores predeterminados `steps=8` y `cfg=1.0` son la configuración oficial. Para que el resultado siga el prompt con más fidelidad, o para usar `negative_prompt`, prueba `cfg` entre 3 y 7 (aprox. 2× más lento).
 7. Los resultados varían mucho según la semilla. Pide 2–4 `variations` y elige la mejor.
 
@@ -378,7 +378,7 @@ La guía completa también se envía al cliente como parte de las instrucciones 
 ## ❓ Preguntas frecuentes
 
 <details>
-<summary><b>¿Funciona en Windows, Linux o en Mac con Intel?</b></summary>
+<summary><b>¿Funciona en Windows, Linux o Mac con Intel?</b></summary>
 
 **Windows:** sí, con una GPU NVIDIA. Consulta [Inicio rápido](#-inicio-rápido).
 
@@ -390,7 +390,7 @@ La guía completa también se envía al cliente como parte de las instrucciones 
 <details>
 <summary><b>¿Aparece "Intel Macs are not supported" en una Mac con Apple Silicon?</b></summary>
 
-El entorno se creó con un Python x86_64 (por ejemplo, un Homebrew antiguo para Intel en `/usr/local`) que se ejecuta bajo Rosetta, así que MLX no se instaló. Con uvx, pide el Python arm64 propio de uv, tanto en setup como en la configuración de tu cliente: `uvx --python cpython-3.11-macos-aarch64 audio-studio-mcp`. Con el script de instalación, vuelve a ejecutar `./install.sh`: le pide a uv un Python arm64 y vuelve a crear ese `.venv`. Si tú mismo defines `UV_PYTHON`, haz que apunte a una compilación arm64: `UV_PYTHON=cpython-3.11-macos-aarch64 ./install.sh`.
+El entorno se creó con un Python x86_64 (por ejemplo, un Homebrew antiguo para Intel en `/usr/local`) que se ejecuta bajo Rosetta, así que MLX no se instaló. Con uvx, pide el Python arm64 propio de uv, tanto en setup como en la configuración de tu cliente: `uvx --python cpython-3.11-macos-aarch64 audio-studio-mcp`. Con el script de instalación, vuelve a ejecutar `./install.sh`: le pide a uv un Python arm64 y vuelve a crear ese `.venv`. Si defines `UV_PYTHON` por tu cuenta, haz que apunte a una compilación arm64: `UV_PYTHON=cpython-3.11-macos-aarch64 ./install.sh`.
 </details>
 
 <details>
@@ -412,9 +412,9 @@ No se ha probado. El modelo medium necesita unos 5–7 GB mientras está cargado
 </details>
 
 <details>
-<summary><b>Se oye un clic en el punto de unión del loop.</b></summary>
+<summary><b>Se escucha un clic donde el loop vuelve a empezar.</b></summary>
 
-Usa WAV u OGG para los loops. MP3 agrega relleno al principio y al final, así que no puede repetirse sin cortes. También prueba un `loop_crossfade_ms` más largo, o pídele al modelo que corte justo al final de un compás.
+Usa WAV u OGG para los loops. El MP3 agrega silencio de relleno al principio y al final, así que no se puede repetir sin cortes. También puedes probar un `loop_crossfade_ms` más largo, o pedirle al modelo que corte justo al final de un compás.
 </details>
 
 ## 🗺️ Hoja de ruta
@@ -422,17 +422,17 @@ Usa WAV u OGG para los loops. MP3 agrega relleno al principio y al final, así q
 - [x] Backend para Apple Silicon (Stable Audio 3, MLX)
 - [x] Backend para Windows con GPU NVIDIA (Stable Audio 3, PyTorch)
 - [x] Interfaz web local (`--web`)
-- [x] Instalación con un solo comando usando `uvx`
-- [ ] Compatibilidad con LoRA (el runtime original ya la tiene)
+- [x] Instalación con un solo comando con `uvx`
+- [ ] Compatibilidad con LoRA (el runtime original ya es compatible)
 
 Los issues y los pull requests son bienvenidos.
 
 ## ⭐ ¿Te gusta? Dale una estrella
 
-Si Audio Studio creó un sonido que terminaste usando, haz clic en **⭐ Star** en la parte superior de la [página del repositorio](https://github.com/kanaworksai-hue/audio-studio-mcp). Es gratis, toma un segundo y ayuda más de lo que parece:
+Si terminaste usando algún sonido creado con Audio Studio, haz clic en **⭐ Star** en la parte superior de la [página del repositorio](https://github.com/kanaworksai-hue/audio-studio-mcp). Es gratis, toma un segundo y ayuda más de lo que parece:
 
 - **Más gente lo descubre.** Las estrellas hacen que el proyecto sea más fácil de encontrar en GitHub, así que más desarrolladores de juegos y creadores de video pueden usarlo.
-- **Mantiene vivas las actualizaciones.** Cada estrella me dice que a alguien le resulta útil. Eso es lo que me motiva a seguir trabajando en la próxima actualización, como la compatibilidad con LoRA.
+- **Me anima a seguir actualizándolo.** Cada estrella me confirma que a alguien le resulta útil. Eso es lo que me motiva a seguir trabajando en la próxima actualización, como la compatibilidad con LoRA.
 
 Otras formas de ayudar: [abre un issue](https://github.com/kanaworksai-hue/audio-studio-mcp/issues) para reportar un error o proponer una idea, o comparte en X un sonido que hayas creado y etiqueta a [@KanaWorks_AI](https://x.com/KanaWorks_AI).
 
@@ -451,7 +451,7 @@ En Windows: `.venv\Scripts\python scripts\smoke_test.py` (~45 s en una RTX 3060,
 ```
 src/audio_studio_mcp/
   server.py            herramientas MCP (independientes del backend)
-  runtime.py           dónde están el runtime y las salidas; obtiene el runtime en instalaciones con uvx
+  runtime.py           dónde están el runtime y las salidas; descarga el runtime en instalaciones con uvx
   firstrun.py          `audio-studio-mcp setup`
   weights.py           pesos del modelo: qué está descargado y cómo se descarga
   prompts.py           construcción de prompts y las instrucciones que se envían a los clientes
@@ -463,7 +463,7 @@ src/audio_studio_mcp/
   static/              interfaz web (HTML/JS/CSS, sin paso de compilación)
 ```
 
-Una nueva plataforma se agrega como otro backend en `backends/`.
+Para agregar una plataforma nueva, crea otro backend en `backends/`.
 
 ## 📄 Licencia y créditos
 
@@ -484,6 +484,6 @@ Este es un proyecto independiente. No está afiliado a Stability AI, Apple, NVID
 
 <p><b>Hecho con ♥ por <a href="https://x.com/KanaWorks_AI">KanaWorks_AI</a></b></p>
 
-<p><sub>Si Audio Studio te ahorra tiempo, una ⭐ mantiene vivas las actualizaciones y ayuda a que otros lo encuentren. Más proyectos: <a href="https://github.com/kanaworksai-hue">github.com/kanaworksai-hue</a></sub></p>
+<p><sub>Si Audio Studio te ahorra tiempo, una ⭐ me anima a seguir actualizándolo y ayuda a que otros lo encuentren. Más proyectos: <a href="https://github.com/kanaworksai-hue">github.com/kanaworksai-hue</a></sub></p>
 
 </div>

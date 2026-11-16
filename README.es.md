@@ -322,7 +322,8 @@ En los clientes compatibles con [MCP Apps](https://modelcontextprotocol.io/exten
 | Claude Desktop | ✅ |
 | VS Code (GitHub Copilot) | ✅ Activa `chat.mcp.apps.enabled` (experimental) |
 | Cursor, Goose y otros clientes con MCP Apps | ✅ |
-| Claude Code, Codex y otros clientes | Resultados en texto, igual que antes |
+| App de Codex (escritorio) | ✅ |
+| Claude Code, Codex CLI y extensión para IDE, y otros clientes | Resultados en texto, igual que antes |
 | claude.ai, ChatGPT | ❌ Necesitan un servidor remoto, y este se ejecuta en tu computadora |
 
 ¿No ves el reproductor, solo texto? Reinicia el cliente después de cambiar su configuración de MCP. En algunas versiones de Claude Desktop, las apps de servidores locales no aparecen en los chats normales ([anthropics/claude-ai-mcp#1069](https://github.com/anthropics/claude-ai-mcp/issues/1069)); en un chat incógnito sí aparecen. Para desactivar el reproductor, define `AUDIO_STUDIO_CHAT_PLAYER=off`.

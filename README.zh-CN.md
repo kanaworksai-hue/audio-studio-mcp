@@ -329,7 +329,8 @@ claude mcp add --scope user --transport http audio-studio http://127.0.0.1:8765/
 | Claude Desktop | ✅ |
 | VS Code（GitHub Copilot） | ✅ 需开启 `chat.mcp.apps.enabled`（实验性功能） |
 | Cursor、Goose 等支持 MCP Apps 的客户端 | ✅ |
-| Claude Code、Codex 等其他客户端 | 和以前一样返回文字结果 |
+| Codex 桌面应用 | ✅ |
+| Claude Code、Codex CLI 和 IDE 插件等其他客户端 | 和以前一样返回文字结果 |
 | claude.ai、ChatGPT | ❌ 它们需要远程服务器，而本服务器运行在你自己的电脑上 |
 
 没有播放器，只有文字？修改 MCP 设置后请重启客户端。部分版本的 Claude Desktop 在普通对话里不显示本地服务器的应用（[anthropics/claude-ai-mcp#1069](https://github.com/anthropics/claude-ai-mcp/issues/1069)），在无痕对话里可以显示。要关闭播放器，设置 `AUDIO_STUDIO_CHAT_PLAYER=off`。

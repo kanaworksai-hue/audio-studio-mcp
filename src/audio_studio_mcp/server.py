@@ -485,7 +485,7 @@ async def audio_preview(
     offset: Annotated[int, Field(ge=0, description="Byte offset into the encoded preview.")] = 0,
     format: Annotated[Literal["ogg", "mp3"], Field(description="Preview encoding.")] = "ogg",
 ) -> dict:
-    """For the in-chat player only (hidden from the model): a compressed preview of a result file in base64 chunks, with its waveform and metadata in the first chunk."""
+    """Internal helper of the in-chat player, which calls it itself; never call it yourself (it returns base64 audio data, not anything useful to read). Gives a compressed preview of a result file in chunks, with its waveform and metadata in the first one."""
     return await asyncio.to_thread(chat_player.preview, path, offset, format)
 
 

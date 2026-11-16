@@ -322,7 +322,8 @@ claude mcp add --scope user --transport http audio-studio http://127.0.0.1:8765/
 | Claude Desktop | ✅ |
 | VS Code(GitHub Copilot) | ✅ `chat.mcp.apps.enabled`를 켜야 함(실험적 기능) |
 | Cursor, Goose 등 MCP Apps를 지원하는 클라이언트 | ✅ |
-| Claude Code, Codex 등 그 밖의 클라이언트 | 지금처럼 텍스트로 결과 표시 |
+| Codex 앱(데스크톱) | ✅ |
+| Claude Code, Codex CLI·IDE 확장 등 그 밖의 클라이언트 | 지금처럼 텍스트로 결과 표시 |
 | claude.ai, ChatGPT | ❌ 원격 서버가 필요한데, 이 서버는 내 컴퓨터에서 실행됩니다 |
 
 플레이어 없이 텍스트만 나오나요? MCP 설정을 바꾼 뒤 클라이언트를 재시작하세요. Claude Desktop 일부 버전에서는 로컬 서버의 앱이 일반 채팅에 표시되지 않습니다([anthropics/claude-ai-mcp#1069](https://github.com/anthropics/claude-ai-mcp/issues/1069)). 이때도 시크릿 채팅에서는 표시됩니다. 플레이어를 끄려면 `AUDIO_STUDIO_CHAT_PLAYER=off`로 설정하세요.

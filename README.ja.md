@@ -329,7 +329,8 @@ claude mcp add --scope user --transport http audio-studio http://127.0.0.1:8765/
 | Claude Desktop | ✅ |
 | VS Code（GitHub Copilot） | ✅ `chat.mcp.apps.enabled` をオンにする（実験的機能） |
 | Cursor、Goose など MCP Apps に対応したクライアント | ✅ |
-| Claude Code、Codex などのクライアント | これまでどおりテキストで結果を返します |
+| Codex アプリ（デスクトップ） | ✅ |
+| Claude Code、Codex の CLI と IDE 拡張などのクライアント | これまでどおりテキストで結果を返します |
 | claude.ai、ChatGPT | ❌ リモートサーバーが必要ですが、このサーバーは自分のパソコンで動きます |
 
 プレーヤーが出ずにテキストだけが表示される場合は、MCP の設定を変えたあとにクライアントを再起動してください。Claude Desktop のバージョンによっては、ローカルサーバーのアプリが通常のチャットに表示されません（[anthropics/claude-ai-mcp#1069](https://github.com/anthropics/claude-ai-mcp/issues/1069)）。その場合もシークレットチャットでは表示されます。プレーヤーを使わないときは `AUDIO_STUDIO_CHAT_PLAYER=off` を設定します。

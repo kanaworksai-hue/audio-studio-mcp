@@ -14,7 +14,7 @@
 
 <p><a href="https://github.com/kanaworksai-hue"><img src="docs/brand/kanaworks-mark.png" height="22" alt="" align="absmiddle"></a>&nbsp;<a href="https://github.com/kanaworksai-hue"><b>KanaWorks_AI のプロジェクト</b></a></p>
 
-[English](README.md) | [简体中文](README.zh-CN.md) | **日本語**
+[English](README.md) | [简体中文](README.zh-CN.md) | **日本語** | [한국어](README.ko.md) | [Português (Brasil)](README.pt-BR.md) | [Español](README.es.md)
 
 <!-- mcp-name: io.github.kanaworksai-hue/audio-studio-mcp -->
 

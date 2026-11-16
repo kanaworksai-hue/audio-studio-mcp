@@ -69,12 +69,34 @@ _weights_checked = False
 
 def weights_message(backend: Backend) -> str:
     from . import weights
-    size = weights.download_size(backend.name, [backend.dit]) if backend.name.startswith("sa3-") else ""
-    return (f"Audio Studio is installed, but the Stable Audio 3 model weights ({getattr(backend, 'dit', '')}, "
-            f"{size}) are not downloaded yet. Run this once in a terminal; it shows the download size "
-            f"and progress (and, on Windows, the Hugging Face license steps):  {runtime.setup_command()}  "
+    model = getattr(backend, "dit", "medium")
+    size = weights.download_size(backend.name, [model]) if backend.name.startswith("sa3-") else ""
+    folders = runtime.custom_folders()
+    same_env = f"  (in a terminal with the same settings as this server: {folders})" if folders else ""
+    return (f"Audio Studio is installed, but the Stable Audio 3 model weights ({model}, {size}) are "
+            "not downloaded yet. Run this once in a terminal; it shows the download size and progress "
+            f"(and, on Windows, the Hugging Face license steps):  {runtime.setup_command(model)}{same_env}  "
             "AI agents: you may run it yourself with -y added (it takes minutes); if it asks for a "
             "Hugging Face login, pass its steps on to the user and never ask for the token in the chat.")
+
+
+def _relink(backend: Backend) -> bool:
+    """MLX weights already in the Hugging Face cache only need their links in the
+    runtime folder (e.g. a new runtime commit after an update): make them instead
+    of asking for setup. Returns whether everything is in place now."""
+    if backend.name != "sa3-mlx":
+        return False
+    from . import weights
+    upstream = getattr(backend, "upstream_dir", None)
+    try:
+        if upstream is None or not weights.in_hf_cache(backend.dit, upstream):
+            return False
+        with contextlib.redirect_stdout(sys.stderr):
+            weights.download_mlx([backend.dit], upstream)
+    except Exception as e:  # anything odd: fall back to asking for setup
+        print(f"[audio-studio] could not link the cached weights: {e!r}", file=sys.stderr)
+        return False
+    return not backend.missing_weights()
 
 
 def ready_backend() -> Backend:
@@ -85,7 +107,7 @@ def ready_backend() -> Backend:
     global _weights_checked
     backend = get_backend()
     if not _weights_checked:
-        if runtime.managed_runtime() and backend.missing_weights():
+        if runtime.managed_runtime() and backend.missing_weights() and not _relink(backend):
             raise runtime.SetupRequired(weights_message(backend))
         _weights_checked = True
     return backend
@@ -492,8 +514,10 @@ def main(argv: list[str] | None = None) -> None:
         # Not set up yet. Start anyway, so the client connects and every tool
         # call can say what to do; downloading here could outlast the client's
         # startup timeout.
-        print(f"audio-studio-mcp: not set up yet; run once in a terminal: {runtime.setup_command()}",
-              file=sys.stderr)
+        folders = runtime.custom_folders()
+        print("audio-studio-mcp: not set up yet; run once in a terminal: "
+              f"{runtime.setup_command(os.environ.get('AUDIO_STUDIO_SA3_MODEL'))}"
+              + (f" (with {folders})" if folders else ""), file=sys.stderr)
     else:
         try:
             backend = ready_backend()

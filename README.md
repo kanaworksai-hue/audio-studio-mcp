@@ -94,6 +94,8 @@ uvx --python 3.11 --torch-backend cu126 audio-studio-mcp setup
 
 `--torch-backend cu126` makes uv install the CUDA build of PyTorch (PyPI only has the CPU build for Windows), and `--python 3.11` keeps uv away from a Python that PyTorch doesn't support yet. If uvx answers `unexpected argument '--torch-backend'`, your uv is too old: update it with `winget upgrade astral-sh.uv` (or `uv self update`). On Windows, if you aren't logged in to Hugging Face yet, setup prints the steps: accept the license on the model page, then log in **in your own terminal** with `uvx --from huggingface_hub hf auth login` and run setup again.
 
+Setup downloads the **medium** model. For the small, fast models add `--model sm-music`, `--model sm-sfx` or `--model all`, and set `AUDIO_STUDIO_SA3_MODEL` in your client config (see [Configuration](#️-configuration)).
+
 **2. Register it with your MCP client.** Use the same command without `setup`:
 
 ```bash
@@ -155,7 +157,7 @@ Generated files go to `~/AudioStudio` (set `AUDIO_STUDIO_OUTPUT_DIR` to change i
 > *"Install the Audio Studio MCP server (https://github.com/kanaworksai-hue/audio-studio-mcp) by following its README, including the notes for AI agents."*
 >
 > **Notes for AI agents:**
-> - Run the setup command for the user's OS yourself, with `-y` added, and give it a long timeout: it downloads 7–10 GB. If it is cut off, run it again; finished files are kept. Then register the server as shown above.
+> - Run the setup command for the user's OS yourself, with `-y` added, and give it a long timeout: it downloads about 7 GB on macOS and about 13 GB on Windows (model and PyTorch). If it is cut off, run it again; finished files are kept. Then register the server as shown above.
 > - On Windows the model weights are gated and need the user's own Hugging Face login. If setup stops with the login steps, pass them on to the user and wait until they say they are done, then run setup again. Never ask the user to paste their token into the chat.
 > - Before setup has finished, the server starts but every tool call answers with the setup command to run.
 
@@ -168,7 +170,7 @@ The install scripts from earlier versions still work. They clone the repository,
 **Requirements:**
 
 - Apple Silicon Mac (M1 or later), 16 GB RAM recommended
-- About 6 GB of disk for the model
+- About 8 GB of disk (model ~6.9 GB)
 - `git` and [`ffmpeg`](https://ffmpeg.org) (`brew install ffmpeg`)
 
 ```bash
@@ -177,7 +179,7 @@ cd audio-studio-mcp
 ./install.sh
 ```
 
-The installer sets up [`uv`](https://docs.astral.sh/uv/) if needed, clones the official Stable Audio 3 runtime into `vendor/` at a tested commit, creates `.venv/`, and downloads the **medium** model (1.4B, ~5.9 GB) from [Hugging Face](https://huggingface.co/stabilityai/stable-audio-3-optimized). It finishes by printing the exact command to register the server:
+The installer sets up [`uv`](https://docs.astral.sh/uv/) if needed, clones the official Stable Audio 3 runtime into `vendor/` at a tested commit, creates `.venv/`, and downloads the **medium** model (1.4B, ~6.9 GB) from [Hugging Face](https://huggingface.co/stabilityai/stable-audio-3-optimized). It finishes by printing the exact command to register the server:
 
 ```bash
 claude mcp add --scope user audio-studio -- /path/to/audio-studio-mcp/.venv/bin/audio-studio-mcp
@@ -260,7 +262,7 @@ Then just ask:
 - **`peak_ceiling_db`** (default −1): a safety ceiling. Louder peaks are turned down and quieter audio is never boosted. Use `process_audio` to normalize.
 - **`process_audio` normalization**: `peak` is common for SFX. `loudness` normalizes to a target LUFS: −14 for streaming/video, −16 for game BGM, −23 for broadcast.
 
-Generated files are 44.1 kHz 24-bit stereo WAV, written to `outputs/` in this folder. Each one has a `<name>.json` next to it. Processed files keep the original generation info under `source`.
+Generated files are 44.1 kHz 24-bit stereo WAV, written to the output folder (`~/AudioStudio`, or `outputs/` in a source install; see `AUDIO_STUDIO_OUTPUT_DIR`). Each one has a `<name>.json` next to it. Processed files keep the original generation info under `source`.
 </details>
 
 ## 🌐 Web UI
@@ -310,7 +312,7 @@ claude mcp add --scope user --transport http audio-studio http://127.0.0.1:8765/
 | `AUDIO_STUDIO_MLX_CACHE_GB` | `1` | macOS: cap on MLX's buffer cache. Without it, a long generation can leave ~6 GB cached |
 | `AUDIO_STUDIO_DEVICE` | `cuda` if available | Windows/Linux: PyTorch device, e.g. `cuda`, `cuda:1` or `cpu` |
 | `AUDIO_STUDIO_SA3_DIR` | downloaded by setup (source install: `<repo>/vendor/stable-audio-3`) | Use another stable-audio-3 checkout |
-| `AUDIO_STUDIO_HOME` | macOS `~/Library/Application Support/audio-studio-mcp`, Windows `%LOCALAPPDATA%\\audio-studio-mcp` | Where setup keeps the Stable Audio 3 runtime (~1 MB). The weights stay in the Hugging Face cache |
+| `AUDIO_STUDIO_HOME` | macOS `~/Library/Application Support/audio-studio-mcp`, Windows `%LOCALAPPDATA%\audio-studio-mcp` | Where setup keeps the Stable Audio 3 runtime (~1 MB). The weights stay in the Hugging Face cache |
 | `AUDIO_STUDIO_BACKEND` | `auto` | `auto`, `sa3-mlx` (Apple Silicon) or `sa3-torch` (PyTorch, NVIDIA) |
 | `AUDIO_STUDIO_FFMPEG` | `ffmpeg` on `PATH` | Path to ffmpeg |
 
@@ -439,8 +441,9 @@ Other ways to help: [open an issue](https://github.com/kanaworksai-hue/audio-stu
 ```bash
 uv run pytest                              # offline tests, no model needed
 .venv/bin/python scripts/smoke_test.py     # end-to-end with the real model (~30 s on an M1)
-uv build && .venv/bin/python scripts/smoke_test.py --server "uvx --python 3.11 --from $(ls dist/*.whl) audio-studio-mcp"
-                                           # the same against the built wheel, as uvx runs it
+rm -rf dist && uv build && WHL=$(ls dist/*.whl)   # the same against the built wheel, as uvx runs it:
+uvx --python 3.11 --from "$WHL" audio-studio-mcp setup -y
+.venv/bin/python scripts/smoke_test.py --server "uvx --python 3.11 --from $WHL audio-studio-mcp"
 ```
 
 On Windows: `.venv\Scripts\python scripts\smoke_test.py` (~45 s on an RTX 3060, including model loading).

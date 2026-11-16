@@ -150,10 +150,10 @@ def main(argv: list[str] | None = None) -> int:
         ok("already downloaded")
     elif args.skip_weights:
         warn(f"skipped ({weights.download_size(backend, todo)}). Generating needs them: run "
-             f"{runtime.setup_command()} again before the first generation.")
+             f"{runtime.setup_command(args.model)} again before the first generation.")
     else:
         from huggingface_hub import constants
-        retry = f"Run this again: {runtime.setup_command()}"
+        retry = f"Run this again: {runtime.setup_command(args.model)}"
         if backend == "sa3-torch":
             gated = weights.gated_repos(todo)
             if gated:
@@ -174,7 +174,7 @@ def main(argv: list[str] | None = None) -> int:
                   f"  Saved to the Hugging Face cache: {constants.HF_HUB_CACHE}\n"
                   f"  {weights.LICENSE_NOTE}", flush=True)
             if not args.yes and stdin_is_terminal() and not confirm("Download now?"):
-                print(f"\nNothing downloaded. Run setup again when you are ready: {runtime.setup_command()}")
+                print(f"\nNothing downloaded. Run setup again when you are ready: {runtime.setup_command(args.model)}")
                 return 1
         rc = weights.download(backend, todo, upstream, retry)
         if rc:

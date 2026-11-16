@@ -94,6 +94,8 @@ uvx --python 3.11 --torch-backend cu126 audio-studio-mcp setup
 
 `--torch-backend cu126` は uv に CUDA 版の PyTorch を入れさせるオプションです（PyPI には Windows 向けの CPU 版しかありません）。`--python 3.11` は、PyTorch がまだ対応していない新しい Python が選ばれるのを防ぎます。uvx が `unexpected argument '--torch-backend'` と表示する場合は uv が古いので、`winget upgrade astral-sh.uv`（または `uv self update`）で更新してください。Windows で Hugging Face にまだログインしていない場合は、setup が手順を表示します。モデルのページでライセンスに同意し、**ご自身のターミナルで** `uvx --from huggingface_hub hf auth login` を実行してログインしてから、setup をもう一度実行してください。
 
+setup は **medium** モデルをダウンロードします。小型で高速なモデルを使うには `--model sm-music`、`--model sm-sfx` または `--model all` を付け、クライアントの設定で `AUDIO_STUDIO_SA3_MODEL` を指定してください（[設定](#️-設定)を参照）。
+
 **2. MCP クライアントに登録します。** `setup` を外した同じコマンドを使います：
 
 ```bash
@@ -155,7 +157,7 @@ tool_timeout_sec = 900
 > *「Audio Studio MCP サーバー（https://github.com/kanaworksai-hue/audio-studio-mcp）を、README（AI エージェント向けの注意も含めて）に従ってインストールして。」*
 >
 > **AI エージェント向けの注意：**
-> - ユーザーの OS に合った setup コマンドに `-y` を付けて、エージェント自身が実行してください。7〜10 GB をダウンロードするので、タイムアウトは長めにします。途中で切れたらもう一度実行すれば、ダウンロード済みのファイルはそのまま使われます。そのあと、上の手順でサーバーを登録します。
+> - ユーザーの OS に合った setup コマンドに `-y` を付けて、エージェント自身が実行してください。macOS で約 7 GB、Windows で約 13 GB（モデルと PyTorch）をダウンロードするので、タイムアウトは長めにします。途中で切れたらもう一度実行すれば、ダウンロード済みのファイルはそのまま使われます。そのあと、上の手順でサーバーを登録します。
 > - Windows では、モデルの重みはユーザー本人の Hugging Face ログインが必要です。setup がログイン手順を表示して止まったら、その手順をユーザーに伝え、終わったと言われてから setup を再実行してください。トークンをチャットに貼るようユーザーに頼まないでください。
 > - setup が終わるまでも、サーバーは起動します。ただし、どのツールを呼んでも、実行すべき setup コマンドが返ってきます。
 
@@ -168,7 +170,7 @@ tool_timeout_sec = 900
 **動作要件：**
 
 - Apple Silicon Mac（M1 以降）、メモリ 16 GB 推奨
-- モデル用に約 6 GB のディスク容量
+- 約 8 GB のディスク容量（モデル約 6.9 GB）
 - `git` と [`ffmpeg`](https://ffmpeg.org)（`brew install ffmpeg`）
 
 ```bash
@@ -182,7 +184,7 @@ cd audio-studio-mcp
 1. 必要なら [`uv`](https://docs.astral.sh/uv/) を導入します。
 2. 公式 Stable Audio 3 ランタイムを、動作確認済みのコミットで `vendor/` に clone します。
 3. `.venv/` を作成します。
-4. [Hugging Face](https://huggingface.co/stabilityai/stable-audio-3-optimized) から **medium** モデル（1.4B、約 5.9 GB）をダウンロードします。
+4. [Hugging Face](https://huggingface.co/stabilityai/stable-audio-3-optimized) から **medium** モデル（1.4B、約 6.9 GB）をダウンロードします。
 
 最後に、登録用のコマンドがそのまま表示されます：
 
@@ -267,7 +269,7 @@ macOS ではダウンロードにログインは不要で、`hf auth login` で�
 - **`peak_ceiling_db`**（既定 −1）：安全上限です。ピークが超えた場合だけ全体を下げ、小さい音を持ち上げることはありません。正規化は `process_audio` で行います。
 - **`process_audio` の正規化**：効果音には `peak` がよく使われます。`loudness` は目標 LUFS に合わせます。目安は配信・動画 −14、ゲーム BGM −16、放送 −23 です。
 
-生成ファイルは 44.1 kHz 24-bit ステレオ WAV で、このフォルダの `outputs/` に保存され、それぞれ隣に `<ファイル名>.json` が付きます。後処理したファイルには、元の生成情報が `source` として残ります。
+生成ファイルは 44.1 kHz 24-bit ステレオ WAV で、出力フォルダ（`~/AudioStudio`、ソースからのインストールでは `outputs/`。`AUDIO_STUDIO_OUTPUT_DIR` で変更可）に保存され、それぞれ隣に `<ファイル名>.json` が付きます。後処理したファイルには、元の生成情報が `source` として残ります。
 </details>
 
 ## 🌐 Web UI
@@ -317,7 +319,7 @@ claude mcp add --scope user --transport http audio-studio http://127.0.0.1:8765/
 | `AUDIO_STUDIO_MLX_CACHE_GB` | `1` | macOS：MLX のバッファキャッシュ上限。設定しないと、長い曲の生成後に約 6 GB 余分に残ることがあります |
 | `AUDIO_STUDIO_DEVICE` | CUDA があれば `cuda` | Windows/Linux：PyTorch のデバイス。`cuda`、`cuda:1`、`cpu` など |
 | `AUDIO_STUDIO_SA3_DIR` | setup がダウンロード（ソースからのインストール：`<repo>/vendor/stable-audio-3`） | 別の stable-audio-3 チェックアウトを使う |
-| `AUDIO_STUDIO_HOME` | macOS `~/Library/Application Support/audio-studio-mcp`、Windows `%LOCALAPPDATA%\\audio-studio-mcp` | setup が Stable Audio 3 ランタイム（約 1 MB）を置く場所。重みは Hugging Face のキャッシュに置かれます |
+| `AUDIO_STUDIO_HOME` | macOS `~/Library/Application Support/audio-studio-mcp`、Windows `%LOCALAPPDATA%\audio-studio-mcp` | setup が Stable Audio 3 ランタイム（約 1 MB）を置く場所。重みは Hugging Face のキャッシュに置かれます |
 | `AUDIO_STUDIO_BACKEND` | `auto` | `auto`、`sa3-mlx`（Apple Silicon）、`sa3-torch`（PyTorch、NVIDIA） |
 | `AUDIO_STUDIO_FFMPEG` | `PATH` 上の `ffmpeg` | ffmpeg のパス |
 
@@ -446,8 +448,9 @@ Audio Studio で作った音を実際に使ってもらえたなら、[リポジ
 ```bash
 uv run pytest                              # オフラインテスト（モデル不要）
 .venv/bin/python scripts/smoke_test.py     # 実モデルでのエンドツーエンドテスト（M1 で約 30 秒）
-uv build && .venv/bin/python scripts/smoke_test.py --server "uvx --python 3.11 --from $(ls dist/*.whl) audio-studio-mcp"
-                                           # 同じテストをビルドした wheel で（uvx での実行と同じ形）
+rm -rf dist && uv build && WHL=$(ls dist/*.whl)   # 同じテストをビルドした wheel で（uvx での実行と同じ形）：
+uvx --python 3.11 --from "$WHL" audio-studio-mcp setup -y
+.venv/bin/python scripts/smoke_test.py --server "uvx --python 3.11 --from $WHL audio-studio-mcp"
 ```
 
 Windows では `.venv\Scripts\python scripts\smoke_test.py`（RTX 3060 で約 45 秒、モデル読み込みを含む）。

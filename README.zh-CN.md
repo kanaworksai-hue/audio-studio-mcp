@@ -94,6 +94,8 @@ uvx --python 3.11 --torch-backend cu126 audio-studio-mcp setup
 
 `--torch-backend cu126` 让 uv 安装 CUDA 版的 PyTorch（PyPI 上 Windows 只有 CPU 版），`--python 3.11` 避免 uv 选中 PyTorch 还不支持的新版 Python。如果 uvx 提示 `unexpected argument '--torch-backend'`，说明 uv 太旧，用 `winget upgrade astral-sh.uv`（或 `uv self update`）更新。在 Windows 上如果还没登录 Hugging Face，setup 会打印步骤：在模型页面同意许可，然后**在你自己的终端里**运行 `uvx --from huggingface_hub hf auth login` 登录，再运行一次 setup。
 
+setup 默认下载 **medium** 模型。要用小而快的模型，加上 `--model sm-music`、`--model sm-sfx` 或 `--model all`，并在客户端配置里设置 `AUDIO_STUDIO_SA3_MODEL`（见[配置](#️-配置)）。
+
 **2. 注册到 MCP 客户端。** 用同一条命令，去掉 `setup`：
 
 ```bash
@@ -155,7 +157,7 @@ tool_timeout_sec = 900
 > *“按照 Audio Studio MCP 服务器（https://github.com/kanaworksai-hue/audio-studio-mcp）的 README（包括写给 AI agent 的说明）安装它。”*
 >
 > **写给 AI agent 的说明：**
-> - 由你自己运行与用户系统对应的 setup 命令，加上 `-y`，超时设长一些：它要下载 7–10 GB。中途断了就再运行一次，下载完的文件会保留。然后按上面的方法注册服务器。
+> - 由你自己运行与用户系统对应的 setup 命令，加上 `-y`，超时设长一些：macOS 上约下载 7 GB，Windows 上约 13 GB（模型加 PyTorch）。中途断了就再运行一次，下载完的文件会保留。然后按上面的方法注册服务器。
 > - 在 Windows 上，模型权重需要用户本人的 Hugging Face 登录。如果 setup 打印登录步骤后停止，请把步骤转告用户，等用户说完成后再运行 setup。不要让用户把 token 贴到聊天里。
 > - setup 完成之前服务器也能启动，但调用任何工具都会返回需要运行的 setup 命令。
 
@@ -168,7 +170,7 @@ tool_timeout_sec = 900
 **环境要求：**
 
 - Apple Silicon Mac（M1 及以上），建议 16 GB 内存
-- 模型约占 6 GB 磁盘
+- 约 8 GB 磁盘（模型约 6.9 GB）
 - `git` 和 [`ffmpeg`](https://ffmpeg.org)（`brew install ffmpeg`）
 
 ```bash
@@ -182,7 +184,7 @@ cd audio-studio-mcp
 1. 需要时安装 [`uv`](https://docs.astral.sh/uv/)。
 2. 把官方 Stable Audio 3 运行时 clone 到 `vendor/`，固定在测试过的 commit。
 3. 创建 `.venv/`。
-4. 从 [Hugging Face](https://huggingface.co/stabilityai/stable-audio-3-optimized) 下载 **medium** 模型（1.4B，约 5.9 GB）。
+4. 从 [Hugging Face](https://huggingface.co/stabilityai/stable-audio-3-optimized) 下载 **medium** 模型（1.4B，约 6.9 GB）。
 
 最后会打印出注册用的完整命令：
 
@@ -267,7 +269,7 @@ macOS 上下载不需要登录，用 `hf auth login` 登录后 Hugging Face 的�
 - **`peak_ceiling_db`**（默认 −1）：安全上限。峰值超过就整体压低，低于的不会提升。需要标准化时用 `process_audio`。
 - **`process_audio` 的标准化**：音效常用 `peak`；`loudness` 会标准化到目标 LUFS，−14 用于流媒体和视频，−16 用于游戏 BGM，−23 用于广播。
 
-生成的文件是 44.1 kHz 24-bit 立体声 WAV，写到本目录的 `outputs/`，旁边各有一个 `<文件名>.json`。处理后的文件会在 `source` 里保留原始生成信息。
+生成的文件是 44.1 kHz 24-bit 立体声 WAV，写到输出目录（`~/AudioStudio`，从源码安装时是 `outputs/`；可用 `AUDIO_STUDIO_OUTPUT_DIR` 修改），旁边各有一个 `<文件名>.json`。处理后的文件会在 `source` 里保留原始生成信息。
 </details>
 
 ## 🌐 Web UI
@@ -317,7 +319,7 @@ claude mcp add --scope user --transport http audio-studio http://127.0.0.1:8765/
 | `AUDIO_STUDIO_MLX_CACHE_GB` | `1` | macOS：MLX 缓冲区缓存上限。不设的话，生成长曲子后可能多占约 6 GB |
 | `AUDIO_STUDIO_DEVICE` | 有 CUDA 时为 `cuda` | Windows/Linux：PyTorch 设备，例如 `cuda`、`cuda:1` 或 `cpu` |
 | `AUDIO_STUDIO_SA3_DIR` | 由 setup 下载（从源码安装：`<repo>/vendor/stable-audio-3`） | 使用别处的 stable-audio-3 checkout |
-| `AUDIO_STUDIO_HOME` | macOS `~/Library/Application Support/audio-studio-mcp`，Windows `%LOCALAPPDATA%\\audio-studio-mcp` | setup 存放 Stable Audio 3 运行时（约 1 MB）的位置。权重在 Hugging Face 缓存里 |
+| `AUDIO_STUDIO_HOME` | macOS `~/Library/Application Support/audio-studio-mcp`，Windows `%LOCALAPPDATA%\audio-studio-mcp` | setup 存放 Stable Audio 3 运行时（约 1 MB）的位置。权重在 Hugging Face 缓存里 |
 | `AUDIO_STUDIO_BACKEND` | `auto` | `auto`、`sa3-mlx`（Apple Silicon）或 `sa3-torch`（PyTorch，NVIDIA） |
 | `AUDIO_STUDIO_FFMPEG` | `PATH` 里的 `ffmpeg` | ffmpeg 路径 |
 
@@ -446,8 +448,9 @@ Windows + RTX 3060 12 GB，medium 模型：
 ```bash
 uv run pytest                              # 离线测试，不需要模型
 .venv/bin/python scripts/smoke_test.py     # 用真实模型的端到端测试（M1 上约 30 秒）
-uv build && .venv/bin/python scripts/smoke_test.py --server "uvx --python 3.11 --from $(ls dist/*.whl) audio-studio-mcp"
-                                           # 用构建好的 wheel 做同样的测试（和 uvx 的运行方式一样）
+rm -rf dist && uv build && WHL=$(ls dist/*.whl)   # 用构建好的 wheel 做同样的测试（和 uvx 的运行方式一样）：
+uvx --python 3.11 --from "$WHL" audio-studio-mcp setup -y
+.venv/bin/python scripts/smoke_test.py --server "uvx --python 3.11 --from $WHL audio-studio-mcp"
 ```
 
 Windows 上：`.venv\Scripts\python scripts\smoke_test.py`（RTX 3060 上约 45 秒，含模型加载）。

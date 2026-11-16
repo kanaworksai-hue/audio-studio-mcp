@@ -77,15 +77,25 @@ def download_size(backend: str, names: list[str]) -> str:
 
 def download_mlx(names: list[str], upstream: Path) -> int:
     w = _mlx_manifest(upstream)
+    mlx_dir = upstream / "optimized" / "mlx"
     seen: set[str] = set()
+    failed = []
     for name in names:
         print(f"[{name}] {w.BUNDLE_SIZES[name]}")
         for rel, _ in w.DIT_BUNDLES[name] + w.SHARED:
-            if rel not in seen:
-                seen.add(rel)
-                path = w.ensure_local(rel)
-                print(f"  ✓ {Path(rel).name}" + ("" if path.exists() else "  (missing!)"))
-    return 0
+            if rel in seen:
+                continue
+            seen.add(rel)
+            link = mlx_dir / rel
+            if link.is_symlink() and not link.exists():
+                link.unlink()  # points into a cleared Hugging Face cache: download again
+            path = w.ensure_local(rel)
+            if path.exists():
+                print(f"  ✓ {Path(rel).name}")
+            else:
+                print(f"  ✗ {Path(rel).name}: missing after download", file=sys.stderr)
+                failed.append(rel)
+    return 1 if failed else 0
 
 
 def hf_account() -> str | None:

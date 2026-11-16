@@ -1,0 +1,59 @@
+{
+  "$schema": "https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json",
+  "name": "io.github.kanaworksai-hue/audio-studio-mcp",
+  "title": "Audio Studio",
+  "description": "Local AI BGM and sound effects with Stable Audio 3 (Apple Silicon MLX, NVIDIA CUDA)",
+  "version": "1.1.0",
+  "repository": {
+    "url": "https://github.com/kanaworksai-hue/audio-studio-mcp",
+    "source": "github"
+  },
+  "websiteUrl": "https://github.com/kanaworksai-hue/audio-studio-mcp",
+  "packages": [
+    {
+      "registryType": "pypi",
+      "identifier": "audio-studio-mcp",
+      "version": "1.1.0",
+      "runtimeHint": "uvx",
+      "runtimeArguments": [
+        {
+          "type": "named",
+          "name": "--python",
+          "value": "3.11",
+          "description": "PyTorch 2.7.1 (Windows) has no wheels for the newest Python; uvx ignores the upper bound of requires-python"
+        },
+        {
+          "type": "named",
+          "name": "--torch-backend",
+          "value": "cu126",
+          "description": "Windows: install the CUDA build of PyTorch (PyPI only has CPU builds). No effect on macOS"
+        }
+      ],
+      "transport": {
+        "type": "stdio"
+      },
+      "environmentVariables": [
+        {
+          "name": "AUDIO_STUDIO_OUTPUT_DIR",
+          "description": "Folder for generated audio (default: ~/AudioStudio)",
+          "format": "filepath",
+          "isRequired": false
+        },
+        {
+          "name": "AUDIO_STUDIO_SA3_MODEL",
+          "description": "Model: medium (default, best quality), sm-music or sm-sfx (small and fast)",
+          "default": "medium",
+          "choices": ["medium", "sm-music", "sm-sfx"],
+          "isRequired": false
+        },
+        {
+          "name": "AUDIO_STUDIO_IDLE_UNLOAD_MIN",
+          "description": "Minutes without a request before the model is freed from memory (0 = never)",
+          "default": "10",
+          "format": "number",
+          "isRequired": false
+        }
+      ]
+    }
+  ]
+}

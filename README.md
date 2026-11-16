@@ -16,6 +16,8 @@
 
 **English** | [简体中文](README.zh-CN.md) | [日本語](README.ja.md)
 
+<!-- mcp-name: io.github.kanaworksai-hue/audio-studio-mcp -->
+
 [🎧 Listen to samples](https://kanaworksai-hue.github.io/audio-studio-mcp/) · [Quick start](#-quick-start) · [Tools](#-tools) · [Web UI](#-web-ui) · [FAQ](#-faq) · [⭐ Star](#-like-it-star-it)
 
 </div>
@@ -69,7 +71,99 @@ flowchart LR
 
 ## 🚀 Quick start
 
-### macOS (Apple Silicon)
+You need [uv](https://docs.astral.sh/uv/) 0.9.19 or newer and [ffmpeg](https://ffmpeg.org). There is nothing to clone: `uvx` downloads and runs the published package.
+
+| | macOS | Windows |
+|---|---|---|
+| **Hardware** | Apple Silicon (M1 or later), 16 GB RAM recommended | NVIDIA GPU with 8 GB of VRAM or more and a current driver. Tested on an RTX 3060 12 GB |
+| **Disk** | About 8 GB (model ~6.9 GB) | About 14 GB (model ~10.4 GB, PyTorch) |
+| **uv and ffmpeg** | `brew install uv ffmpeg` | `winget install astral-sh.uv` and `winget install Gyan.FFmpeg` |
+| **Model license** | Nothing to do | Needs a free [Hugging Face](https://huggingface.co) account: open [stabilityai/stable-audio-3-medium](https://huggingface.co/stabilityai/stable-audio-3-medium) and accept the license once |
+
+**1. Set it up once, in a terminal.** This checks your computer, fetches the official Stable Audio 3 runtime at a tested commit, tells you how big the model download is and asks before downloading it. Running it again is safe; finished downloads are kept.
+
+```bash
+# macOS
+uvx --python 3.11 audio-studio-mcp setup
+```
+
+```powershell
+# Windows
+uvx --python 3.11 --torch-backend cu126 audio-studio-mcp setup
+```
+
+`--torch-backend cu126` makes uv install the CUDA build of PyTorch (PyPI only has the CPU build for Windows), and `--python 3.11` keeps uv away from a Python that PyTorch doesn't support yet. On Windows, if you aren't logged in to Hugging Face yet, setup prints the steps: accept the license on the model page, then log in **in your own terminal** with `uvx --from huggingface_hub hf auth login` and run setup again.
+
+**2. Register it with your MCP client.** Use the same command without `setup`:
+
+```bash
+# Claude Code, macOS
+claude mcp add --scope user audio-studio -- uvx --python 3.11 audio-studio-mcp
+# Claude Code, Windows
+claude mcp add --scope user audio-studio -- uvx --python 3.11 --torch-backend cu126 audio-studio-mcp
+```
+
+<details>
+<summary><b>Claude Desktop, Codex, VS Code, Cursor and other clients</b></summary>
+
+On Windows, add `"--torch-backend", "cu126"` after `"3.11"` in each example below.
+
+**Claude Desktop** (`claude_desktop_config.json`), **Cursor** (`.cursor/mcp.json`) and most other clients:
+
+```json
+{
+  "mcpServers": {
+    "audio-studio": {
+      "command": "uvx",
+      "args": ["--python", "3.11", "audio-studio-mcp"]
+    }
+  }
+}
+```
+
+If the client says it can't find `uvx`, put its full path in `command` (`which uvx` on macOS, `where uvx` on Windows). Restart Claude Desktop after editing.
+
+**Codex** (`~/.codex/config.toml`). Codex waits only 10 seconds for a server to start and 60 seconds for a tool call by default; long tracks need more:
+
+```toml
+[mcp_servers.audio-studio]
+command = "uvx"
+args = ["--python", "3.11", "audio-studio-mcp"]
+startup_timeout_sec = 60
+tool_timeout_sec = 900
+```
+
+**VS Code** (`.vscode/mcp.json`, or **MCP: Open User Configuration**):
+
+```json
+{
+  "servers": {
+    "audio-studio": {
+      "type": "stdio",
+      "command": "uvx",
+      "args": ["--python", "3.11", "audio-studio-mcp"]
+    }
+  }
+}
+```
+</details>
+
+Generated files go to `~/AudioStudio` (set `AUDIO_STUDIO_OUTPUT_DIR` to change it). uvx keeps the version it installed; to update, run `uv cache clean audio-studio-mcp` and then setup again.
+
+> [!TIP]
+> **Let your agent install it.** Paste this into Claude Code:
+> *"Install the Audio Studio MCP server (https://github.com/kanaworksai-hue/audio-studio-mcp) by following its README, including the notes for AI agents."*
+>
+> **Notes for AI agents:**
+> - Run the setup command for the user's OS yourself, with `-y` added, and give it a long timeout: it downloads 7–10 GB. If it is cut off, run it again; finished files are kept. Then register the server as shown above.
+> - On Windows the model weights are gated and need the user's own Hugging Face login. If setup stops with the login steps, pass them on to the user and wait until they say they are done, then run setup again. Never ask the user to paste their token into the chat.
+> - Before setup has finished, the server starts but every tool call answers with the setup command to run.
+
+### Alternative: install from source
+
+The install scripts from earlier versions still work. They clone the repository, put the runtime in `vendor/` and the audio in `outputs/` inside it, and run from `.venv/`.
+
+#### macOS (Apple Silicon)
 
 **Requirements:**
 
@@ -89,7 +183,7 @@ The installer sets up [`uv`](https://docs.astral.sh/uv/) if needed, clones the o
 claude mcp add --scope user audio-studio -- /path/to/audio-studio-mcp/.venv/bin/audio-studio-mcp
 ```
 
-### Windows (NVIDIA GPU)
+#### Windows (NVIDIA GPU)
 
 **Requirements:**
 
@@ -142,15 +236,6 @@ On Windows the command is `C:\\path\\to\\audio-studio-mcp\\.venv\\Scripts\\audio
 On macOS, downloads are anonymous; logging in with `hf auth login` raises Hugging Face's rate limit. On Windows, the PyTorch weights are gated: accept the license on each model page you download ([medium](https://huggingface.co/stabilityai/stable-audio-3-medium), [small-music](https://huggingface.co/stabilityai/stable-audio-3-small-music), [small-sfx](https://huggingface.co/stabilityai/stable-audio-3-small-sfx)) and log in.
 </details>
 
-> [!TIP]
-> **Let your agent install it.** Paste this into Claude Code:
-> *"Install https://github.com/kanaworksai-hue/audio-studio-mcp by following its README, including the notes for AI agents, then register it as an MCP server."*
->
-> **Notes for AI agents (Windows only; macOS needs no login):** the weights are gated and need the user's own Hugging Face login.
-> - Before downloading weights, check the login with `hf auth whoami` (after the first installer run: `.venv\Scripts\hf.exe auth whoami`). `install.ps1` checks it too and stops with `ACTION NEEDED` when nobody is logged in.
-> - If the user is not logged in, or the download fails with 401/403 (license not accepted, or accepted with another account), stop and pass the steps the installer printed on to the user: create a free account, accept the license on each model page, then run `hf auth login` in their own terminal. Wait until they say they are done, then re-run the installer.
-> - Never ask the user to paste their token into the chat, and don't use `-SkipWeights` to get past this: generation would fail later with the same error.
-
 Then just ask:
 
 - "Make a 60-second lo-fi BGM loop at 85 BPM for a cafe scene, give me 3 candidates."
@@ -195,10 +280,10 @@ Prefer clicking to chatting? The same server comes with a local web page. Genera
 </p>
 
 ```bash
-.venv/bin/audio-studio-mcp --web 8765
+uvx --python 3.11 audio-studio-mcp --web 8765
 ```
 
-Your browser opens http://127.0.0.1:8765/. Add `--no-browser` to start without opening it, or `--preload` to load the model at startup. Press Ctrl+C to stop it. On Windows: `.venv\Scripts\audio-studio-mcp.exe --web 8765`.
+Your browser opens http://127.0.0.1:8765/. Add `--no-browser` to start without opening it, or `--preload` to load the model at startup. Press Ctrl+C to stop it. On Windows, add `--torch-backend cu126` after `3.11`. From a source install: `.venv/bin/audio-studio-mcp --web 8765` (Windows: `.venv\Scripts\audio-studio-mcp.exe --web 8765`).
 
 The page and your MCP clients can share one process and one loaded model: the same port also serves MCP at `/mcp`. Register it once and use both at the same time. Requests from the page and from agents wait in one queue.
 
@@ -206,7 +291,7 @@ The page and your MCP clients can share one process and one loaded model: the sa
 claude mcp add --scope user --transport http audio-studio http://127.0.0.1:8765/mcp
 ```
 
-- Files are written to the output folder (`outputs/`, or `AUDIO_STUDIO_OUTPUT_DIR`). The library shows that folder, and the editor works on the files in it.
+- Files are written to the output folder (`~/AudioStudio`, `outputs/` in a source install, or `AUDIO_STUDIO_OUTPUT_DIR`). The library shows that folder, and the editor works on the files in it.
 - The page is in English, Japanese and Chinese and follows your browser's language. You can change it in the settings.
 
 > [!WARNING]
@@ -219,12 +304,13 @@ claude mcp add --scope user --transport http audio-studio http://127.0.0.1:8765/
 
 | Variable | Default | Meaning |
 |---|---|---|
-| `AUDIO_STUDIO_OUTPUT_DIR` | `<repo>/outputs` | Where audio files are written |
+| `AUDIO_STUDIO_OUTPUT_DIR` | `~/AudioStudio` (source install: `<repo>/outputs`) | Where audio files are written |
 | `AUDIO_STUDIO_IDLE_UNLOAD_MIN` | `10` | Free the models after this many idle minutes (`0` = never) |
 | `AUDIO_STUDIO_SA3_MODEL` | `medium` | `medium` (best quality, up to 380 s), `sm-music` or `sm-sfx` (small and fast, up to 120 s) |
 | `AUDIO_STUDIO_MLX_CACHE_GB` | `1` | macOS: cap on MLX's buffer cache. Without it, a long generation can leave ~6 GB cached |
 | `AUDIO_STUDIO_DEVICE` | `cuda` if available | Windows/Linux: PyTorch device, e.g. `cuda`, `cuda:1` or `cpu` |
-| `AUDIO_STUDIO_SA3_DIR` | `<repo>/vendor/stable-audio-3` | Use another stable-audio-3 checkout |
+| `AUDIO_STUDIO_SA3_DIR` | downloaded by setup (source install: `<repo>/vendor/stable-audio-3`) | Use another stable-audio-3 checkout |
+| `AUDIO_STUDIO_HOME` | macOS `~/Library/Application Support/audio-studio-mcp`, Windows `%LOCALAPPDATA%\\audio-studio-mcp` | Where setup keeps the Stable Audio 3 runtime (~1 MB). The weights stay in the Hugging Face cache |
 | `AUDIO_STUDIO_BACKEND` | `auto` | `auto`, `sa3-mlx` (Apple Silicon) or `sa3-torch` (PyTorch, NVIDIA) |
 | `AUDIO_STUDIO_FFMPEG` | `ffmpeg` on `PATH` | Path to ffmpeg |
 
@@ -237,11 +323,11 @@ Pass them with `claude mcp add ... -e NAME=value` or in the `env` block of your 
 Each client session normally starts its own server process. Models load on the first call and are freed after the idle timeout. To keep one warm process for every session, run it as a local HTTP server. It only listens on `127.0.0.1`.
 
 ```bash
-.venv/bin/audio-studio-mcp --http 8765 --preload
+uvx --python 3.11 audio-studio-mcp --http 8765 --preload
 claude mcp add --scope user --transport http audio-studio http://127.0.0.1:8765/mcp
 ```
 
-On Windows, start it with `.venv\Scripts\audio-studio-mcp.exe --http 8765 --preload`.
+On Windows, add `--torch-backend cu126` after `3.11`. From a source install, start `.venv/bin/audio-studio-mcp` (Windows: `.venv\Scripts\audio-studio-mcp.exe`) with the same options.
 
 `--web 8765` does the same and adds the [web UI](#-web-ui) on the same port.
 </details>
@@ -292,9 +378,9 @@ The full guide is also sent to the client as the server's instructions.
 <details>
 <summary><b>Does it run on Windows, Linux or Intel Macs?</b></summary>
 
-**Windows:** yes, with an NVIDIA GPU. See [Quick start](#windows-nvidia-gpu).
+**Windows:** yes, with an NVIDIA GPU. See [Quick start](#-quick-start).
 
-**Linux:** with an NVIDIA GPU it uses the same PyTorch backend and should work, but it is untested and has no installer yet. Clone the upstream runtime into `vendor/stable-audio-3` at the commit pinned in `install.sh`, then run `uv sync --extra cuda` and `hf auth login`.
+**Linux:** with an NVIDIA GPU it uses the same PyTorch backend and should work, but it is untested. Use the `cuda` extra: `uvx --python 3.11 --torch-backend cu126 --from "audio-studio-mcp[cuda]" audio-studio-mcp setup`, and log in to Hugging Face as on Windows.
 
 **Intel Macs and AMD GPUs** are not supported.
 </details>
@@ -302,7 +388,7 @@ The full guide is also sent to the client as the server's instructions.
 <details>
 <summary><b>"Intel Macs are not supported" on an Apple Silicon Mac?</b></summary>
 
-The environment was built with an x86_64 Python (for example an old Intel Homebrew under `/usr/local`) that runs under Rosetta, so MLX was skipped. `install.sh` now asks uv for an arm64 Python and recreates such a `.venv`, so re-running `./install.sh` fixes it. If you set `UV_PYTHON` yourself, point it at an arm64 build: `UV_PYTHON=cpython-3.11-macos-aarch64 ./install.sh`.
+The environment was built with an x86_64 Python (for example an old Intel Homebrew under `/usr/local`) that runs under Rosetta, so MLX was skipped. With uvx, ask for uv's own arm64 Python, in setup and in your client's config: `uvx --python cpython-3.11-macos-aarch64 audio-studio-mcp`. With the install script, re-run `./install.sh`: it asks uv for an arm64 Python and recreates such a `.venv`. If you set `UV_PYTHON` yourself, point it at an arm64 build: `UV_PYTHON=cpython-3.11-macos-aarch64 ./install.sh`.
 </details>
 
 <details>
@@ -334,6 +420,7 @@ Use WAV or OGG for loops. MP3 adds padding at the start and end, so it can't loo
 - [x] Apple Silicon backend (Stable Audio 3, MLX)
 - [x] Windows backend for NVIDIA GPUs (Stable Audio 3, PyTorch)
 - [x] Local web UI (`--web`)
+- [x] One-command install with `uvx`
 - [ ] LoRA support (the upstream runtime already has it)
 
 Issues and pull requests are welcome.
@@ -352,6 +439,8 @@ Other ways to help: [open an issue](https://github.com/kanaworksai-hue/audio-stu
 ```bash
 uv run pytest                              # offline tests, no model needed
 .venv/bin/python scripts/smoke_test.py     # end-to-end with the real model (~30 s on an M1)
+uv build && .venv/bin/python scripts/smoke_test.py --server "uvx --python 3.11 --from $(ls dist/*.whl) audio-studio-mcp"
+                                           # the same against the built wheel, as uvx runs it
 ```
 
 On Windows: `.venv\Scripts\python scripts\smoke_test.py` (~45 s on an RTX 3060, including model loading).
@@ -359,6 +448,9 @@ On Windows: `.venv\Scripts\python scripts\smoke_test.py` (~45 s on an RTX 3060, 
 ```
 src/audio_studio_mcp/
   server.py            MCP tools (backend-independent)
+  runtime.py           where the runtime and outputs live; fetches the runtime for uvx installs
+  firstrun.py          `audio-studio-mcp setup`
+  weights.py           model weights: what is downloaded, downloading
   prompts.py           prompt building and the instructions sent to clients
   post.py              post-processing and export
   backends/base.py     backend interface
@@ -373,7 +465,7 @@ A new platform is added as another backend in `backends/`.
 ## 📄 License and credits
 
 - **This project:** [MIT](LICENSE).
-- **Stable Audio 3 runtime:** downloaded into `vendor/` at install time. It is © Stability AI and MIT-licensed.
+- **Stable Audio 3 runtime:** downloaded by `setup` (or into `vendor/` by the install scripts) at a pinned commit. It is © Stability AI and MIT-licensed.
 - **Model weights:** licensed under the [Stability AI Community License](https://huggingface.co/stabilityai/stable-audio-3-optimized). They are downloaded from Hugging Face (macOS: `stable-audio-3-optimized`; Windows: `stable-audio-3-medium` and the small models), not distributed here.
 - **Brand:** the KanaWorks_AI name, logo and the Kana character are © 東京AI映像合同会社 (Tokyo AI Visuals LLC) and are **not** covered by the MIT license. See [docs/brand](docs/brand/README.md).
 - **Fonts:** the web UI ships IBM Plex Sans, © IBM Corp., under the SIL Open Font License 1.1 ([`OFL.txt`](src/audio_studio_mcp/static/fonts/OFL.txt)). The Kana images in the web UI ([`static/brand`](src/audio_studio_mcp/static/brand/README.md)) are covered by the Brand note above.

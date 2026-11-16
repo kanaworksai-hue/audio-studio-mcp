@@ -1,7 +1,10 @@
 """End-to-end test against the real model, over stdio like an MCP client.
 
-Usage: .venv/bin/python scripts/smoke_test.py [--out DIR]
+Usage: .venv/bin/python scripts/smoke_test.py [--out DIR] [--server "COMMAND"]
        (Windows: .venv\Scripts\python scripts\smoke_test.py)
+
+--server tests another install, e.g. the published package:
+       --server "uvx --python 3.11 audio-studio-mcp"
 
 Runs every tool once (generate, edit: variation/inpaint/continue, process,
 unload). Writes into a temporary folder unless --out is given. Takes about
@@ -14,6 +17,7 @@ import argparse
 import asyncio
 import json
 import os
+import shlex
 import sys
 import tempfile
 from pathlib import Path
@@ -30,9 +34,9 @@ async def call(client: Client, name: str, args: dict) -> dict:
     return json.loads(text)
 
 
-async def run(out_dir: Path) -> None:
+async def run(out_dir: Path, server: list[str]) -> None:
     params = StdioServerParameters(
-        command=sys.executable, args=["-m", "audio_studio_mcp"],
+        command=server[0], args=server[1:],
         env={**os.environ, "AUDIO_STUDIO_OUTPUT_DIR": str(out_dir)})
     async with Client(params, read_timeout_seconds=900) as c:
         tools = sorted(t.name for t in (await c.list_tools()).tools)
@@ -86,13 +90,17 @@ def main() -> None:
     sys.stdout.reconfigure(errors="replace")
     ap = argparse.ArgumentParser(description=__doc__.split("\n")[0])
     ap.add_argument("--out", type=Path, help="keep outputs in this folder")
+    ap.add_argument("--server", help="command that starts the server (default: this Python's "
+                                     "audio_studio_mcp module)")
     args = ap.parse_args()
+    server = (shlex.split(args.server, posix=os.name != "nt") if args.server
+              else [sys.executable, "-m", "audio_studio_mcp"])
     if args.out:
         args.out.mkdir(parents=True, exist_ok=True)
-        asyncio.run(run(args.out.resolve()))
+        asyncio.run(run(args.out.resolve(), server))
     else:
         with tempfile.TemporaryDirectory(prefix="audio-studio-smoke-") as td:
-            asyncio.run(run(Path(td)))
+            asyncio.run(run(Path(td), server))
 
 
 if __name__ == "__main__":

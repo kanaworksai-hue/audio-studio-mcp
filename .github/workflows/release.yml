@@ -1,0 +1,95 @@
+name: release
+
+# Publishing a GitHub release (gh release create vX.Y.Z --notes-file
+# .github/release-notes/vX.Y.Z.md) builds the package, uploads it to PyPI with
+# Trusted Publishing and then lists the new version in the official MCP Registry.
+# No tokens are stored in the repository: both steps use GitHub's OIDC identity.
+#
+# One-time setup (repository owner):
+#   - pypi.org → Account → Publishing → add a pending publisher: project
+#     audio-studio-mcp, owner kanaworksai-hue, repository audio-studio-mcp,
+#     workflow release.yml, environment pypi
+#   - GitHub → Settings → Environments → create "pypi"
+
+on:
+  release:
+    types: [published]
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v6
+      - name: Check the version and the release notes
+        shell: bash
+        env:
+          TAG: ${{ github.event.release.tag_name }}
+        run: |
+          version="${TAG#v}"
+          test -f ".github/release-notes/$TAG.md" || { echo "missing .github/release-notes/$TAG.md"; exit 1; }
+          grep -q "^version = \"$version\"$" pyproject.toml || { echo "pyproject.toml is not $version"; exit 1; }
+          grep -q "^__version__ = \"$version\"$" src/audio_studio_mcp/__init__.py || { echo "__init__.py is not $version"; exit 1; }
+          test "$(jq -r '.version + " " + .packages[0].version' server.json)" = "$version $version" \
+            || { echo "server.json is not $version"; exit 1; }
+          grep -q "mcp-name: $(jq -r .name server.json)" README.md || { echo "README.md lacks the mcp-name marker"; exit 1; }
+      - run: uv build
+      - name: Check the wheel
+        run: |
+          unzip -l dist/*.whl | grep -q "audio_studio_mcp/static/index.html"
+          uvx --python 3.11 --from dist/*.whl audio-studio-mcp --version
+      - uses: actions/upload-artifact@v4
+        with:
+          name: dist
+          path: dist/
+
+  pypi:
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: pypi
+      url: https://pypi.org/p/audio-studio-mcp
+    permissions:
+      id-token: write  # Trusted Publishing
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: dist
+          path: dist/
+      - uses: pypa/gh-action-pypi-publish@release/v1
+
+  mcp-registry:
+    needs: pypi
+    runs-on: ubuntu-latest
+    permissions:
+      id-token: write  # mcp-publisher login github-oidc
+    env:
+      MCP_PUBLISHER_VERSION: v1.8.9
+    steps:
+      - uses: actions/checkout@v4
+      - uses: sigstore/cosign-installer@6f9f17788090df1f26f669e9d70d6ae9567deba6  # v4.1.2
+      - name: Install mcp-publisher (signature checked)
+        run: |
+          archive="mcp-publisher_linux_amd64.tar.gz"
+          base="https://github.com/modelcontextprotocol/registry/releases/download/$MCP_PUBLISHER_VERSION"
+          curl -fsSLO "$base/$archive"
+          curl -fsSLO "$base/$archive.sigstore.json"
+          cosign verify-blob --bundle "$archive.sigstore.json" \
+            --certificate-identity "https://github.com/modelcontextprotocol/registry/.github/workflows/release.yml@refs/tags/$MCP_PUBLISHER_VERSION" \
+            --certificate-oidc-issuer "https://token.actions.githubusercontent.com" "$archive"
+          tar xzf "$archive" mcp-publisher
+      - name: Wait until PyPI serves the new version
+        env:
+          TAG: ${{ github.event.release.tag_name }}
+        run: |
+          for i in $(seq 1 30); do
+            curl -fsS "https://pypi.org/pypi/audio-studio-mcp/${TAG#v}/json" > /dev/null && exit 0
+            sleep 10
+          done
+          echo "PyPI does not list ${TAG#v} yet"; exit 1
+      - run: ./mcp-publisher validate
+      - run: ./mcp-publisher login github-oidc
+      - run: ./mcp-publisher publish

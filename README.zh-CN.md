@@ -16,6 +16,8 @@
 
 [English](README.md) | **简体中文** | [日本語](README.ja.md)
 
+<!-- mcp-name: io.github.kanaworksai-hue/audio-studio-mcp -->
+
 [🎧 试听样例](https://kanaworksai-hue.github.io/audio-studio-mcp/) · [快速开始](#-快速开始) · [工具](#-工具) · [Web UI](#-web-ui) · [常见问题](#-常见问题) · [⭐ 点个 Star](#-点个-star-支持一下)
 
 </div>
@@ -69,7 +71,99 @@ flowchart LR
 
 ## 🚀 快速开始
 
-### macOS（Apple Silicon）
+只需要 [uv](https://docs.astral.sh/uv/) 0.9.19 或更新版本和 [ffmpeg](https://ffmpeg.org)。不用 clone 仓库：`uvx` 会下载并运行已发布的包。
+
+| | macOS | Windows |
+|---|---|---|
+| **硬件** | Apple Silicon（M1 及以后），建议 16 GB 内存 | 显存 8 GB 以上的 NVIDIA 显卡和较新的驱动。在 RTX 3060 12 GB 上测试过 |
+| **磁盘** | 约 8 GB（模型约 6.9 GB） | 约 14 GB（模型约 10.4 GB，加上 PyTorch） |
+| **uv 和 ffmpeg** | `brew install uv ffmpeg` | `winget install astral-sh.uv` 和 `winget install Gyan.FFmpeg` |
+| **模型许可** | 无需操作 | 需要免费的 [Hugging Face](https://huggingface.co) 账号：打开 [stabilityai/stable-audio-3-medium](https://huggingface.co/stabilityai/stable-audio-3-medium)，同意一次许可 |
+
+**1. 在终端里运行一次 setup。** 它会检查你的电脑，按测试过的 commit 取得官方 Stable Audio 3 运行时，告诉你模型要下载多大，询问后再下载。重复运行也没关系，已经下载完的文件会保留。
+
+```bash
+# macOS
+uvx --python 3.11 audio-studio-mcp setup
+```
+
+```powershell
+# Windows
+uvx --python 3.11 --torch-backend cu126 audio-studio-mcp setup
+```
+
+`--torch-backend cu126` 让 uv 安装 CUDA 版的 PyTorch（PyPI 上 Windows 只有 CPU 版），`--python 3.11` 避免 uv 选中 PyTorch 还不支持的新版 Python。在 Windows 上如果还没登录 Hugging Face，setup 会打印步骤：在模型页面同意许可，然后**在你自己的终端里**运行 `uvx --from huggingface_hub hf auth login` 登录，再运行一次 setup。
+
+**2. 注册到 MCP 客户端。** 用同一条命令，去掉 `setup`：
+
+```bash
+# Claude Code，macOS
+claude mcp add --scope user audio-studio -- uvx --python 3.11 audio-studio-mcp
+# Claude Code，Windows
+claude mcp add --scope user audio-studio -- uvx --python 3.11 --torch-backend cu126 audio-studio-mcp
+```
+
+<details>
+<summary><b>Claude Desktop、Codex、VS Code、Cursor 等客户端</b></summary>
+
+在 Windows 上，下面每个例子都要在 `"3.11"` 后面加上 `"--torch-backend", "cu126"`。
+
+**Claude Desktop**（`claude_desktop_config.json`）、**Cursor**（`.cursor/mcp.json`）和大多数客户端：
+
+```json
+{
+  "mcpServers": {
+    "audio-studio": {
+      "command": "uvx",
+      "args": ["--python", "3.11", "audio-studio-mcp"]
+    }
+  }
+}
+```
+
+如果客户端提示找不到 `uvx`，就在 `command` 里写完整路径（macOS 用 `which uvx`，Windows 用 `where uvx` 查看）。修改后重启 Claude Desktop。
+
+**Codex**（`~/.codex/config.toml`）。Codex 默认只等服务器启动 10 秒、工具调用 60 秒，生成长曲子需要更长时间：
+
+```toml
+[mcp_servers.audio-studio]
+command = "uvx"
+args = ["--python", "3.11", "audio-studio-mcp"]
+startup_timeout_sec = 60
+tool_timeout_sec = 900
+```
+
+**VS Code**（`.vscode/mcp.json`，或命令 **MCP: Open User Configuration**）：
+
+```json
+{
+  "servers": {
+    "audio-studio": {
+      "type": "stdio",
+      "command": "uvx",
+      "args": ["--python", "3.11", "audio-studio-mcp"]
+    }
+  }
+}
+```
+</details>
+
+生成的文件保存在 `~/AudioStudio`（要改的话设置 `AUDIO_STUDIO_OUTPUT_DIR`）。uvx 会一直用第一次装的版本；要更新，先运行 `uv cache clean audio-studio-mcp`，再运行一次 setup。
+
+> [!TIP]
+> **让 AI 帮你装。** 把这句话贴给 Claude Code：
+> *“按照 Audio Studio MCP 服务器（https://github.com/kanaworksai-hue/audio-studio-mcp）的 README（包括写给 AI agent 的说明）安装它。”*
+>
+> **写给 AI agent 的说明：**
+> - 由你自己运行与用户系统对应的 setup 命令，加上 `-y`，超时设长一些：它要下载 7–10 GB。中途断了就再运行一次，下载完的文件会保留。然后按上面的方法注册服务器。
+> - 在 Windows 上，模型权重需要用户本人的 Hugging Face 登录。如果 setup 打印登录步骤后停止，请把步骤转告用户，等用户说完成后再运行 setup。不要让用户把 token 贴到聊天里。
+> - setup 完成之前服务器也能启动，但调用任何工具都会返回需要运行的 setup 命令。
+
+### 其他方式：从源码安装
+
+旧版本的安装脚本仍然可以用。它们会 clone 仓库，把运行时放在仓库里的 `vendor/`、音频放在 `outputs/`，并从 `.venv/` 运行。
+
+#### macOS（Apple Silicon）
 
 **环境要求：**
 
@@ -96,7 +190,7 @@ cd audio-studio-mcp
 claude mcp add --scope user audio-studio -- /path/to/audio-studio-mcp/.venv/bin/audio-studio-mcp
 ```
 
-### Windows（NVIDIA 显卡）
+#### Windows（NVIDIA 显卡）
 
 **环境要求：**
 
@@ -149,15 +243,6 @@ Windows 上 command 写成 `C:\\path\\to\\audio-studio-mcp\\.venv\\Scripts\\audi
 macOS 上下载不需要登录，用 `hf auth login` 登录后 Hugging Face 的限速会更宽松。Windows 上的 PyTorch 权重需要先同意许可：在要下载的每个模型页面同意许可（[medium](https://huggingface.co/stabilityai/stable-audio-3-medium)、[small-music](https://huggingface.co/stabilityai/stable-audio-3-small-music)、[small-sfx](https://huggingface.co/stabilityai/stable-audio-3-small-sfx)），并登录。
 </details>
 
-> [!TIP]
-> **让 AI 帮你装。** 把这句话贴给 Claude Code：
-> *“按照 https://github.com/kanaworksai-hue/audio-studio-mcp 的 README（包括写给 AI agent 的说明）安装它，并注册成 MCP 服务器。”*
->
-> **写给 AI agent 的说明（仅 Windows；macOS 不需要登录）：** 权重需要同意许可，必须用用户本人的 Hugging Face 账号登录。
-> - 下载权重前先用 `hf auth whoami` 检查登录状态（安装脚本运行过一次后用 `.venv\Scripts\hf.exe auth whoami`）。`install.ps1` 也会检查，未登录时会打印 `ACTION NEEDED` 并停止。
-> - 如果未登录，或下载因 401/403 失败（没同意许可，或用别的账号同意的），请停下来，把安装脚本打印的步骤转告用户：注册免费账号、在每个模型页面同意许可、在用户自己的终端里运行 `hf auth login`。等用户说完成后，再重新运行安装脚本。
-> - 不要让用户把 token 贴到聊天里，也不要用 `-SkipWeights` 绕过去：之后生成时会因为同样的错误失败。
-
 然后直接提要求就行：
 
 - “做一段 60 秒、85 BPM 的咖啡馆 lo-fi BGM loop，给我 3 个候选。”
@@ -202,10 +287,10 @@ macOS 上下载不需要登录，用 `hf auth login` 登录后 Hugging Face 的�
 </p>
 
 ```bash
-.venv/bin/audio-studio-mcp --web 8765
+uvx --python 3.11 audio-studio-mcp --web 8765
 ```
 
-浏览器会打开 http://127.0.0.1:8765/。加 `--no-browser` 可以只启动不打开浏览器，加 `--preload` 会在启动时加载模型。按 Ctrl+C 停止。Windows 上用 `.venv\Scripts\audio-studio-mcp.exe --web 8765` 启动。
+浏览器会打开 http://127.0.0.1:8765/。加 `--no-browser` 可以只启动不打开浏览器，加 `--preload` 会在启动时加载模型。按 Ctrl+C 停止。Windows 上在 `3.11` 后面加 `--torch-backend cu126`。从源码安装时用 `.venv/bin/audio-studio-mcp --web 8765`（Windows：`.venv\Scripts\audio-studio-mcp.exe --web 8765`）启动。
 
 同一个端口的 `/mcp` 也提供 MCP 服务，所以网页和 MCP 客户端可以共用一个进程和已加载的模型。注册一次就能同时使用两者，网页和 agent 的请求在同一个队列里依次处理。
 
@@ -213,7 +298,7 @@ macOS 上下载不需要登录，用 `hf auth login` 登录后 Hugging Face 的�
 claude mcp add --scope user --transport http audio-studio http://127.0.0.1:8765/mcp
 ```
 
-- 文件写入输出目录（`outputs/`，或 `AUDIO_STUDIO_OUTPUT_DIR`）。作品库显示的就是这个目录，编辑的也是其中的文件。
+- 文件写入输出目录（`~/AudioStudio`，从源码安装时是 `outputs/`，或 `AUDIO_STUDIO_OUTPUT_DIR`）。作品库显示的就是这个目录，编辑的也是其中的文件。
 - 界面支持英文、日文和中文，默认跟随浏览器语言，也可以在设置里切换。
 
 > [!WARNING]
@@ -226,12 +311,13 @@ claude mcp add --scope user --transport http audio-studio http://127.0.0.1:8765/
 
 | 环境变量 | 默认值 | 说明 |
 |---|---|---|
-| `AUDIO_STUDIO_OUTPUT_DIR` | `<repo>/outputs` | 音频输出目录 |
+| `AUDIO_STUDIO_OUTPUT_DIR` | `~/AudioStudio`（从源码安装：`<repo>/outputs`） | 音频输出目录 |
 | `AUDIO_STUDIO_IDLE_UNLOAD_MIN` | `10` | 闲置多少分钟后释放模型（`0` = 不释放） |
 | `AUDIO_STUDIO_SA3_MODEL` | `medium` | `medium`（质量最好，最长 380 秒）、`sm-music` 或 `sm-sfx`（小而快，最长 120 秒） |
 | `AUDIO_STUDIO_MLX_CACHE_GB` | `1` | macOS：MLX 缓冲区缓存上限。不设的话，生成长曲子后可能多占约 6 GB |
 | `AUDIO_STUDIO_DEVICE` | 有 CUDA 时为 `cuda` | Windows/Linux：PyTorch 设备，例如 `cuda`、`cuda:1` 或 `cpu` |
-| `AUDIO_STUDIO_SA3_DIR` | `<repo>/vendor/stable-audio-3` | 使用别处的 stable-audio-3 checkout |
+| `AUDIO_STUDIO_SA3_DIR` | 由 setup 下载（从源码安装：`<repo>/vendor/stable-audio-3`） | 使用别处的 stable-audio-3 checkout |
+| `AUDIO_STUDIO_HOME` | macOS `~/Library/Application Support/audio-studio-mcp`，Windows `%LOCALAPPDATA%\\audio-studio-mcp` | setup 存放 Stable Audio 3 运行时（约 1 MB）的位置。权重在 Hugging Face 缓存里 |
 | `AUDIO_STUDIO_BACKEND` | `auto` | `auto`、`sa3-mlx`（Apple Silicon）或 `sa3-torch`（PyTorch，NVIDIA） |
 | `AUDIO_STUDIO_FFMPEG` | `PATH` 里的 `ffmpeg` | ffmpeg 路径 |
 
@@ -244,11 +330,11 @@ claude mcp add --scope user --transport http audio-studio http://127.0.0.1:8765/
 默认情况下，每个客户端会话都会启动自己的服务器进程，第一次调用时加载模型，闲置后释放。想让所有会话共用一个常驻的进程，可以作为本机 HTTP 服务运行，只监听 `127.0.0.1`：
 
 ```bash
-.venv/bin/audio-studio-mcp --http 8765 --preload
+uvx --python 3.11 audio-studio-mcp --http 8765 --preload
 claude mcp add --scope user --transport http audio-studio http://127.0.0.1:8765/mcp
 ```
 
-Windows 上用 `.venv\Scripts\audio-studio-mcp.exe --http 8765 --preload` 启动。
+Windows 上在 `3.11` 后面加 `--torch-backend cu126`。从源码安装时，用同样的参数启动 `.venv/bin/audio-studio-mcp`（Windows：`.venv\Scripts\audio-studio-mcp.exe`）。
 
 `--web 8765` 的效果相同，并在同一端口提供 [Web UI](#-web-ui)。
 </details>
@@ -299,9 +385,9 @@ Windows + RTX 3060 12 GB，medium 模型：
 <details>
 <summary><b>能在 Windows、Linux 或 Intel Mac 上用吗？</b></summary>
 
-**Windows：** 可以，需要 NVIDIA 显卡，见[快速开始](#windowsnvidia-显卡)。
+**Windows：** 可以，需要 NVIDIA 显卡，见[快速开始](#-快速开始)。
 
-**Linux：** 有 NVIDIA 显卡时用的是同一个 PyTorch 后端，理论上能用，但没有测试过，也还没有安装脚本。可以把上游运行时 clone 到 `vendor/stable-audio-3`（commit 用 `install.sh` 里固定的那个），再运行 `uv sync --extra cuda` 和 `hf auth login`。
+**Linux：** 有 NVIDIA 显卡时用的是同一个 PyTorch 后端，理论上能用，但没有测试过。请用 `cuda` extra：`uvx --python 3.11 --torch-backend cu126 --from "audio-studio-mcp[cuda]" audio-studio-mcp setup`，Hugging Face 登录和 Windows 一样。
 
 **Intel Mac 和 AMD 显卡**不支持。
 </details>
@@ -309,7 +395,7 @@ Windows + RTX 3060 12 GB，medium 模型：
 <details>
 <summary><b>明明是 Apple Silicon Mac，却提示「Intel Macs are not supported」？</b></summary>
 
-环境是用 Rosetta 下运行的 x86_64 版 Python（例如 `/usr/local` 里旧的 Intel 版 Homebrew）建的，所以没有装上 MLX。现在的 `install.sh` 会让 uv 使用 arm64 的 Python，并重建这样的 `.venv`，重新运行 `./install.sh` 即可。如果你自己设置了 `UV_PYTHON`，请改成 arm64 版：`UV_PYTHON=cpython-3.11-macos-aarch64 ./install.sh`。
+环境是用 Rosetta 下运行的 x86_64 版 Python（例如 `/usr/local` 里旧的 Intel 版 Homebrew）建的，所以没有装上 MLX。用 uvx 时，在 setup 和客户端配置里都指定 uv 自带的 arm64 版 Python：`uvx --python cpython-3.11-macos-aarch64 audio-studio-mcp`。用安装脚本时，现在的 `install.sh` 会让 uv 使用 arm64 的 Python，并重建这样的 `.venv`，重新运行 `./install.sh` 即可。如果你自己设置了 `UV_PYTHON`，请改成 arm64 版：`UV_PYTHON=cpython-3.11-macos-aarch64 ./install.sh`。
 </details>
 
 <details>
@@ -341,6 +427,7 @@ Windows + RTX 3060 12 GB，medium 模型：
 - [x] Apple Silicon 后端（Stable Audio 3、MLX）
 - [x] 面向 NVIDIA 显卡的 Windows 后端（Stable Audio 3、PyTorch）
 - [x] 本地 Web UI（`--web`）
+- [x] 用一条 `uvx` 命令安装
 - [ ] LoRA 支持（上游运行时已经支持）
 
 欢迎提 Issue 和 Pull Request。
@@ -359,6 +446,8 @@ Windows + RTX 3060 12 GB，medium 模型：
 ```bash
 uv run pytest                              # 离线测试，不需要模型
 .venv/bin/python scripts/smoke_test.py     # 用真实模型的端到端测试（M1 上约 30 秒）
+uv build && .venv/bin/python scripts/smoke_test.py --server "uvx --python 3.11 --from $(ls dist/*.whl) audio-studio-mcp"
+                                           # 用构建好的 wheel 做同样的测试（和 uvx 的运行方式一样）
 ```
 
 Windows 上：`.venv\Scripts\python scripts\smoke_test.py`（RTX 3060 上约 45 秒，含模型加载）。
@@ -366,6 +455,9 @@ Windows 上：`.venv\Scripts\python scripts\smoke_test.py`（RTX 3060 上约 45 
 ```
 src/audio_studio_mcp/
   server.py            MCP 工具（与后端无关）
+  runtime.py           运行时和输出的位置；uvx 安装时负责取得运行时
+  firstrun.py          `audio-studio-mcp setup`
+  weights.py           模型权重：检查是否已下载、下载
   prompts.py           prompt 拼接，以及发给客户端的说明
   post.py              后期处理和导出
   backends/base.py     后端接口
@@ -380,7 +472,7 @@ src/audio_studio_mcp/
 ## 📄 许可证与致谢
 
 - **本项目：** [MIT](LICENSE)。
-- **Stable Audio 3 运行时：** 安装时下载到 `vendor/`，© Stability AI，MIT 协议。
+- **Stable Audio 3 运行时：** 由 `setup`（安装脚本则是 `vendor/`）按固定的 commit 下载，© Stability AI，MIT 协议。
 - **模型权重：** 适用 [Stability AI Community License](https://huggingface.co/stabilityai/stable-audio-3-optimized)。权重从 Hugging Face 下载（macOS：`stable-audio-3-optimized`；Windows：`stable-audio-3-medium` 及小模型），本项目不分发。
 - **品牌：** KanaWorks_AI 名称、logo 和 Kana 形象版权归东京AI映像合同会社所有，**不在** MIT 授权范围内。详见 [docs/brand](docs/brand/README.md)。
 - **字体：** Web UI 附带 IBM Plex Sans 字体，© IBM Corp.，采用 SIL Open Font License 1.1（[`OFL.txt`](src/audio_studio_mcp/static/fonts/OFL.txt)）。Web UI 中的 Kana 图片（[`static/brand`](src/audio_studio_mcp/static/brand/README.md)）适用上面“品牌”一条。

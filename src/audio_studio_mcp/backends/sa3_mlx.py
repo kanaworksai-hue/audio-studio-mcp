@@ -1,13 +1,14 @@
 """Stable Audio 3 on Apple Silicon via the official MLX runtime.
 
-Wraps upstream optimized/mlx (Stability-AI/stable-audio-3, cloned by
-install.sh into vendor/). Generation goes through sa3_gradio.run_generation,
-the official cached-model path, so results match upstream ./sa3 and
-./sa3-gradio bit-for-bit for the same seed.
+Wraps upstream optimized/mlx (Stability-AI/stable-audio-3: cloned by
+install.sh into vendor/, or downloaded by runtime.py for package installs).
+Generation goes through sa3_gradio.run_generation, the official cached-model
+path, so results match upstream ./sa3 and ./sa3-gradio bit-for-bit for the
+same seed.
 
-Upstream internals used here (pinned commit, see install.sh): run_generation,
-load_dit, get_t5/get_conditioner/get_decoder, _reconcile_lora, the module
-caches and _MLX_EXECUTOR.
+Upstream internals used here (pinned commit, see runtime.UPSTREAM_COMMIT):
+run_generation, load_dit, get_t5/get_conditioner/get_decoder, _reconcile_lora,
+the module caches and _MLX_EXECUTOR.
 """
 from __future__ import annotations
 
@@ -18,6 +19,7 @@ import time
 from concurrent.futures import Executor
 from pathlib import Path
 
+from .. import runtime
 from .base import Backend, GenerationRequest, GenerationResult
 
 MODELS = {  # DiT → (decoder, max seconds)
@@ -27,19 +29,17 @@ MODELS = {  # DiT → (decoder, max seconds)
 }
 
 
-def default_upstream_dir() -> Path:
-    # <repo>/src/audio_studio_mcp/backends/sa3_mlx.py → <repo>/vendor/stable-audio-3
-    return Path(__file__).resolve().parents[3] / "vendor" / "stable-audio-3"
-
-
 class SA3MLXBackend(Backend):
     name = "sa3-mlx"
 
     def __init__(self, upstream_dir: Path | None = None, model: str | None = None,
                  cache_limit_gb: float | None = None) -> None:
         super().__init__()
-        upstream_dir = Path(upstream_dir or os.environ.get("AUDIO_STUDIO_SA3_DIR")
-                            or default_upstream_dir()).expanduser().resolve()
+        # Default: vendor/ of a checkout, AUDIO_STUDIO_SA3_DIR, or (package
+        # installs) the runtime downloaded into the user's data folder.
+        upstream_dir = (Path(upstream_dir).expanduser().resolve() if upstream_dir
+                        else runtime.ensure_runtime())
+        self.upstream_dir = upstream_dir
         self.mlx_dir = upstream_dir / "optimized" / "mlx"
         if not (self.mlx_dir / "scripts" / "sa3_gradio.py").is_file():
             raise RuntimeError(
@@ -58,6 +58,12 @@ class SA3MLXBackend(Backend):
         # stdout pointed at stderr; every model call is wrapped the same way.
         os.chdir(self.mlx_dir)
         sys.path.insert(0, str(self.mlx_dir / "scripts"))
+        try:
+            import mlx.core  # noqa: F401
+        except ImportError as e:
+            raise RuntimeError(
+                f"MLX is not installed in this Python environment ({sys.executable}). Use a native "
+                f"arm64 Python on Apple Silicon, e.g. {runtime.UVX_MAC_ARM64}") from e
         with contextlib.redirect_stdout(sys.stderr):
             import mlx.core as mx
             import sa3_gradio as g
@@ -82,6 +88,10 @@ class SA3MLXBackend(Backend):
     @property
     def executor(self) -> Executor:
         return self._g._MLX_EXECUTOR
+
+    def missing_weights(self) -> list[str]:
+        from .. import weights
+        return weights.missing(self.name, self.dit, self.upstream_dir)
 
     def _get_dit_any_length(self, dit_name, T_lat, dtype, lora_specs=None, num_steps=8):
         g = self._g

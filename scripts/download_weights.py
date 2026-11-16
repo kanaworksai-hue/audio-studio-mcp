@@ -1,4 +1,4 @@
-"""Download Stable Audio 3 weights from Hugging Face.
+"""Download Stable Audio 3 weights from Hugging Face (used by install.sh / install.ps1).
 
 Usage: <venv python> scripts/download_weights.py [medium|sm-music|sm-sfx|all ...]
 
@@ -9,131 +9,35 @@ NVIDIA / PyTorch (sa3-torch): the official checkpoints from
 stabilityai/stable-audio-3-{medium,small-music,small-sfx}. These repos are gated:
 accept the license on each model page, then log in once with `hf auth login`.
 
-Files go to the Hugging Face cache (HF_HOME / HF_HUB_CACHE).
+Files go to the Hugging Face cache (HF_HOME / HF_HUB_CACHE). The logic lives in
+the package (audio_studio_mcp.weights), shared with `audio-studio-mcp setup`.
 """
 from __future__ import annotations
 
-import os
 import sys
 from pathlib import Path
 
 REPO_DIR = Path(__file__).resolve().parents[1]
-UPSTREAM_DIR = Path(os.environ.get("AUDIO_STUDIO_SA3_DIR") or REPO_DIR / "vendor" / "stable-audio-3"
-                    ).expanduser().resolve()
-MLX_DIR = UPSTREAM_DIR / "optimized" / "mlx"
-
 sys.path.insert(0, str(REPO_DIR / "src"))
+from audio_studio_mcp import weights  # noqa: E402
 from audio_studio_mcp.backends import resolve_backend_name  # noqa: E402
-
-MODELS = ("medium", "sm-music", "sm-sfx")
-# sa3-torch: name → (Hugging Face repo, approximate download size)
-TORCH_REPOS = {
-    "medium": ("stabilityai/stable-audio-3-medium", "~10.4 GB"),
-    "sm-music": ("stabilityai/stable-audio-3-small-music", "~3.5 GB"),
-    "sm-sfx": ("stabilityai/stable-audio-3-small-sfx", "~3.5 GB"),
-}
-TORCH_FILES = ["model_config.json", "model.safetensors", "t5gemma-b-b-ul2/*"]
-
-
-def download_mlx(names: list[str]) -> int:
-    if not (MLX_DIR / "scripts" / "weights.py").is_file():
-        print(f"error: upstream runtime not found at {MLX_DIR}; run ./install.sh first", file=sys.stderr)
-        return 1
-    sys.path.insert(0, str(MLX_DIR / "scripts"))
-    from weights import BUNDLE_SIZES, DIT_BUNDLES, SHARED, ensure_local
-
-    seen: set[str] = set()
-    for name in names:
-        print(f"[{name}] {BUNDLE_SIZES[name]}")
-        for rel, _ in DIT_BUNDLES[name] + SHARED:
-            if rel not in seen:
-                seen.add(rel)
-                path = ensure_local(rel)
-                print(f"  ✓ {Path(rel).name}" + ("" if path.exists() else "  (missing!)"))
-    return 0
-
-
-def hf_account() -> str | None:
-    """The Hugging Face user this machine is logged in as (like `hf auth whoami`)."""
-    from huggingface_hub import whoami
-    try:
-        return whoami()["name"]
-    except Exception:
-        return None
-
-
-def gated_help(repos: list[str], account: str | None) -> str:
-    """Why a gated download failed and what the user has to do, worded so an AI
-    agent running the installer can pass it on as is."""
-    hf = Path(sys.executable).with_name("hf.exe" if os.name == "nt" else "hf")
-    pages = "".join(f"\n       https://huggingface.co/{r}" for r in repos)
-    if account:
-        head = (f"error: the Hugging Face account '{account}' (hf auth whoami) has no access to\n"
-                "these gated model repos yet. Either the license was not accepted on them, or it\n"
-                "was accepted with a different account.\n\n"
-                f"  1. Log in on huggingface.co as '{account}', open each page and accept the\n"
-                f"     Stability AI Community License (fill in the short form and submit):{pages}\n"
-                "     To use another account instead, log in with it in your own terminal:\n"
-                f"       \"{hf}\" auth login\n")
-    else:
-        head = ("error: not logged in to Hugging Face, so these gated model repos cannot be\n"
-                "downloaded.\n\n"
-                "  1. Create a free account (https://huggingface.co/join), log in on huggingface.co,\n"
-                "     open each page and accept the Stability AI Community License:"
-                f"{pages}\n"
-                "     Then create a Read token (https://huggingface.co/settings/tokens) and, in your\n"
-                "     own terminal (not in a chat), run this and paste the token:\n"
-                f"       \"{hf}\" auth login\n")
-    return (head +
-            "  2. Run the installer again; finished downloads are kept.\n\n"
-            "AI agents: pass these steps on to the user and wait until they are done. Do not ask\n"
-            "for the token in the chat, and do not skip the weights to get past this.")
-
-
-def download_torch(names: list[str]) -> int:
-    from huggingface_hub import auth_check, snapshot_download
-    from huggingface_hub.errors import GatedRepoError
-
-    # Check every repo first, so the user can accept all the licenses in one go.
-    gated = []
-    for name in names:
-        repo = TORCH_REPOS[name][0]
-        try:
-            auth_check(repo)
-        except GatedRepoError:
-            gated.append(repo)
-        except Exception:
-            pass  # offline etc.: let snapshot_download decide
-    if gated:
-        print(gated_help(gated, hf_account()), file=sys.stderr)
-        return 2
-
-    for name in names:
-        repo, size = TORCH_REPOS[name]
-        print(f"[{name}] {repo} ({size})")
-        try:
-            path = snapshot_download(repo, allow_patterns=TORCH_FILES)
-        except GatedRepoError:
-            print(gated_help([repo], hf_account()), file=sys.stderr)
-            return 2
-        print(f"  ✓ {path}")
-    return 0
+from audio_studio_mcp.runtime import MLX_MARKER, upstream_dir  # noqa: E402
 
 
 def main(argv: list[str]) -> int:
     # Windows consoles and pipes may use a legacy code page; never crash on ✓ / →.
     sys.stdout.reconfigure(errors="replace")
-    names = argv or ["medium"]
-    if "all" in names:
-        names = list(MODELS)
-    unknown = [n for n in names if n not in MODELS]
-    if unknown:
-        print(f"error: unknown model(s) {', '.join(unknown)}; choose from {', '.join(MODELS)} or all",
-              file=sys.stderr)
+    try:
+        names = weights.expand(argv)
+    except ValueError as e:
+        print(f"error: {e}", file=sys.stderr)
         return 1
-    if resolve_backend_name() == "sa3-mlx":
-        return download_mlx(names)
-    return download_torch(names)
+    backend = resolve_backend_name()
+    upstream = upstream_dir()
+    if backend == "sa3-mlx" and not (upstream / MLX_MARKER).is_file():
+        print(f"error: upstream runtime not found at {upstream}; run ./install.sh first", file=sys.stderr)
+        return 1
+    return weights.download(backend, names, upstream)
 
 
 if __name__ == "__main__":

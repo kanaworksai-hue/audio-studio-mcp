@@ -28,5 +28,6 @@ jobs:
             done
           else sudo apt-get update && sudo apt-get install -y ffmpeg; fi
           ffmpeg -version > /dev/null && echo "ffmpeg found: $(command -v ffmpeg)"
-      - run: uv sync
+      # The offline tests stub PyTorch: skip the ~2.5 GB CUDA build Windows would get.
+      - run: uv sync --no-install-package torch --no-install-package torchaudio
       - run: uv run pytest -v

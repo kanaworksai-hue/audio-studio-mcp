@@ -40,6 +40,11 @@ from . import __version__, chat_player, post, runtime
 from .backends import Backend, GenerationRequest, create_backend, resolve_backend_name
 from .prompts import DEFAULT_SECONDS, INSTRUCTIONS, prepare_prompt, strip_prefix
 
+# before anything imports huggingface_hub (it reads the cache location once)
+for _name in runtime.adopt_saved_hf_cache():
+    print(f"[audio-studio] {_name}={os.environ[_name]} (from the Windows environment; "
+          f"the MCP client did not pass it)", file=sys.stderr)
+
 # <repo>/outputs in a source checkout, ~/AudioStudio for package installs (uvx)
 OUTPUT_DIR = runtime.output_dir()
 IDLE_UNLOAD_MIN = float(os.environ.get("AUDIO_STUDIO_IDLE_UNLOAD_MIN", "10"))

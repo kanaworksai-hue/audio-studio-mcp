@@ -429,3 +429,44 @@ def test_download_mlx_replaces_dangling_links(tmp_path, monkeypatch):
     fake_w.ensure_local = lambda rel: up / "nowhere" / rel  # still missing → failure, not "✓"
     link.unlink()
     assert weights.download_mlx(["medium"], up) == 1
+
+
+# ── Hugging Face cache moved with a Windows environment variable ─────────────
+def test_saved_hf_cache_adopted_when_the_client_passes_none():
+    """Claude Desktop starts servers with a few system variables only: a cache the
+    user moved (HUGGINGFACE_HUB_CACHE=D:\…) is taken from the saved environment."""
+    env = {"PATH": "x"}
+    saved = {"HUGGINGFACE_HUB_CACHE": r"D:\hf\hub"}
+    assert runtime.adopt_saved_hf_cache(env, saved.get) == ["HUGGINGFACE_HUB_CACHE"]
+    assert env["HUGGINGFACE_HUB_CACHE"] == r"D:\hf\hub" and "HF_HOME" not in env
+
+
+def test_cache_the_client_passes_is_kept():
+    """A cache set in the client config wins; nothing saved is mixed in (HF_HUB_CACHE
+    from the registry would override the client's HF_HOME)."""
+    env = {"HF_HOME": r"E:\client"}
+    saved = {"HF_HUB_CACHE": r"D:\hf\hub", "HUGGINGFACE_HUB_CACHE": r"D:\hf\hub"}
+    assert runtime.adopt_saved_hf_cache(env, saved.get) == []
+    assert env == {"HF_HOME": r"E:\client"}
+
+
+def test_unreadable_saved_environment_is_ignored():
+    def broken(name):
+        raise OSError("no registry")
+    env = {}
+    assert runtime.adopt_saved_hf_cache(env, broken) == [] and env == {}
+
+
+def test_saved_environment_read_on_windows_only():
+    env = {}
+    adopted = runtime.adopt_saved_hf_cache(env)  # the real registry (or nothing off Windows)
+    if runtime.os.name != "nt":
+        assert adopted == [] and env == {}
+    assert set(adopted) <= set(runtime.HF_CACHE_VARS) and all(env[k] for k in adopted)
+
+
+def test_setup_hint_names_the_legacy_cache_variable(monkeypatch):
+    for var in ("AUDIO_STUDIO_HOME", "HF_HOME", "HF_HUB_CACHE"):
+        monkeypatch.delenv(var, raising=False)
+    monkeypatch.setenv("HUGGINGFACE_HUB_CACHE", r"D:\hf\hub")
+    assert runtime.custom_folders() == r"HUGGINGFACE_HUB_CACHE=D:\hf\hub"

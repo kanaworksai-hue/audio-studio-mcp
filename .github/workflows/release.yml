@@ -60,6 +60,8 @@ jobs:
           name: dist
           path: dist/
       - uses: pypa/gh-action-pypi-publish@release/v1
+        with:
+          skip-existing: true  # a re-run after a failed registry step must not fail here
 
   mcp-registry:
     needs: pypi

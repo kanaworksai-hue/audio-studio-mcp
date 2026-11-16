@@ -93,8 +93,12 @@ def main() -> None:
     ap.add_argument("--server", help="command that starts the server (default: this Python's "
                                      "audio_studio_mcp module)")
     args = ap.parse_args()
-    server = (shlex.split(args.server, posix=os.name != "nt") if args.server
-              else [sys.executable, "-m", "audio_studio_mcp"])
+    if args.server:
+        # Windows: non-POSIX splitting keeps backslashes but also the quotes; drop them
+        server = [part[1:-1] if len(part) > 1 and part[0] == part[-1] == '"' else part
+                  for part in shlex.split(args.server, posix=os.name != "nt")]
+    else:
+        server = [sys.executable, "-m", "audio_studio_mcp"]
     if args.out:
         args.out.mkdir(parents=True, exist_ok=True)
         asyncio.run(run(args.out.resolve(), server))

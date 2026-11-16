@@ -6,7 +6,7 @@
 #   2. clones the official Stable Audio 3 runtime into vendor/ at a pinned commit
 #   3. creates .venv/ with a native arm64 Python and installs dependencies
 #      (uv sync --extra mlx), then checks that mlx imports
-#   4. downloads model weights from Hugging Face (medium: ~5.9 GB)
+#   4. downloads model weights from Hugging Face (medium: ~6.9 GB)
 #   5. prints the command that registers the server with Claude Code
 #
 # Usage:
@@ -153,7 +153,7 @@ ok ".venv ready (arm64, mlx)"
 # ── weights ──────────────────────────────────────────────────────────────────
 if [[ "$SKIP_WEIGHTS" -eq 1 ]]; then
     step "Skipping weights"
-    warn "the first generation will download them (medium: ~5.9 GB) and can take a long time."
+    warn "the first generation will download them (medium: ~6.9 GB) and can take a long time."
 else
     step "Downloading model weights: $MODEL (from huggingface.co/stabilityai/stable-audio-3-optimized)"
     printf '  The weights are licensed under the Stability AI Community License.\n'

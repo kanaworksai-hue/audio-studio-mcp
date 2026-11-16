@@ -24,6 +24,7 @@ import shutil
 import sys
 import tarfile
 import tempfile
+import time
 from pathlib import Path, PurePosixPath
 
 UPSTREAM_REPO = "Stability-AI/stable-audio-3"
@@ -37,9 +38,9 @@ UPSTREAM_KEEP = ("LICENSE", "README.md", "optimized/mlx/", "stable_audio_3/")
 MLX_MARKER = "optimized/mlx/scripts/sa3_gradio.py"
 TORCH_MARKER = "stable_audio_3/model.py"
 
-# The command line users run (README, server.json). --python: uvx ignores the
-# upper bound of requires-python and may pick a Python that torch 2.7.1 has no
-# wheels for. --torch-backend: PyPI only has CPU builds of torch for Windows.
+# The command line users run (README, server.json). --python: uvx may pick the
+# newest Python, which torch 2.7.1 (Windows) has no wheels for. --torch-backend:
+# PyPI only has CPU builds of torch for Windows.
 UVX_MAC = "uvx --python 3.11 audio-studio-mcp"
 UVX_MAC_ARM64 = "uvx --python cpython-3.11-macos-aarch64 audio-studio-mcp"
 UVX_NVIDIA = "uvx --python 3.11 --torch-backend cu126 audio-studio-mcp"
@@ -64,7 +65,8 @@ def data_home() -> Path:
     """Per-user folder for the downloaded runtime (not the weights: those stay in
     the Hugging Face cache, shared with other tools)."""
     if os.environ.get("AUDIO_STUDIO_HOME"):
-        return Path(os.environ["AUDIO_STUDIO_HOME"]).expanduser()
+        # absolute: the MLX backend chdirs, and setup and the client may start elsewhere
+        return Path(os.environ["AUDIO_STUDIO_HOME"]).expanduser().resolve()
     if sys.platform == "darwin":
         return Path.home() / "Library" / "Application Support" / "audio-studio-mcp"
     if os.name == "nt":
@@ -120,8 +122,16 @@ def run_command() -> str:
     return UVX_LINUX
 
 
-def setup_command() -> str:
-    return f"{run_command()} setup"
+def setup_command(model: str | None = None) -> str:
+    extra = f" --model {model}" if model and model != "medium" else ""
+    return f"{run_command()} setup{extra}"
+
+
+def custom_folders() -> str:
+    """Folders this process was told about that a plain terminal may not know
+    (MCP clients pass env vars); setup must use the same ones."""
+    return ", ".join(f"{k}={os.environ[k]}" for k in ("AUDIO_STUDIO_HOME", "HF_HOME", "HF_HUB_CACHE")
+                     if os.environ.get(k))
 
 
 def runtime_ready(path: Path | None = None) -> bool:
@@ -132,7 +142,8 @@ def runtime_ready(path: Path | None = None) -> bool:
 def _keep(name: str) -> str | None:
     """Archive member → path inside the runtime folder, or None to skip it."""
     parts = PurePosixPath(name).parts
-    if len(parts) < 2 or any(p in ("..", "") for p in parts) or name.startswith("/"):
+    if (len(parts) < 2 or any(p in ("..", "") for p in parts) or name.startswith("/")
+            or "\\" in name or ":" in name):  # no Windows separators or drive letters
         return None
     rel = "/".join(parts[1:])  # drop the "stable-audio-3-<sha>/" prefix
     if any(rel == k or (k.endswith("/") and rel.startswith(k)) for k in UPSTREAM_KEEP):
@@ -175,10 +186,15 @@ def fetch_upstream(dest: Path | None = None, log=None) -> Path:
                 "Check the internet connection (and any proxy: HTTPS_PROXY) and try again.") from e
 
         staging = Path(tmp) / "runtime"
-        with tarfile.open(archive, "r:gz") as tf:
+        try:
+            tf = tarfile.open(archive, "r:gz")
+        except tarfile.TarError as e:
+            raise SetupRequired(f"the download from {UPSTREAM_ARCHIVE} is not a valid archive "
+                                f"({e}); run setup again.") from e
+        with tf:
             # git archive records the commit; make sure we got the one we pinned.
             got = (tf.pax_headers or {}).get("comment", "")
-            if got and got != UPSTREAM_COMMIT:
+            if got != UPSTREAM_COMMIT:
                 raise SetupRequired(f"the downloaded runtime is commit {got[:12]}, "
                                     f"expected {UPSTREAM_COMMIT[:12]}")
             for member in tf.getmembers():
@@ -186,6 +202,8 @@ def fetch_upstream(dest: Path | None = None, log=None) -> Path:
                 if rel is None or not (member.isfile() or member.isdir()):
                     continue  # no links or devices; nothing outside the kept parts
                 target = staging / rel
+                if not target.resolve().is_relative_to(staging.resolve()):
+                    continue
                 if member.isdir():
                     target.mkdir(parents=True, exist_ok=True)
                     continue
@@ -196,11 +214,20 @@ def fetch_upstream(dest: Path | None = None, log=None) -> Path:
             f"{UPSTREAM_REPO}@{UPSTREAM_COMMIT}\n", encoding="utf-8")
         if not runtime_ready(staging):
             raise SetupRequired(f"the downloaded archive {UPSTREAM_ARCHIVE} has no Stable Audio 3 runtime")
-        try:
-            staging.rename(dest)
-        except OSError:
-            if not runtime_ready(dest):  # another process may have won the race
-                raise
+        if dest.exists() and not runtime_ready(dest):
+            # an incomplete folder (files deleted or quarantined): replace it
+            shutil.rmtree(dest, ignore_errors=True)
+        for attempt in range(5):
+            try:
+                staging.rename(dest)
+                break
+            except OSError as e:
+                if runtime_ready(dest):  # another process won the race
+                    break
+                if attempt == 4:  # e.g. antivirus still scanning the new files on Windows
+                    raise SetupRequired(f"could not move the runtime into {dest}: {e}. "
+                                        f"Delete {dest} and run setup again.") from e
+                time.sleep(1)
     return dest
 
 

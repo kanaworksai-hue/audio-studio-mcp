@@ -346,3 +346,86 @@ def test_server_json_matches_the_package():
     version = tomllib.loads((REPO / "pyproject.toml").read_text(encoding="utf-8"))["project"]["version"]
     from audio_studio_mcp import __version__
     assert meta["version"] == pkg["version"] == version == __version__
+
+
+# ── review fixes (v1.1.1) ────────────────────────────────────────────────────
+def test_relative_home_is_made_absolute(monkeypatch, tmp_path):
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setenv("AUDIO_STUDIO_HOME", "home")
+    assert runtime.data_home() == tmp_path.resolve() / "home"
+
+
+def test_fetch_ignores_windows_separators(package_install, fake_download):
+    evil = {**UPSTREAM_FILES, "stable_audio_3/..\\..\\evil.py": b"x", "stable_audio_3/C:x.py": b"x"}
+    fake_download["archive"] = make_archive(evil)
+    path = runtime.ensure_runtime(log=lambda m: None)
+    assert sorted(p.name for p in (path / "stable_audio_3").iterdir()) == ["model.py"]
+
+
+def test_fetch_requires_the_commit_record(package_install, fake_download):
+    fake_download["archive"] = make_archive(UPSTREAM_FILES, commit="")
+    with pytest.raises(runtime.SetupRequired, match="expected"):
+        runtime.ensure_runtime(log=lambda m: None)
+
+
+def test_fetch_replaces_an_incomplete_runtime(package_install, fake_download):
+    broken = runtime.upstream_dir()
+    (broken / "stable_audio_3").mkdir(parents=True)  # the MLX part went missing
+    path = runtime.ensure_runtime(log=lambda m: None)
+    assert path == broken and runtime.runtime_ready(path)
+
+
+def test_setup_command_names_the_model(package_install):
+    assert runtime.setup_command("sm-sfx").endswith("setup --model sm-sfx")
+    assert runtime.setup_command("medium").endswith("setup")
+
+
+@pytest.mark.anyio
+async def test_weights_message_names_model_and_folders(fake, package_install, monkeypatch):
+    fake.name, fake.dit = "sa3-mlx", "sm-sfx"
+    fake.missing_weights = lambda: ["x"]
+    monkeypatch.setenv("HF_HOME", str(package_install / "hf"))
+    with pytest.raises(Exception) as exc:
+        await server.generate_audio(prompt="x", duration_seconds=1)
+    assert "setup --model sm-sfx" in str(exc.value) and "HF_HOME=" in str(exc.value)
+
+
+@pytest.mark.anyio
+async def test_cached_weights_are_relinked_without_setup(fake, package_install, monkeypatch):
+    fake.name, fake.dit, fake.upstream_dir = "sa3-mlx", "medium", package_install
+    state = {"missing": ["x"]}
+    fake.missing_weights = lambda: list(state["missing"])
+    monkeypatch.setattr(weights, "in_hf_cache", lambda n, up: True)
+    monkeypatch.setattr(weights, "download_mlx", lambda names, up: state.update(missing=[]) or 0)
+    out = await server.generate_audio(prompt="x", duration_seconds=1)
+    assert len(out["candidates"]) == 1
+
+
+def test_download_mlx_replaces_dangling_links(tmp_path, monkeypatch):
+    import sys
+    import types
+    up = tmp_path / "sa3"
+    models = up / "optimized" / "mlx" / "models" / "mlx"
+    models.mkdir(parents=True)
+    link = models / "dit.npz"
+    try:
+        link.symlink_to(tmp_path / "cleared-cache-file")
+    except OSError:
+        pytest.skip("no symlink permission")
+    target = tmp_path / "fresh.npz"
+    target.write_bytes(b"w")
+
+    def ensure_local(rel):
+        p = up / "optimized" / "mlx" / rel
+        if not (p.exists() or p.is_symlink()):  # upstream returns early for any link
+            p.symlink_to(target)
+        return p
+    fake_w = types.SimpleNamespace(BUNDLE_SIZES={"medium": "x"}, SHARED=[],
+                                   DIT_BUNDLES={"medium": [("models/mlx/dit.npz", "MLX/dit.npz")]},
+                                   ensure_local=ensure_local)
+    monkeypatch.setattr(weights, "_mlx_manifest", lambda upstream: fake_w)
+    assert weights.download_mlx(["medium"], up) == 0
+    assert link.resolve() == target.resolve()
+    fake_w.ensure_local = lambda rel: up / "nowhere" / rel  # still missing → failure, not "✓"
+    link.unlink()
+    assert weights.download_mlx(["medium"], up) == 1

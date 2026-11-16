@@ -3,7 +3,7 @@
   "name": "io.github.kanaworksai-hue/audio-studio-mcp",
   "title": "Audio Studio",
   "description": "Local AI BGM and sound effects with Stable Audio 3 (Apple Silicon MLX, NVIDIA CUDA)",
-  "version": "1.1.0",
+  "version": "1.1.1",
   "repository": {
     "url": "https://github.com/kanaworksai-hue/audio-studio-mcp",
     "source": "github"
@@ -13,14 +13,14 @@
     {
       "registryType": "pypi",
       "identifier": "audio-studio-mcp",
-      "version": "1.1.0",
+      "version": "1.1.1",
       "runtimeHint": "uvx",
       "runtimeArguments": [
         {
           "type": "named",
           "name": "--python",
           "value": "3.11",
-          "description": "PyTorch 2.7.1 (Windows) has no wheels for the newest Python; uvx ignores the upper bound of requires-python"
+          "description": "uvx may pick the newest Python, which PyTorch 2.7.1 (Windows) has no wheels for yet"
         },
         {
           "type": "named",

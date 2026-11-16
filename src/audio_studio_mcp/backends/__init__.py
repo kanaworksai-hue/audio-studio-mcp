@@ -34,11 +34,14 @@ def resolve_backend_name(name: str | None = None) -> str:
         if platform.system() == "Darwin" and platform.machine() == "arm64":
             return "sa3-mlx"
         if platform.system() == "Darwin" and _running_under_rosetta():
+            from ..runtime import UVX_MAC_ARM64, source_checkout
+            fix = ("re-run ./install.sh (it picks one; unset UV_PYTHON if you set it to an x86_64 "
+                   "Python), or run: uv sync --extra mlx --python cpython-3.11-macos-aarch64"
+                   if source_checkout() is not None else
+                   f"start it with uvx's own arm64 Python, here and in your MCP client's config: {UVX_MAC_ARM64}")
             raise RuntimeError(
                 f"this Python ({sys.executable}) is an x86_64 build running under Rosetta on an "
-                "Apple Silicon Mac, so MLX is not available. Recreate the environment with an arm64 "
-                "Python: re-run ./install.sh (it picks one; unset UV_PYTHON if you set it to an x86_64 "
-                "Python), or run: uv sync --extra mlx --python cpython-3.11-macos-aarch64")
+                "Apple Silicon Mac, so MLX is not available. Use a native arm64 Python: " + fix)
         if platform.system() == "Darwin":
             raise RuntimeError("Intel Macs are not supported; Audio Studio MCP needs Apple Silicon "
                                "(sa3-mlx) or an NVIDIA GPU (sa3-torch).")

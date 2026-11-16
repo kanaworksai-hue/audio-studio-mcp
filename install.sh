@@ -19,7 +19,8 @@ set -euo pipefail
 
 REPO_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 UPSTREAM_URL="https://github.com/Stability-AI/stable-audio-3.git"
-# Tested upstream commit. The MLX backend uses upstream internals, so bump this
+# Tested upstream commit; keep in sync with src/audio_studio_mcp/runtime.py and
+# install.ps1. The MLX backend uses upstream internals, so bump this
 # only after running the smoke test against the new commit.
 UPSTREAM_COMMIT="77e0398c26f7d22d801ec1bb036307e8b231f741"
 # AUDIO_STUDIO_SA3_DIR points at your own stable-audio-3 checkout; it is used as is.

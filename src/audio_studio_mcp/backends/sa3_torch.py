@@ -1,8 +1,9 @@
 """Stable Audio 3 on NVIDIA GPUs (Windows / Linux) via the official PyTorch API.
 
-Wraps upstream stable_audio_3 (Stability-AI/stable-audio-3, cloned by
-install.ps1 / install.sh into vendor/): StableAudioModel.from_pretrained and
-StableAudioModel.generate, the documented Python API. Weights come from the
+Wraps upstream stable_audio_3 (Stability-AI/stable-audio-3: cloned by
+install.ps1 into vendor/, or downloaded by runtime.py for package installs):
+StableAudioModel.from_pretrained and StableAudioModel.generate, the documented
+Python API. Weights come from the
 Hugging Face repos stabilityai/stable-audio-3-{medium,small-music,small-sfx},
 which are gated: accept the license on the model page and log in once
 (`hf auth login`).
@@ -22,6 +23,7 @@ import time
 from concurrent.futures import Executor, ThreadPoolExecutor
 from pathlib import Path
 
+from .. import runtime
 from .base import Backend, GenerationRequest, GenerationResult
 
 MODELS = {  # AUDIO_STUDIO_SA3_MODEL → (upstream model name, autoencoder, max seconds)
@@ -31,19 +33,16 @@ MODELS = {  # AUDIO_STUDIO_SA3_MODEL → (upstream model name, autoencoder, max 
 }
 
 
-def default_upstream_dir() -> Path:
-    # <repo>/src/audio_studio_mcp/backends/sa3_torch.py → <repo>/vendor/stable-audio-3
-    return Path(__file__).resolve().parents[3] / "vendor" / "stable-audio-3"
-
-
 class SA3TorchBackend(Backend):
     name = "sa3-torch"
 
     def __init__(self, upstream_dir: Path | None = None, model: str | None = None,
                  device: str | None = None) -> None:
         super().__init__()
-        upstream_dir = Path(upstream_dir or os.environ.get("AUDIO_STUDIO_SA3_DIR")
-                            or default_upstream_dir()).expanduser().resolve()
+        # Default: vendor/ of a checkout, AUDIO_STUDIO_SA3_DIR, or (package
+        # installs) the runtime downloaded into the user's data folder.
+        upstream_dir = (Path(upstream_dir).expanduser().resolve() if upstream_dir
+                        else runtime.ensure_runtime())
         if not (upstream_dir / "stable_audio_3" / "model.py").is_file():
             raise RuntimeError(
                 f"Stable Audio 3 runtime not found at {upstream_dir}. Run the installer "
@@ -62,8 +61,18 @@ class SA3TorchBackend(Backend):
         # stdout pointed at stderr.
         if str(upstream_dir) not in sys.path:
             sys.path.insert(0, str(upstream_dir))
-        with contextlib.redirect_stdout(sys.stderr):
+        try:
             import torch
+        except ImportError as e:
+            raise RuntimeError(
+                f"PyTorch is not installed in this Python environment ({sys.executable}). On Linux "
+                f"install the cuda extra: {runtime.UVX_LINUX}") from e
+        # uvx without --torch-backend gets PyPI's CPU-only torch on Windows: say
+        # so instead of running ~50x slower on the CPU.
+        if (getattr(getattr(torch, "version", None), "cuda", "") is None and not device
+                and not os.environ.get("AUDIO_STUDIO_DEVICE") and runtime.nvidia_gpu_present()):
+            raise runtime.SetupRequired(runtime.cpu_torch_message(getattr(torch, "__version__", "?")))
+        with contextlib.redirect_stdout(sys.stderr):
             import stable_audio_3
             from stable_audio_3.models import transformer
         if transformer.flex_attention_compiled is not None and importlib.util.find_spec("triton") is None:
@@ -81,6 +90,10 @@ class SA3TorchBackend(Backend):
 
     def loaded(self) -> bool:
         return self._model is not None
+
+    def missing_weights(self) -> list[str]:
+        from .. import weights
+        return weights.missing(self.name, self.dit, Path())
 
     def _load(self) -> bool:
         """Load the model if needed; returns whether this call loaded it."""

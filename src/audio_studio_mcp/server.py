@@ -13,6 +13,7 @@ process forever is not an option on a 16 GB Mac).
 Run:  audio-studio-mcp              (stdio, what MCP clients launch)
       audio-studio-mcp --http 8765  (one shared streamable-HTTP server on 127.0.0.1)
       audio-studio-mcp --web 8765   (the same /mcp plus the web UI at http://127.0.0.1:8765/; see web.py)
+      audio-studio-mcp setup        (first run: download the runtime and weights; see firstrun.py)
 """
 from __future__ import annotations
 
@@ -34,12 +35,12 @@ from mcp.server.mcpserver import MCPServer
 from mcp.server.mcpserver.exceptions import ToolError
 from pydantic import AliasChoices, Field
 
-from . import post
-from .backends import Backend, GenerationRequest, create_backend
+from . import __version__, post, runtime
+from .backends import Backend, GenerationRequest, create_backend, resolve_backend_name
 from .prompts import DEFAULT_SECONDS, INSTRUCTIONS, prepare_prompt, strip_prefix
 
-REPO_DIR = Path(__file__).resolve().parents[2]
-OUTPUT_DIR = Path(os.environ.get("AUDIO_STUDIO_OUTPUT_DIR") or REPO_DIR / "outputs").expanduser().resolve()
+# <repo>/outputs in a source checkout, ~/AudioStudio for package installs (uvx)
+OUTPUT_DIR = runtime.output_dir()
 IDLE_UNLOAD_MIN = float(os.environ.get("AUDIO_STUDIO_IDLE_UNLOAD_MIN", "10"))
 # The MLX backend chdirs into its runtime; resolve relative inputs against the
 # directory the server was started from instead.
@@ -53,13 +54,41 @@ def get_backend() -> Backend:
     global _backend
     if _backend is None:
         _backend = create_backend()
+        _backend.start_idle_reaper(IDLE_UNLOAD_MIN)
     return _backend
 
 
 def set_backend(backend: Backend | None) -> None:
     """Swap the backend (tests)."""
-    global _backend
-    _backend = backend
+    global _backend, _weights_checked
+    _backend, _weights_checked = backend, False
+
+
+_weights_checked = False
+
+
+def weights_message(backend: Backend) -> str:
+    from . import weights
+    size = weights.download_size(backend.name, [backend.dit]) if backend.name.startswith("sa3-") else ""
+    return (f"Audio Studio is installed, but the Stable Audio 3 model weights ({getattr(backend, 'dit', '')}, "
+            f"{size}) are not downloaded yet. Run this once in a terminal; it shows the download size "
+            f"and progress (and, on Windows, the Hugging Face license steps):  {runtime.setup_command()}  "
+            "AI agents: you may run it yourself with -y added (it takes minutes); if it asks for a "
+            "Hugging Face login, pass its steps on to the user and never ask for the token in the chat.")
+
+
+def ready_backend() -> Backend:
+    """The backend, once its weights are downloaded. Package installs require
+    `audio-studio-mcp setup` first instead of silently downloading ~7 GB inside a
+    tool call that MCP clients may time out; a source checkout keeps upstream's
+    download-on-first-use."""
+    global _weights_checked
+    backend = get_backend()
+    if not _weights_checked:
+        if runtime.managed_runtime() and backend.missing_weights():
+            raise runtime.SetupRequired(weights_message(backend))
+        _weights_checked = True
+    return backend
 
 
 # ── helpers ──────────────────────────────────────────────────────────────────
@@ -202,7 +231,7 @@ def _tool(fn):
             return await fn(*args, **kwargs)
         except ToolError:
             raise
-        except ValueError as e:
+        except (ValueError, runtime.SetupRequired) as e:
             raise ToolError(str(e)) from e
         except Exception as e:
             traceback.print_exc(file=sys.stderr)
@@ -239,7 +268,7 @@ async def generate_audio(
     peak_ceiling_db: _Ceiling = -1.0,
 ) -> dict:
     """Generate BGM, instrument loops/stems or sound effects from text with Stable Audio 3 (runs locally). Returns one WAV path per candidate."""
-    backend = get_backend()
+    backend = ready_backend()
     sfx_fields = (sound_source, sound_action, sound_material, sound_space)
     text, seconds = prepare_prompt(prompt, audio_type, duration_seconds, bpm, sfx_fields)
     seconds = float(min(seconds or DEFAULT_SECONDS[audio_type], backend.max_seconds))
@@ -314,7 +343,7 @@ async def edit_audio(
         req.inpaint_audio, req.inpaint_range = str(src), (start, seconds)
         extra = {"region": [round(start, 2), seconds]}
 
-    backend = get_backend()
+    backend = ready_backend()
     req.seconds = seconds = float(min(seconds, backend.max_seconds))
     if req.inpaint_range is not None:
         start, end = req.inpaint_range
@@ -433,7 +462,15 @@ def _port(text: str) -> int:
 
 def main(argv: list[str] | None = None) -> None:
     global _preload_when_ready
-    ap = argparse.ArgumentParser(prog="audio-studio-mcp", description=__doc__.split("\n")[0])
+    argv = sys.argv[1:] if argv is None else list(argv)
+    if argv[:1] == ["setup"]:
+        from . import firstrun
+        sys.exit(firstrun.main(argv[1:]))
+
+    ap = argparse.ArgumentParser(
+        prog="audio-studio-mcp", description=__doc__.split("\n")[0],
+        epilog="First run: `audio-studio-mcp setup` downloads the Stable Audio 3 runtime and model "
+               "weights (see `audio-studio-mcp setup --help`).")
     mode = ap.add_mutually_exclusive_group()
     mode.add_argument("--http", type=int, metavar="PORT",
                       help="serve streamable HTTP on 127.0.0.1:PORT instead of stdio (local only)")
@@ -442,19 +479,37 @@ def main(argv: list[str] | None = None) -> None:
                            "port, sharing one loaded model (local only)")
     ap.add_argument("--no-browser", action="store_true", help="with --web: do not open a browser")
     ap.add_argument("--preload", action="store_true", help="load models at startup")
+    ap.add_argument("--version", action="version", version=f"%(prog)s {__version__}")
     args = ap.parse_args(argv)
+    stdio = not args.http and args.web is None
 
-    try:
-        backend = get_backend()
+    try:  # wrong platform or Python (e.g. x86_64 under Rosetta): nothing else can help
+        resolve_backend_name()
     except RuntimeError as e:
         print(f"audio-studio-mcp: {e}", file=sys.stderr)
         sys.exit(1)
-    backend.start_idle_reaper(IDLE_UNLOAD_MIN)
-    if args.preload:
-        if args.http or args.web is not None:
-            backend.preload()
+    if stdio and runtime.managed_runtime() and not runtime.runtime_ready():
+        # Not set up yet. Start anyway, so the client connects and every tool
+        # call can say what to do; downloading here could outlast the client's
+        # startup timeout.
+        print(f"audio-studio-mcp: not set up yet; run once in a terminal: {runtime.setup_command()}",
+              file=sys.stderr)
+    else:
+        try:
+            backend = ready_backend()
+        except runtime.SetupRequired as e:
+            print(f"audio-studio-mcp: {e}", file=sys.stderr)
+            if not stdio:
+                sys.exit(1)
+        except RuntimeError as e:
+            print(f"audio-studio-mcp: {e}", file=sys.stderr)
+            sys.exit(1)
         else:
-            _preload_when_ready = True
+            if args.preload:
+                if not stdio:
+                    backend.preload()
+                else:
+                    _preload_when_ready = True
 
     if args.web is not None:
         from . import web
@@ -463,7 +518,6 @@ def main(argv: list[str] | None = None) -> None:
         server.run("streamable-http", host="127.0.0.1", port=args.http)
     else:
         server.run()
-
 
 if __name__ == "__main__":
     main()

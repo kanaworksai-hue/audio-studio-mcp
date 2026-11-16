@@ -35,7 +35,8 @@ if ($Help) { Get-Help $PSCommandPath -Detailed; exit 0 }
 
 $RepoDir = $PSScriptRoot
 $UpstreamUrl = "https://github.com/Stability-AI/stable-audio-3.git"
-# Tested upstream commit; keep in sync with install.sh. Bump only after running
+# Tested upstream commit; keep in sync with install.sh and
+# src/audio_studio_mcp/runtime.py. Bump only after running
 # the smoke test against the new commit.
 $UpstreamCommit = "77e0398c26f7d22d801ec1bb036307e8b231f741"
 # AUDIO_STUDIO_SA3_DIR points at your own stable-audio-3 checkout; it is used as is.

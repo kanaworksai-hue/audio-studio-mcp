@@ -72,6 +72,10 @@ class Backend(ABC):
     def _preload(self) -> None:
         """Blocking; load the models needed for text-to-audio."""
 
+    def missing_weights(self) -> list[str]:
+        """Model files that are not downloaded yet (empty: ready, or unknown)."""
+        return []
+
     # ── shared behaviour ─────────────────────────────────────────────────────
     async def generate(self, seeds: list[int], req: GenerationRequest) -> GenerationResult:
         def job():

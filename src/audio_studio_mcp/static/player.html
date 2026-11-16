@@ -1,0 +1,1075 @@
+<!doctype html>
+<!-- In-chat player (MCP Apps). Served by chat_player.py as ui://audio-studio/player.html
+     with wave.js and the export presets inlined: the sandboxed iframe can load nothing
+     else. Talks to the host over postMessage JSON-RPC (ext-apps 2026-01-26). -->
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Audio Studio</title>
+<style>
+/* The web UI's "framed sheet" tokens (app.css): neutral greys, Kana's hoodie
+   yellow as the one hue (current take's action, played waveform, playing row).
+   The host draws the frame and the background; the card itself is transparent. */
+:root {
+  --surface-2: #f3f4f5; --active: #e8e9eb; --rule: #e6e8eb;
+  --border-strong: #b9bdc3; --text: #131416; --muted: #5b5e63;
+  --ink-btn: #131416; --ink-btn-text: #ffffff;
+  --brand: #f5b301; --brand-hover: #ffc21f; --brand-edge: #d39a00; --brand-text: #131416; --focus: #131416;
+  --danger: #b42318; --danger-soft: #fff0ee; --ok: #1e7b4f;
+  --wave: #8b9097; --wave-played: #9a6c00; --track-bg: #f3f4f5;
+  --radius: 10px; --radius-sm: 6px;
+  color-scheme: light;
+}
+:root[data-theme="dark"] {
+  --surface-2: #2a2a2f; --active: #34343a; --rule: #34343a;
+  --border-strong: #55555c; --text: #f2f2f3; --muted: #b8b8bf;
+  --ink-btn: #f2f2f3; --ink-btn-text: #131416;
+  --brand: #ffc23d; --brand-hover: #ffd068; --brand-edge: #ffc23d; --brand-text: #131416; --focus: #ffc23d;
+  --danger: #ff8f84; --danger-soft: #3a1c1c; --ok: #5cc38a;
+  --wave: #8a8d94; --wave-played: #ffc23d; --track-bg: #1c1c1f;
+  color-scheme: dark;
+}
+* { box-sizing: border-box; }
+[hidden] { display: none !important; }
+html { height: max-content; }
+body {
+  margin: 0; background: transparent; color: var(--text);
+  font: 14px/1.45 var(--font-sans, "IBM Plex Sans", system-ui, -apple-system, "Segoe UI", "Hiragino Sans", "Noto Sans CJK JP", "Microsoft YaHei", sans-serif);
+  -webkit-font-smoothing: antialiased;
+}
+:lang(ja) { word-break: auto-phrase; }
+.card { padding: 12px 14px 10px; }
+button { font: inherit; color: inherit; }
+:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
+
+.head { display: flex; gap: 12px; align-items: flex-start; }
+.titles { flex: 1; min-width: 0; }
+h1 { font-size: 15px; font-weight: 600; margin: 0; line-height: 1.3; overflow-wrap: anywhere; text-wrap: pretty; }
+.sub { margin: 2px 0 0; padding: 0; border: 0; background: none; text-align: left; cursor: pointer; width: 100%;
+  color: var(--muted); font-size: 13px; overflow-wrap: anywhere;
+  display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; text-wrap: pretty; }
+.sub[aria-expanded="true"] { -webkit-line-clamp: unset; }
+.facts { margin: 4px 0 0; color: var(--muted); font-size: 12px; font-variant-numeric: tabular-nums; }
+.head-tools { display: flex; gap: 6px; flex-shrink: 0; }
+
+.btn {
+  display: inline-flex; align-items: center; gap: 6px; height: 30px; padding: 0 11px; border-radius: var(--radius-sm);
+  border: 1px solid var(--border-strong); background: transparent; cursor: pointer; white-space: nowrap; font-size: 13px;
+}
+.btn:hover:not(:disabled) { background: var(--surface-2); }
+.btn:disabled, .btn[aria-disabled="true"] { opacity: .55; cursor: default; }
+.btn.toggle[aria-pressed="true"] { background: var(--active); border-color: var(--text); }
+.btn svg { width: 14px; height: 14px; flex-shrink: 0; }
+/* "Use this": outlined; filled with Kana yellow only on the take you are listening to */
+.row.current .keep:not([aria-pressed="true"]) { background: var(--brand); border-color: var(--brand-edge); color: var(--brand-text); font-weight: 600; }
+.row.current .keep:not([aria-pressed="true"]):hover { background: var(--brand-hover); }
+.keep[aria-pressed="true"] { border-color: var(--text); font-weight: 600; }
+
+.status { margin: 10px 0 0; font-size: 13px; color: var(--muted); display: flex; align-items: center; gap: 8px; }
+.status:empty { display: none; }
+.status.error { color: var(--danger); background: var(--danger-soft); padding: 8px 10px; border-radius: var(--radius-sm); }
+.spinner { width: 14px; height: 14px; border-radius: 50%; border: 2px solid var(--border-strong); border-top-color: var(--brand);
+  animation: spin .9s linear infinite; flex-shrink: 0; display: inline-block; vertical-align: -2px; }
+@keyframes spin { to { transform: rotate(360deg); } }
+@media (prefers-reduced-motion: reduce) { .spinner { animation-duration: 3s; } }
+.elapsed { font-variant-numeric: tabular-nums; }
+
+/* one column grid shared by every row (subgrid), so the waveforms line up */
+.rows { list-style: none; margin: 10px 0 0; padding: 0; display: grid; column-gap: 10px;
+  grid-template-columns: 36px fit-content(200px) minmax(0, 1fr) max-content max-content; }
+.row {
+  grid-column: 1 / -1; display: grid; grid-template-columns: subgrid; align-items: center;
+  row-gap: 4px; padding: 8px 4px 8px 6px; border-top: 1px solid var(--rule); position: relative;
+}
+.row:first-child { border-top: 0; }
+.row::before { content: ""; position: absolute; left: -10px; top: 8px; bottom: 8px; width: 3px; border-radius: 2px; background: transparent; }
+.row.current::before { background: var(--brand); }
+.play {
+  width: 32px; height: 32px; border-radius: 50%; border: 0; background: var(--ink-btn); color: var(--ink-btn-text);
+  display: grid; place-items: center; cursor: pointer; padding: 0;
+}
+.play.playing { background: var(--brand); color: var(--brand-text); }
+.play:disabled { background: var(--active); color: var(--muted); cursor: progress; }
+.play svg { width: 14px; height: 14px; }
+.label { display: flex; flex-direction: column; min-width: 0; line-height: 1.25; }
+.label b { font-weight: 600; font-size: 13px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.label small { color: var(--muted); font-size: 12px; font-variant-numeric: tabular-nums; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.label kbd { font: inherit; font-size: 11px; color: var(--muted); border: 1px solid var(--border-strong); border-radius: 4px;
+  padding: 0 4px; margin-left: 6px; font-weight: 500; vertical-align: 1px; }
+.track { height: 40px; border-radius: var(--radius-sm); background: var(--track-bg); cursor: pointer; position: relative; touch-action: none; }
+.track canvas { width: 100%; height: 100%; display: block; }
+.track .seam { position: absolute; top: 0; bottom: 0; right: 0; width: 2px; background: var(--brand); opacity: 0; }
+.loop-on .track .seam { opacity: .9; }
+.row.pending .track { background: repeating-linear-gradient(90deg, var(--track-bg) 0 6px, var(--surface-2) 6px 12px); }
+.time { color: var(--muted); font-size: 12px; font-variant-numeric: tabular-nums; white-space: nowrap; min-width: 74px; text-align: right; }
+.actions { display: flex; gap: 6px; justify-content: flex-end; }
+.note { grid-column: 3 / -1; font-size: 12px; color: var(--muted); overflow-wrap: anywhere; user-select: text; }
+.note > * + * { margin-left: 6px; }
+.note:empty { display: none; }
+.note.ok { color: var(--ok); }
+.note.error { color: var(--danger); }
+.note code { font: 12px/1.4 var(--font-mono, ui-monospace, SFMono-Regular, Menlo, monospace); color: var(--text); }
+
+.panel { grid-column: 2 / -1; margin: 2px 0 2px; }
+.panel-title { font-size: 12px; color: var(--muted); margin: 0 0 6px; }
+.presets { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 6px; }
+.preset {
+  text-align: left; border: 1px solid var(--border-strong); background: transparent; border-radius: var(--radius-sm);
+  padding: 7px 9px; cursor: pointer; display: flex; flex-direction: column; gap: 2px;
+}
+.preset:hover { background: var(--surface-2); }
+.preset.rec { border-color: var(--brand-edge); box-shadow: inset 0 0 0 1px var(--brand-edge); }
+.preset b { font-weight: 600; font-size: 13px; display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
+.preset small { color: var(--muted); font-size: 12px; line-height: 1.35; text-wrap: pretty; }
+.preset .spec { font-variant-numeric: tabular-nums; }
+.tag { font-weight: 600; font-size: 11px; padding: 1px 6px; border-radius: 999px; background: var(--brand); color: var(--brand-text); }
+
+.foot { display: flex; align-items: center; gap: 10px; margin-top: 8px; padding-top: 10px; border-top: 1px solid var(--rule); flex-wrap: wrap; }
+.foot:empty { display: none; }
+.progress { color: var(--muted); font-size: 13px; display: inline-flex; gap: 6px; align-items: center; }
+.hint { color: var(--muted); font-size: 12px; margin-left: auto; }
+.paths { margin: 6px 0 0; padding-left: 18px; font-size: 12px; overflow-wrap: anywhere; user-select: text; }
+
+@media (max-width: 620px) {
+  .rows { grid-template-columns: 36px minmax(0, 1fr) max-content; }
+  .track { grid-column: 1 / -1; grid-row: 2; }
+  .time { grid-column: 3; grid-row: 1; }
+  .actions { grid-column: 1 / -1; grid-row: 3; justify-content: flex-start; }
+  .note, .panel { grid-column: 1 / -1; }
+  .hint { margin-left: 0; flex-basis: 100%; }
+}
+@media (max-width: 480px) {
+  .head { flex-direction: column; gap: 8px; }
+  .presets { grid-template-columns: 1fr; }
+}
+</style>
+</head>
+<body>
+<main class="card" id="app">
+  <header class="head">
+    <div class="titles">
+      <h1 id="title"></h1>
+      <button class="sub" id="sub" type="button" aria-expanded="false" hidden></button>
+      <p class="facts" id="facts" hidden></p>
+    </div>
+    <div class="head-tools" id="head-tools" hidden>
+      <button class="btn toggle" id="loop" type="button" aria-pressed="false"></button>
+      <button class="btn" id="seam" type="button" hidden></button>
+    </div>
+  </header>
+  <div class="status" id="status" role="status" aria-live="polite"></div>
+  <ol class="rows" id="rows"></ol>
+  <footer class="foot" id="foot"></footer>
+</main>
+
+<script>
+/*@WAVE_JS@*/
+</script>
+<script>
+"use strict";
+const PRESETS = /*@PRESETS@*/null;
+const PRESET_ORDER = ["game_sfx", "game_loop", "video_bgm", "original"];
+const DECODED_BUDGET_SEC = 900;  // decoded audio kept at once (~300 MB stereo); the rest is re-decoded on play
+
+// ── strings (English, Japanese, Simplified Chinese; the web UI's wording) ──
+const STRINGS = {
+  en: {
+    "work.generate": "Generating on this computer…", "work.edit": "Editing on this computer…",
+    "work.process": "Exporting…", "loading": "Loading audio…", "row.loading": "Loading…",
+    "type.music": "Music", "type.instrument": "Instrument loop", "type.sfx": "Sound effect", "type.raw": "Audio",
+    "mode.variation": "Variation", "mode.inpaint": "Replaced part", "mode.continue": "Extended", "kind.process": "Export",
+    "cand.label": "Version {n}", "cand.single": "Result", "cand.seed": "seed {seed}", "cand.original": "Before edit",
+    "cand.export": "Export", "versions": "{n} versions",
+    "play": "Play", "pause": "Pause", "position": "Playback position",
+    "loop": "Loop", "seam": "Hear the seam",
+    "seam.title": "Turns loop on and plays the last 3 s into the start, so you can check the loop point",
+    "keep": "Use this", "kept": "Chosen", "keep.title": "Tell the assistant you picked this one",
+    "keep.aria": "Use {name}", "export.aria": "Export {name}",
+    "keep.msg": "I'll use {label} ({seed}): {path}", "keep.msgNoSeed": "I'll use {label}: {path}",
+    "keep.noted": "Noted. The assistant will see your choice with your next message.",
+    "keep.manual": "Tell the assistant: {text}",
+    "export": "Export", "export.title": "Export for…", "export.rec": "Recommended",
+    "exporting": "Exporting…", "exported": "Saved", "export.failed": "Export failed: {msg}",
+    "more": "2 more versions", "more.title": "Same prompt, new seeds", "more.working": "Making 2 more versions on this computer…",
+    "more.failed": "Could not make more versions: {msg}",
+    "hint": "Space play · 1–{n} compare at the same spot · L loop",
+    "hint0": "Space play · 1–{n} compare at the same spot · 0 before edit · L loop",
+    "hint1": "Space play · ←/→ seek · L loop",
+    "load.failed": "Could not load this audio: {msg}",
+    "noTools": "This client cannot send audio to the player. The files are:",
+    "error": "The tool reported an error:", "cancelled": "Cancelled.",
+    "preset.game_sfx": "Game sound effect", "preset.game_loop": "Game music loop", "preset.video_bgm": "Video / YouTube",
+    "preset.original": "Plain WAV",
+    "preset.game_sfxDesc": "Silence trimmed and mono, ready for Unity, Godot or Unreal.",
+    "preset.game_loopDesc": "Loops seamlessly in Unity, Godot or Unreal (turn looping on there).",
+    "preset.video_bgmDesc": "YouTube loudness with a short fade in and out, for video editors.",
+    "preset.originalDesc": "Same sound, saved as WAV. Only clipping peaks are tamed.",
+    "preset.game_sfxSpec": "OGG 48 kHz · peak −1 dB", "preset.game_loopSpec": "OGG 48 kHz · −16 LUFS",
+    "preset.video_bgmSpec": "WAV 48 kHz · −14 LUFS", "preset.originalSpec": "WAV 24-bit · original rate",
+  },
+  ja: {
+    "work.generate": "このパソコンで生成しています…", "work.edit": "このパソコンで編集しています…",
+    "work.process": "書き出しています…", "loading": "音声を読み込み中…", "row.loading": "読み込み中…",
+    "type.music": "音楽", "type.instrument": "楽器ソロ／ループ", "type.sfx": "効果音", "type.raw": "音声",
+    "mode.variation": "バリエーション", "mode.inpaint": "一部差し替え", "mode.continue": "延長", "kind.process": "書き出し",
+    "cand.label": "バージョン {n}", "cand.single": "結果", "cand.seed": "シード {seed}", "cand.original": "編集前",
+    "cand.export": "書き出し", "versions": "{n} バージョン",
+    "play": "再生", "pause": "一時停止", "position": "再生位置",
+    "loop": "ループ", "seam": "つなぎ目を聴く",
+    "seam.title": "ループをオンにして、終わりの 3 秒から頭へ戻るところを聴きます",
+    "keep": "これを使う", "kept": "選択済み", "keep.title": "これに決めたことを AI に伝えます",
+    "keep.aria": "{name}を使う", "export.aria": "{name}を書き出す",
+    "keep.msg": "{label}（{seed}）を使います: {path}", "keep.msgNoSeed": "{label}を使います: {path}",
+    "keep.noted": "記録しました。次のメッセージを送ると AI に伝わります。",
+    "keep.manual": "AI にこう伝えてください: {text}",
+    "export": "書き出し", "export.title": "用途を選んで書き出し", "export.rec": "おすすめ",
+    "exporting": "書き出しています…", "exported": "保存しました", "export.failed": "書き出しに失敗しました: {msg}",
+    "more": "あと 2 バージョン作る", "more.title": "同じプロンプトでシードを変えて生成", "more.working": "このパソコンであと 2 バージョン作っています…",
+    "more.failed": "追加で作れませんでした: {msg}",
+    "hint": "Space 再生 · 1〜{n} 同じ位置で聴き比べ · L ループ",
+    "hint0": "Space 再生 · 1〜{n} 同じ位置で聴き比べ · 0 編集前 · L ループ",
+    "hint1": "Space 再生 · ←/→ 移動 · L ループ",
+    "load.failed": "音声を読み込めませんでした: {msg}",
+    "noTools": "このクライアントではプレーヤーに音声を送れません。ファイルはこちら:",
+    "error": "ツールがエラーを返しました:", "cancelled": "キャンセルされました。",
+    "preset.game_sfx": "ゲームの効果音", "preset.game_loop": "ゲームのループ BGM", "preset.video_bgm": "動画・YouTube",
+    "preset.original": "WAV のまま",
+    "preset.game_sfxDesc": "無音カット・モノラル。Unity / Godot / Unreal にそのまま使えます。",
+    "preset.game_loopDesc": "Unity / Godot / Unreal で継ぎ目なくループします（エンジン側でループを有効に）。",
+    "preset.video_bgmDesc": "YouTube の音量基準・短いフェードイン／アウト。動画編集向け。",
+    "preset.originalDesc": "音はそのまま WAV で保存。割れそうなピークだけ抑えます。",
+    "preset.game_sfxSpec": "OGG 48 kHz · ピーク −1 dB", "preset.game_loopSpec": "OGG 48 kHz · −16 LUFS",
+    "preset.video_bgmSpec": "WAV 48 kHz · −14 LUFS", "preset.originalSpec": "WAV 24 bit · 元のサンプルレート",
+  },
+  zh: {
+    "work.generate": "正在本机生成…", "work.edit": "正在本机编辑…",
+    "work.process": "正在导出…", "loading": "正在加载音频…", "row.loading": "加载中…",
+    "type.music": "音乐", "type.instrument": "单乐器 / 循环", "type.sfx": "音效", "type.raw": "音频",
+    "mode.variation": "变体", "mode.inpaint": "替换片段", "mode.continue": "延长", "kind.process": "导出",
+    "cand.label": "版本 {n}", "cand.single": "结果", "cand.seed": "种子 {seed}", "cand.original": "编辑前",
+    "cand.export": "导出", "versions": "{n} 个版本",
+    "play": "播放", "pause": "暂停", "position": "播放位置",
+    "loop": "循环", "seam": "试听接缝",
+    "seam.title": "开启循环，从结尾前 3 秒播到开头，检查循环接缝",
+    "keep": "用这个", "kept": "已选", "keep.title": "告诉 AI 你选了这个",
+    "keep.aria": "用{name}", "export.aria": "导出{name}",
+    "keep.msg": "我用{label}（{seed}）：{path}", "keep.msgNoSeed": "我用{label}：{path}",
+    "keep.noted": "已记录，你下次发消息时 AI 就会知道。",
+    "keep.manual": "请这样告诉 AI：{text}",
+    "export": "导出", "export.title": "按用途导出", "export.rec": "推荐",
+    "exporting": "正在导出…", "exported": "已保存", "export.failed": "导出失败：{msg}",
+    "more": "再生成 2 个版本", "more.title": "同样的提示词，换种子生成", "more.working": "正在本机再生成 2 个版本…",
+    "more.failed": "没能再生成：{msg}",
+    "hint": "空格 播放 · 1–{n} 同一位置对比 · L 循环",
+    "hint0": "空格 播放 · 1–{n} 同一位置对比 · 0 编辑前 · L 循环",
+    "hint1": "空格 播放 · ←/→ 移动 · L 循环",
+    "load.failed": "无法加载这段音频：{msg}",
+    "noTools": "这个客户端无法把音频传给播放器。文件在：",
+    "error": "工具返回了错误：", "cancelled": "已取消。",
+    "preset.game_sfx": "游戏音效", "preset.game_loop": "游戏循环音乐", "preset.video_bgm": "视频 / YouTube",
+    "preset.original": "普通 WAV",
+    "preset.game_sfxDesc": "去掉静音、单声道，可直接用于 Unity / Godot / Unreal。",
+    "preset.game_loopDesc": "在 Unity / Godot / Unreal 中无缝循环（请在引擎里开启循环）。",
+    "preset.video_bgmDesc": "YouTube 音量标准，短淡入淡出，适合视频剪辑。",
+    "preset.originalDesc": "声音不变，存为 WAV，只压住可能爆音的峰值。",
+    "preset.game_sfxSpec": "OGG 48 kHz · 峰值 −1 dB", "preset.game_loopSpec": "OGG 48 kHz · −16 LUFS",
+    "preset.video_bgmSpec": "WAV 48 kHz · −14 LUFS", "preset.originalSpec": "WAV 24 bit · 原采样率",
+  },
+};
+let LANG = "en";
+function setLang(locale) {
+  const l = String(locale || navigator.language || "en").toLowerCase();
+  LANG = l.startsWith("ja") ? "ja" : l.startsWith("zh") ? "zh" : "en";
+  document.documentElement.lang = LANG === "zh" ? "zh-CN" : LANG;
+}
+function t(key, vars) {
+  let s = (STRINGS[LANG] && STRINGS[LANG][key]) || STRINGS.en[key] || key;
+  if (vars) for (const [k, v] of Object.entries(vars)) s = s.split(`{${k}}`).join(String(v));
+  return s;
+}
+// tiny DOM helper (the web UI's el() has the same shape)
+function el(tag, attrs, ...kids) {
+  const n = document.createElement(tag);
+  for (const [k, v] of Object.entries(attrs || {})) {
+    if (v == null || v === false) continue;
+    if (k === "text") n.textContent = v;
+    else if (k.startsWith("on")) n.addEventListener(k.slice(2), v);
+    else n.setAttribute(k, v === true ? "" : v);
+  }
+  for (const c of kids) if (c != null) n.append(c);
+  return n;
+}
+const $ = (id) => document.getElementById(id);
+const ICON = {
+  play: '<svg viewBox="0 0 16 16" aria-hidden="true"><path d="M4.5 2.8v10.4L13 8z" fill="currentColor"/></svg>',
+  pause: '<svg viewBox="0 0 16 16" aria-hidden="true"><path d="M5 3h2v10H5zM9.5 3h2v10h-2z" fill="currentColor"/></svg>',
+  loop: '<svg viewBox="0 0 16 16" aria-hidden="true"><path d="M3 7a4 4 0 0 1 4-4h5m0 0-2-2m2 2-2 2M13 9a4 4 0 0 1-4 4H4m0 0 2 2m-2-2 2-2" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>',
+  plus: '<svg viewBox="0 0 16 16" aria-hidden="true"><path d="M8 3v10M3 8h10" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg>',
+  check: '<svg viewBox="0 0 16 16" aria-hidden="true"><path d="m3 8.5 3 3 7-7" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>',
+  down: '<svg viewBox="0 0 16 16" aria-hidden="true"><path d="M8 2.5v8m0 0-3.5-3.5M8 10.5l3.5-3.5M3 13.5h10" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>',
+};
+const baseName = (p) => String(p).split(/[\\/]/).pop();
+const stemOf = (p) => baseName(p).replace(/\.[^.]+$/, "");
+function setButton(btn, icon, text) { btn.innerHTML = icon || ""; btn.append(text); }
+function clock(sec) { sec = Math.max(0, Math.floor(sec)); return `${Math.floor(sec / 60)}:${String(sec % 60).padStart(2, "0")}`; }
+// "Working… 0:42" with a live timer; returns a stop function
+function progress(node, text) {
+  const t0 = Date.now(), time = el("span", { class: "elapsed", text: "0:00" });
+  node.replaceChildren(el("span", { class: "spinner", "aria-hidden": "true" }), el("span", { text }), time);
+  const timer = setInterval(() => { time.textContent = clock((Date.now() - t0) / 1000); }, 1000);
+  return () => clearInterval(timer);
+}
+
+// The JSON object a tool result carries as text. Hosts may add their own text
+// after it (Claude Desktop adds a note for the model), in the same block or another one.
+function resultJson(res) {
+  if (res && res.structuredContent) return res.structuredContent;
+  for (const b of (res && res.content) || []) {
+    if (b.type !== "text" || typeof b.text !== "string") continue;
+    const s = b.text;
+    for (let start = s.indexOf("{"); start >= 0; start = s.indexOf("{", start + 1)) {
+      let depth = 0, inStr = false, esc = false;
+      for (let i = start; i < s.length; i++) {
+        const c = s[i];
+        if (inStr) { if (esc) esc = false; else if (c === "\\") esc = true; else if (c === '"') inStr = false; continue; }
+        if (c === '"') inStr = true;
+        else if (c === "{") depth++;
+        else if (c === "}" && --depth === 0) {
+          try { return JSON.parse(s.slice(start, i + 1)); } catch { break; }
+        }
+      }
+    }
+  }
+  return null;
+}
+
+// ── host bridge: JSON-RPC 2.0 over postMessage ───────────────────────────
+const Host = {
+  nextId: 1, pending: new Map(), caps: {}, ctx: {}, ready: false, handlers: {},
+  send(msg) { window.parent.postMessage({ jsonrpc: "2.0", ...msg }, "*"); },
+  request(method, params, timeoutMs = 0) {
+    const id = this.nextId++;
+    return new Promise((resolve, reject) => {
+      const timer = timeoutMs ? setTimeout(() => { this.pending.delete(id); reject(new Error(`${method} timed out`)); }, timeoutMs) : 0;
+      this.pending.set(id, { resolve, reject, timer });
+      this.send({ id, method, params });
+    });
+  },
+  notify(method, params) { this.send({ method, params }); },
+  onMessage(ev) {
+    if (ev.source !== window.parent) return;
+    const m = ev.data;
+    if (!m || m.jsonrpc !== "2.0") return;
+    if (m.method == null && m.id != null) {  // a response
+      const p = this.pending.get(m.id);
+      if (!p) return;
+      this.pending.delete(m.id);
+      clearTimeout(p.timer);
+      if (m.error) p.reject(new Error(m.error.message || "host error"));
+      else p.resolve(m.result);
+      return;
+    }
+    if (m.id != null) {  // a request from the host
+      if (m.method === "ui/resource-teardown") Engine.close();
+      else if (m.method !== "ping") {
+        this.send({ id: m.id, error: { code: -32601, message: `Method not found: ${m.method}` } });
+        return;
+      }
+      this.send({ id: m.id, result: {} });
+      return;
+    }
+    const h = this.handlers[m.method];
+    if (h) h(m.params || {});
+  },
+  async init() {
+    window.addEventListener("message", (e) => this.onMessage(e));
+    const r = await this.request("ui/initialize", {
+      appInfo: { name: "audio-studio-player", version: "1" },
+      appCapabilities: { availableDisplayModes: ["inline"] },
+      protocolVersion: "2026-01-26",
+    });
+    this.caps = (r && r.hostCapabilities) || {};
+    this.applyContext((r && r.hostContext) || {});
+    this.notify("ui/notifications/initialized", {});
+    this.ready = true;
+  },
+  applyContext(c) {
+    this.ctx = { ...this.ctx, ...c };
+    const root = document.documentElement;
+    if (c.theme) root.dataset.theme = c.theme;
+    const vars = c.styles && c.styles.variables;
+    if (vars) for (const [k, v] of Object.entries(vars)) if (typeof v === "string" && k.startsWith("--")) root.style.setProperty(k, v);
+    if (c.locale) { setLang(c.locale); UI.relabel(); }
+    if (c.theme || vars) UI.redrawAll();
+  },
+  async callTool(name, args, timeoutMs = 0) {
+    const r = await this.request("tools/call", { name, arguments: args }, timeoutMs);
+    const text = ((r && r.content) || []).filter((b) => b.type === "text").map((b) => b.text).join("");
+    if (r && r.isError) throw new Error(text || `${name} failed`);
+    const json = resultJson(r);
+    if (!json) throw new Error(text || `${name}: no result`);
+    return json;
+  },
+};
+
+// ── audio: Web Audio for sample-accurate loops and same-moment A/B switches ──
+const Engine = {
+  ac: null, src: null, srcGain: null, row: null, startedAt: 0, offset: 0, playing: false, loop: false, seq: 0,
+  context() {
+    if (!this.ac) {
+      const AC = window.AudioContext || window.webkitAudioContext;
+      try { this.ac = new AC({ sampleRate: 44100 }); } catch { this.ac = new AC(); }  // the model's rate: no resampling
+    }
+    return this.ac;
+  },
+  duration(row) { return (row.buffer && row.buffer.duration) || row.seconds || 0; },
+  position() {
+    const r = this.row;
+    if (!r || !this.playing) return this.offset;
+    const t = this.offset + (this.ac.currentTime - this.startedAt), d = this.duration(r);
+    return this.loop && d ? t % d : Math.min(t, d);
+  },
+  timeOf(row) { return row === this.row ? this.position() : 0; },
+  isPlaying(row) { return this.playing && row === this.row; },
+  setRow(row) {
+    if (this.row === row) return;
+    const prev = this.row;
+    this.row = row;
+    if (prev) prev.render();
+    if (row) row.render();
+    UI.lit();
+  },
+  // play `row` from `at` seconds; null keeps the current moment (the A/B switch)
+  async play(row, at) {
+    const seq = ++this.seq;
+    let pos = at != null ? at : this.position();
+    if (!row.ready) {  // not loaded yet: stop what plays, start this one when it arrives
+      this.fadeOut(); this.playing = false;
+      this.setRow(row); this.offset = pos; row.wantPlay = true;
+      UI.tick(true);
+      return;
+    }
+    const ac = this.context();
+    if (ac.state === "suspended") { try { await ac.resume(); } catch { /* no gesture yet */ } }
+    const buffer = await row.ensureBuffer();
+    if (seq !== this.seq || !buffer) return;  // another play/pause came in meanwhile
+    const d = buffer.duration;
+    pos = this.loop ? pos % d : Math.min(pos, d - 0.005);
+    this.fadeOut();
+    const g = ac.createGain(), s = ac.createBufferSource();
+    s.buffer = buffer; s.loop = this.loop; s.connect(g); g.connect(ac.destination);
+    g.gain.setValueAtTime(0, ac.currentTime);
+    g.gain.linearRampToValueAtTime(1, ac.currentTime + 0.012);
+    s.start(0, Math.max(0, pos));
+    s.onended = () => {
+      if (this.src !== s) return;
+      this.playing = false; this.offset = 0; this.src = null;
+      UI.tick(true);
+    };
+    this.setRow(row);
+    Object.assign(this, { src: s, srcGain: g, startedAt: ac.currentTime, offset: Math.max(0, pos), playing: true });
+    UI.tick(true);
+  },
+  fadeOut() {
+    const s = this.src, g = this.srcGain;
+    if (!s) return;
+    this.src = null;
+    const now = this.ac.currentTime;
+    g.gain.cancelScheduledValues(now);
+    g.gain.setValueAtTime(g.gain.value, now);
+    g.gain.linearRampToValueAtTime(0, now + 0.012);
+    try { s.stop(now + 0.015); } catch { /* already stopped */ }
+  },
+  pause() {
+    this.seq++;
+    if (this.row) this.row.wantPlay = false;
+    if (!this.playing) return;
+    this.offset = this.position();
+    this.playing = false;
+    this.fadeOut();
+    UI.tick(true);
+  },
+  toggle(row) {
+    if (this.isPlaying(row) || (row === this.row && row.wantPlay)) { this.pause(); return; }
+    // another take: the same moment (A/B); the current take: where it was paused
+    this.play(row, row === this.row ? this.offset : this.row ? null : 0);
+  },
+  seek(row, sec) {
+    sec = Math.max(0, Math.min(this.duration(row), sec));
+    if (this.playing) { this.play(row, sec); return; }  // also when another take is playing
+    this.setRow(row);
+    this.offset = sec;
+    UI.tick(true);
+  },
+  setLoop(on) {
+    const pos = this.position();
+    this.loop = on;
+    if (this.playing) this.play(this.row, pos);
+  },
+  close() { this.fadeOut(); this.playing = false; if (this.ac) this.ac.close().catch(() => {}); this.ac = null; },
+};
+
+function b64bytes(b64) {
+  const bin = atob(b64), out = new Uint8Array(bin.length);
+  for (let i = 0; i < bin.length; i++) out[i] = bin.charCodeAt(i);
+  return out;
+}
+const VORBIS = (() => { try { return !!new Audio().canPlayType('audio/ogg; codecs="vorbis"'); } catch { return false; } })();
+
+// Decoded buffers are big (a 5 min stereo take ≈ 100 MB): keep a budget, drop the
+// least recently played (the compressed bytes stay, and decode again on play).
+const Decoded = {
+  rows: [],
+  touch(row) {
+    this.rows = this.rows.filter((r) => r !== row);
+    this.rows.push(row);
+    let total = this.rows.reduce((s, r) => s + (r.buffer ? r.buffer.duration * r.buffer.numberOfChannels / 2 : 0), 0);
+    for (const r of [...this.rows]) {
+      if (total <= DECODED_BUDGET_SEC || r === row || r === Engine.row) continue;
+      total -= r.buffer.duration * r.buffer.numberOfChannels / 2;
+      r.buffer = null;
+      this.rows = this.rows.filter((x) => x !== r);
+    }
+  },
+};
+
+// One playable line: a version, the audio before an edit, or an export.
+class Row {
+  constructor({ path, seed = null, kind = "cand", index = 0, exportOf = null, preset = null }) {
+    Object.assign(this, { path, seed, kind, index, exportOf, preset });
+    this.file = baseName(path);
+    this.peaks = null; this.bytes = null; this.buffer = null; this.ready = false; this.seconds = 0; this.meta = {};
+    this.wantPlay = false; this.chosen = false; this.busy = false;
+    this.btn = el("button", { class: "play", type: "button", disabled: true, onclick: () => Engine.toggle(this) });
+    this.btn.innerHTML = ICON.play;
+    this.cv = el("canvas", { "aria-hidden": "true" });
+    this.track = el("div", { class: "track", role: "slider", tabindex: "0", "aria-valuemin": "0",
+      onpointerdown: (e) => this.seekPointer(e), onkeydown: (e) => this.key(e) }, this.cv, el("span", { class: "seam" }));
+    this.timeEl = el("span", { class: "time" });
+    this.labelEl = el("div", { class: "label" });
+    this.actions = el("div", { class: "actions" });
+    this.note = el("div", { class: "note", role: "status" });
+    this.node = el("li", { class: "row pending" }, this.btn, this.labelEl, this.track, this.timeEl, this.actions, this.note);
+    this.relabel();
+    this.render();
+  }
+  // the number key that selects this line (versions 1–9, 0 = before the edit)
+  get keyNo() {
+    if (this.kind === "original") return "0";
+    return this.kind === "cand" && this.index >= 1 && this.index <= 9 && UI.candidates.length > 1 ? String(this.index) : "";
+  }
+  get label() {
+    if (this.kind === "original") return t("cand.original");
+    if (this.kind === "export") return `${t("cand.export")} · ${t(`preset.${this.preset}`)}`;
+    if (this.kind === "result" || (this.index === 1 && UI.candidates.length === 1)) return t("cand.single");
+    return t("cand.label", { n: this.index });
+  }
+  // how the model context names this line (English, stable across UI languages)
+  get modelName() {
+    if (this.kind === "original") return "the audio before the edit";
+    if (this.kind === "export") return `the ${this.preset} export of ${this.exportOf ? this.exportOf.modelName : "a take"}`;
+    return this.kind === "cand" ? `version ${this.index}` : "the result";
+  }
+  relabel() {
+    const name = this.label, key = this.keyNo;
+    this.labelEl.replaceChildren(el("b", { text: name }, key ? el("kbd", { "aria-hidden": "true", text: key }) : null),
+      el("small", { text: this.seed != null ? t("cand.seed", { seed: this.seed }) : this.kind === "export" ? this.file : "" }));
+    this.labelEl.title = this.path;
+    this.track.setAttribute("aria-label", `${name} — ${t("position")}`);
+    this.renderActions();
+    this.shown = null;
+    this.update();
+  }
+  renderActions() {
+    if (!UI.canAct || this.kind === "original" || this.kind === "result") { this.actions.replaceChildren(); return; }
+    const focused = this.actions.contains(document.activeElement) ? [...this.actions.children].indexOf(document.activeElement) : -1;
+    this.keepBtn = el("button", { class: "btn keep", type: "button", title: t("keep.title"),
+      "aria-pressed": String(this.chosen), "aria-label": t("keep.aria", { name: this.label }), onclick: () => UI.choose(this) });
+    setButton(this.keepBtn, this.chosen ? ICON.check : "", this.chosen ? t("kept") : t("keep"));
+    const kids = [this.keepBtn];
+    if (this.kind === "cand") {
+      // busy: aria-disabled, not disabled, so keyboard focus stays on it
+      this.exportBtn = el("button", { class: "btn", type: "button", "aria-expanded": "false", "aria-disabled": this.busy ? "true" : null,
+        "aria-label": t("export.aria", { name: this.label }), onclick: (e) => UI.openExport(this, e.currentTarget) });
+      setButton(this.exportBtn, ICON.down, t("export"));
+      kids.push(this.exportBtn);
+    }
+    this.actions.replaceChildren(...kids);
+    if (focused >= 0 && kids[focused]) kids[focused].focus();
+  }
+  async load() {
+    try {
+      let fmt = VORBIS ? "ogg" : "mp3";
+      for (let attempt = 0; ; attempt++) {
+        try { await this.fetchAudio(fmt); break; }
+        catch (e) {
+          if (e.restart && attempt < 3) continue;  // the server re-encoded mid-download
+          if (fmt === "ogg" && e.decode) { fmt = "mp3"; continue; }
+          throw e;
+        }
+      }
+      this.ready = true;
+      this.btn.disabled = false;
+      this.node.classList.remove("pending");
+      this.render();
+      if (this.wantPlay && Engine.row === this) { this.wantPlay = false; Engine.play(this, Engine.offset); }
+    } catch (e) {
+      this.node.classList.remove("pending");
+      this.setNote(t("load.failed", { msg: e.message }), "error");
+      this.btn.disabled = true;
+      this.update();
+    }
+  }
+  async fetchAudio(fmt) {
+    const parts = [];
+    let offset = 0, total = 0, etag = null;
+    for (;;) {
+      const r = await Host.callTool("audio_preview", { path: this.path, offset, format: fmt }, 120000);
+      if (offset === 0) {
+        etag = r.etag;
+        if (!this.peaks) {
+          this.peaks = r.peaks; this.seconds = r.seconds || 0; this.meta = r.meta || {};
+          this.render();
+          UI.metaArrived(this);
+        }
+      } else if (r.etag !== etag) {
+        const err = new Error("preview changed"); err.restart = true; throw err;
+      }
+      parts.push(b64bytes(r.data));
+      total += parts[parts.length - 1].length;
+      offset = r.next;
+      if (r.done) break;
+    }
+    const bytes = new Uint8Array(total);
+    let o = 0;
+    for (const p of parts) { bytes.set(p, o); o += p.length; }
+    this.bytes = bytes;
+    this.buffer = null;
+    if (!(await this.ensureBuffer())) { const err = new Error(`cannot decode ${fmt}`); err.decode = true; throw err; }
+    if (!this.seconds) this.seconds = this.buffer.duration;
+  }
+  // the decoded audio, decoding the kept bytes again if it was dropped from memory
+  async ensureBuffer() {
+    if (!this.buffer && this.bytes) {
+      if (!this.decoding) {
+        this.decoding = Engine.context().decodeAudioData(this.bytes.slice().buffer)
+          .then((b) => { this.buffer = b; }, () => { this.buffer = null; })
+          .finally(() => { this.decoding = null; });
+      }
+      await this.decoding;
+    }
+    if (this.buffer) Decoded.touch(this);
+    return this.buffer;
+  }
+  setNote(content, cls = "") {
+    if (typeof content === "string") this.note.textContent = content;
+    else this.note.replaceChildren(...content);
+    this.note.className = `note ${cls}`.trim();
+    UI.resize();
+  }
+  seekPointer(e) {
+    if (!this.seconds) return;
+    const r = this.track.getBoundingClientRect();
+    const sec = Math.max(0, Math.min(this.seconds, ((e.clientX - r.left) / r.width) * this.seconds));
+    Engine.play(this, sec);
+  }
+  key(e) {
+    const step = e.shiftKey ? 5 : 1, now = Engine.timeOf(this);
+    if (e.key === "ArrowRight") Engine.seek(this, now + step);
+    else if (e.key === "ArrowLeft") Engine.seek(this, now - step);
+    else if (e.key === "Home") Engine.seek(this, 0);
+    else if (e.key === "Enter" || e.key === " ") Engine.toggle(this);
+    else return;
+    e.preventDefault(); e.stopPropagation();
+  }
+  render() {
+    this.update();
+    const ctx = fitCanvas(this.cv);
+    ctx.clearRect(0, 0, this.cv.width, this.cv.height);
+    if (!this.peaks) return;
+    const now = Engine.timeOf(this);
+    drawPeaks(ctx, this.peaks.min, this.peaks.max, {
+      color: cssVar("--wave"), played: cssVar("--wave-played"),
+      split: this.seconds && Engine.row === this ? now / this.seconds : 0 });
+  }
+  update() {
+    const playing = Engine.isPlaying(this), now = Engine.timeOf(this);
+    this.node.classList.toggle("current", Engine.row === this);
+    if (this.shown !== playing) {  // swap the icon only on a change: a click on a replaced <svg> is lost
+      this.shown = playing;
+      this.btn.classList.toggle("playing", playing);
+      this.btn.innerHTML = playing ? ICON.pause : ICON.play;
+      this.btn.setAttribute("aria-label", `${playing ? t("pause") : t("play")}: ${this.label}`);
+    }
+    const f = (x) => (this.seconds < 60 ? `${x.toFixed(1)} s` : fmtClock(x));
+    this.timeEl.textContent = !this.ready && !this.note.classList.contains("error") ? t("row.loading")
+      : !this.seconds ? "" : Engine.row === this && now > 0 ? `${f(now)} / ${f(this.seconds)}` : f(this.seconds);
+    this.track.setAttribute("aria-valuemax", String(Math.round(this.seconds * 10) / 10));
+    this.track.setAttribute("aria-valuenow", String(Math.round(now * 10) / 10));
+    this.track.setAttribute("aria-valuetext", `${fmtClock(now)} / ${fmtClock(this.seconds)}`);
+  }
+}
+
+// ── the card ──────────────────────────────────────────────────────────────
+const UI = {
+  args: null, result: null, rows: [], canAct: false, actions: [], openMenu: null, stopStatus: null,
+  get candidates() { return this.rows.filter((r) => r.kind === "cand"); },
+  toolName() {
+    const n = Host.ctx.toolInfo && Host.ctx.toolInfo.tool && Host.ctx.toolInfo.tool.name;
+    if (n) return n;
+    const r = this.result || {};
+    if (r.candidates) return r.mode ? "edit_audio" : "generate_audio";
+    if (r.steps && r.format) return "process_audio";
+    return this.args && this.args.input_audio ? (this.args.mode ? "edit_audio" : "process_audio") : "generate_audio";
+  },
+  status(text, { spin = false, error = false } = {}) {
+    const s = $("status");
+    if (this.stopStatus) { this.stopStatus(); this.stopStatus = null; }
+    s.className = `status${error ? " error" : ""}`;
+    s.replaceChildren();
+    if (text && spin) this.stopStatus = progress(s, text);
+    else if (text) s.append(el("span", { text }));
+    this.resize();
+  },
+  header() {
+    const a = this.args || {}, m = (this.candidates[0] || this.rows[0] || {}).meta || {};
+    const tool = this.toolName();
+    const type = a.audio_type || m.audio_type || "music";
+    const given = a.title || m.title;
+    let title = given;
+    if (!title) {
+      if (tool === "process_audio") title = t("kind.process");
+      else if (tool === "edit_audio") title = t(`mode.${a.mode || m.mode || "variation"}`);
+      else title = t(`type.${type}`);
+    }
+    $("title").textContent = title;
+    const promptText = a.prompt || m.prompt || [a.sound_source, a.sound_action, a.sound_material, a.sound_space].filter(Boolean).join(", ")
+      || (m.prompt_used || (this.result && this.result.prompt_used) || "").replace(/^TrackType:[^,]*,\s*(VocalType:[^,]*,\s*)?/, "");
+    const sub = $("sub");
+    sub.textContent = promptText || "";
+    sub.hidden = !promptText;
+    const facts = [];
+    if (tool === "generate_audio" && given) facts.push(t(`type.${type}`));  // untitled: the type is the title already
+    if (tool === "edit_audio" && given) facts.push(t(`mode.${a.mode || m.mode || "variation"}`));
+    const secs = (this.result && this.result.seconds) || (this.rows[0] && this.rows[0].seconds);
+    if (secs) facts.push(secs < 60 ? `${Number(secs).toFixed(secs < 10 ? 1 : 0)} s` : fmtClock(secs));
+    if (a.bpm || m.bpm) facts.push(`${a.bpm || m.bpm} BPM`);
+    const n = this.candidates.length;
+    if (n > 1) facts.push(t("versions", { n }));
+    if (tool === "process_audio" && this.result) {
+      const r = this.result;
+      facts.push(`${String(r.format || "").toUpperCase()} ${r.sample_rate ? `${r.sample_rate / 1000} kHz` : ""}`.trim());
+      if (r.integrated_lufs != null) facts.push(`${r.integrated_lufs} LUFS`);
+    }
+    $("facts").textContent = facts.join(" · ");
+    $("facts").hidden = !facts.length;
+  },
+  relabel() {
+    if (!this.result && !this.args) return;
+    this.header();
+    setButton($("loop"), ICON.loop, t("loop"));
+    $("seam").textContent = t("seam"); $("seam").title = t("seam.title");
+    for (const r of this.rows) r.relabel();
+    this.footer();
+  },
+  footer() {
+    const f = $("foot");
+    if (!this.rows.length) { f.replaceChildren(); this.resize(); return; }
+    // keep the More button (and its focus) across updates
+    if (!this.moreBtn) {
+      this.moreBtn = el("button", { class: "btn", type: "button", id: "more", onclick: () => this.more() });
+      this.moreProgress = el("span", { class: "progress", role: "status" });
+      this.hintEl = el("span", { class: "hint" });
+      f.replaceChildren(this.moreBtn, this.moreProgress, this.hintEl);
+    }
+    setButton(this.moreBtn, ICON.plus, t("more"));
+    this.moreBtn.title = t("more.title");
+    this.moreBtn.hidden = !(this.canAct && this.moreArgs());
+    this.moreBtn.disabled = !!this.moreBusy;
+    const n = this.candidates.length, orig = this.rows.some((r) => r.kind === "original");
+    this.hintEl.textContent = n > 1 ? t(orig ? "hint0" : "hint", { n: Math.min(n, 9) }) : t("hint1");
+    this.resize();
+  },
+  addRow(row) {
+    this.rows.push(row);
+    $("rows").append(row.node);
+    return row;
+  },
+  // tool-input: show what is being made while the model runs
+  onInput(args) {
+    this.args = args || {};
+    this.header();
+    const tool = this.toolName();
+    if (!this.result) this.status(t(tool === "process_audio" ? "work.process" : tool === "edit_audio" ? "work.edit" : "work.generate"), { spin: true });
+  },
+  onResult(res) {
+    const text = ((res && res.content) || []).filter((b) => b.type === "text").map((b) => b.text).join("");
+    if (res && res.isError) { this.header(); this.status(`${t("error")} ${text}`, { error: true }); return; }
+    const r = resultJson(res);
+    if (!r) { this.status(text, { error: true }); return; }
+    this.result = r;
+    this.canAct = !!Host.caps.serverTools;
+    $("rows").replaceChildren(); this.rows = [];
+    if (Array.isArray(r.candidates)) {
+      if (this.toolName() === "edit_audio" && this.args && this.args.input_audio) {  // compare against the input first
+        this.addRow(new Row({ path: this.args.input_audio, kind: "original" })).optional = true;
+      }
+      r.candidates.forEach((c, i) => this.addRow(new Row({ path: c.path, seed: c.seed, index: i + 1 })));
+    } else if (r.path) {
+      this.addRow(new Row({ path: r.path, kind: "result" }));
+      if ((r.steps || []).some((s) => String(s).startsWith("loop"))) this.setLoop(true);
+    }
+    if (this.toolName() !== "process_audio" && (this.args || {}).audio_type === "instrument") this.setLoop(true);
+    $("head-tools").hidden = false;
+    this.relabel();
+    if (!Host.caps.serverTools) {
+      this.status(t("noTools"));
+      $("status").after(el("ul", { class: "paths" }, ...this.rows.map((x) => el("li", { text: x.path }))));
+      for (const x of this.rows) { x.node.classList.remove("pending"); x.timeEl.textContent = ""; }
+      this.resize();
+      return;
+    }
+    this.status("");
+    this.loadAll();
+  },
+  async loadAll() {
+    // one file at a time: the first one plays soonest, and the host is not flooded
+    for (const r of [...this.rows]) {
+      if (r.ready || r.loading) continue;
+      r.loading = true;
+      await r.load();
+      if (r.optional && !r.ready) { r.node.remove(); this.rows = this.rows.filter((x) => x !== r); this.relabel(); }
+    }
+  },
+  metaArrived(row) {
+    if (row === this.rows[0] || row === this.candidates[0]) { this.header(); this.footer(); }
+    if (!this.args && row.kind === "cand" && row.meta.audio_type === "instrument" && !this.loopTouched) this.setLoop(true);
+  },
+  setLoop(on) {
+    Engine.setLoop(on);
+    $("loop").setAttribute("aria-pressed", String(on));
+    $("seam").hidden = !on;
+    document.body.classList.toggle("loop-on", on);
+    this.resize();
+  },
+  seam() {
+    const row = Engine.row || this.rows.find((r) => r.ready);
+    if (!row) return;
+    if (!Engine.loop) this.setLoop(true);
+    Engine.play(row, Math.max(0, (row.seconds || 0) - 3));
+  },
+  lit() { for (const r of this.rows) r.node.classList.toggle("current", Engine.row === r); },
+  tick(all) {
+    for (const r of this.rows) r.update();
+    if (Engine.row) Engine.row.render();
+    if (all) this.ensureRaf();
+  },
+  ensureRaf() {
+    if (this.raf) return;
+    const step = () => {
+      this.raf = 0;
+      if (Engine.row) Engine.row.render();
+      if (Engine.playing) this.raf = requestAnimationFrame(step);
+    };
+    this.raf = requestAnimationFrame(step);
+  },
+  redrawAll() { for (const r of this.rows) r.render(); },
+  // what the user did here, for the model (each call replaces the previous one)
+  remember(line) {
+    this.actions.push(line);
+    if (!Host.caps.updateModelContext) return;
+    const text = ["Audio Studio player — what the user did in the in-chat player:", ...this.actions.map((a) => `- ${a}`)].join("\n");
+    Host.request("ui/update-model-context", { content: [{ type: "text", text }] }).catch(() => {});
+  },
+  async choose(row) {
+    if (row.chosen) return;
+    const msg = row.seed != null
+      ? t("keep.msg", { label: row.label, seed: t("cand.seed", { seed: row.seed }), path: row.path })
+      : t("keep.msgNoSeed", { label: row.label, path: row.path });
+    this.rows.forEach((r) => { if (r.chosen && r !== row) { r.chosen = false; r.renderActions(); } });
+    row.chosen = true; row.renderActions();
+    this.remember(`chose ${row.modelName}${row.seed != null ? ` (seed ${row.seed})` : ""}: ${row.path}`);
+    if (Host.caps.message) {
+      try {
+        const r = await Host.request("ui/message", { role: "user", content: [{ type: "text", text: msg }] });
+        if (!r || !r.isError) return;
+      } catch { /* fall through */ }
+    }
+    row.setNote(Host.caps.updateModelContext ? t("keep.noted") : t("keep.manual", { text: msg }), "ok");
+  },
+  recommended() {
+    const type = (this.args && this.args.audio_type) || ((this.candidates[0] || {}).meta || {}).audio_type;
+    return type === "sfx" ? "game_sfx" : type === "instrument" ? "game_loop" : "video_bgm";
+  },
+  closeMenu(focusButton = false) {
+    if (!this.openMenu) return;
+    const { menu, button } = this.openMenu;
+    menu.remove(); button.setAttribute("aria-expanded", "false");
+    this.openMenu = null;
+    if (focusButton) button.focus();
+    this.resize();
+  },
+  // the presets open inline under the row (a floating menu would be clipped by the iframe)
+  openExport(row, button) {
+    if (row.busy) return;
+    const was = this.openMenu && this.openMenu.button === button;
+    this.closeMenu();
+    if (was) return;
+    const rec = this.recommended();
+    const order = [rec, ...PRESET_ORDER.filter((p) => p !== rec)];
+    const id = `panel-${this.rows.indexOf(row)}`;
+    const menu = el("div", { class: "panel", id, role: "group", "aria-label": t("export.title") },
+      el("p", { class: "panel-title", text: t("export.title") }),
+      el("div", { class: "presets" }, ...order.map((p) => el("button", {
+        type: "button", class: `preset${p === rec ? " rec" : ""}`, onclick: () => { this.closeMenu(true); this.export(row, p); } },
+        el("b", {}, t(`preset.${p}`), p === rec ? el("span", { class: "tag", text: t("export.rec") }) : null),
+        el("small", { text: t(`preset.${p}Desc`) }),
+        el("small", { class: "spec", text: t(`preset.${p}Spec`) })))));
+    row.note.before(menu);
+    button.setAttribute("aria-expanded", "true");
+    button.setAttribute("aria-controls", id);
+    this.openMenu = { menu, button };
+    this.resize();
+    menu.querySelector("button").focus();
+    menu.addEventListener("keydown", (e) => {
+      if (e.key !== "Escape") return;
+      this.closeMenu(true);
+      e.preventDefault(); e.stopPropagation();
+    });
+  },
+  async export(row, preset) {
+    if (row.busy) return;
+    row.busy = true; row.renderActions();
+    if (row.exportBtn) row.exportBtn.focus();
+    const stop = progress(row.note, t("exporting"));
+    row.note.className = "note"; this.resize();
+    try {
+      const r = await Host.callTool("process_audio", { input_audio: row.path, ...PRESETS[preset], title: `${stemOf(row.path)}_${preset}` });
+      stop();
+      row.setNote([el("span", { text: t("exported") }), el("code", { text: r.path })], "ok");
+      const x = new Row({ path: r.path, kind: "export", preset, exportOf: row });
+      x.node.title = r.path;
+      let after = this.rows.indexOf(row);  // keep a version's exports right below it
+      while (this.rows[after + 1] && this.rows[after + 1].exportOf === row) after++;
+      this.rows.splice(after + 1, 0, x);
+      this.rows[after].node.after(x.node);
+      this.footer();
+      this.remember(`exported ${row.modelName} with the "${preset}" preset (${PRESETS[preset].format}, ${PRESETS[preset].sample_rate} Hz): ${r.path}`);
+      x.loading = true;
+      await x.load();
+      if (preset === "game_loop" && !Engine.playing) this.setLoop(true);
+    } catch (e) {
+      stop();
+      row.setNote(t("export.failed", { msg: e.message }), "error");
+    } finally {
+      const refocus = document.activeElement === row.exportBtn || document.activeElement === document.body;
+      row.busy = false; row.renderActions();
+      if (refocus && row.exportBtn) row.exportBtn.focus();
+    }
+  },
+  // repeat the call with the next seeds; generate_audio can also be rebuilt from the sidecar
+  moreArgs() {
+    const tool = this.toolName();
+    const seeds = this.candidates.map((r) => r.seed).filter((s) => typeof s === "number");
+    const next = seeds.length ? Math.max(...seeds) + 1 : null;
+    const withSeed = (a) => {
+      if (next != null && next <= 2 ** 31 - 5) a.seed = next; else delete a.seed;
+      return a;
+    };
+    if (tool === "process_audio") return null;
+    if (this.args) return { tool, args: withSeed({ ...this.args, variations: 2 }) };
+    if (tool !== "generate_audio") return null;
+    const m = (this.candidates[0] || {}).meta || {};
+    if (!m.prompt_used) return null;
+    const sf = m.sound_fields || {};
+    const a = { prompt: m.prompt || "", audio_type: m.audio_type || "music", duration_seconds: m.seconds, variations: 2,
+      cfg: m.cfg, steps: m.steps, bpm: m.bpm, negative_prompt: m.negative_prompt, title: m.title,
+      sound_source: sf.source, sound_action: sf.action, sound_material: sf.material, sound_space: sf.space };
+    for (const k of Object.keys(a)) if (a[k] == null || a[k] === "") delete a[k];
+    return { tool, args: withSeed(a) };
+  },
+  async more() {
+    const call = this.moreArgs();
+    if (!call || this.moreBusy) return;
+    this.moreBusy = true;
+    this.footer();
+    const stop = progress(this.moreProgress, t("more.working"));
+    this.status("");
+    try {
+      const r = await Host.callTool(call.tool, call.args);
+      const base = Math.max(0, ...this.candidates.map((x) => x.index));
+      let anchor = this.candidates[this.candidates.length - 1];
+      const after = (x) => this.rows[this.rows.indexOf(x) + 1];
+      while (after(anchor) && after(anchor).exportOf) anchor = after(anchor);
+      const added = (r.candidates || []).map((c, i) => new Row({ path: c.path, seed: c.seed, index: base + i + 1 }));
+      let at = this.rows.indexOf(anchor);
+      for (const x of added) { this.rows.splice(++at, 0, x); anchor.node.after(x.node); anchor = x; }
+      this.remember(`made ${added.length} more versions (same prompt, next seeds): ` + added.map((x) => `${x.modelName} seed ${x.seed}: ${x.path}`).join("; "));
+      stop(); this.moreProgress.replaceChildren();
+      this.moreBusy = false;
+      this.relabel();  // key numbers and the "Result" label change with more versions
+      await this.loadAll();
+    } catch (e) {
+      stop(); this.moreProgress.replaceChildren();
+      this.moreBusy = false;
+      this.footer();
+      this.status(t("more.failed", { msg: e.message }), { error: true });
+    }
+  },
+  key(e) {
+    if (e.defaultPrevented || e.metaKey || e.ctrlKey || e.altKey) return;
+    if (e.target.closest && e.target.closest(".panel") && e.key !== "Escape") return;
+    const cur = Engine.row || this.rows.find((r) => r.ready) || this.rows[0];
+    if (!cur) return;
+    if (e.key === " " && !(e.target instanceof HTMLButtonElement)) { Engine.toggle(cur); }
+    else if (/^[0-9]$/.test(e.key)) {
+      const r = this.rows.find((x) => x.keyNo === e.key) || (e.key === "1" && this.candidates.length === 1 ? this.candidates[0] : null);
+      if (!r) return;
+      if (Engine.playing) Engine.play(r);  // the A/B switch: same moment, other take
+      else Engine.seek(r, Engine.timeOf(cur));
+    }
+    else if (e.key === "l" || e.key === "L") { this.loopTouched = true; this.setLoop(!Engine.loop); }
+    else if (e.key === "ArrowRight" || e.key === "ArrowLeft") {
+      if (e.target.closest && e.target.closest(".track")) return;
+      Engine.seek(cur, Engine.timeOf(cur) + (e.key === "ArrowRight" ? 1 : -1) * (e.shiftKey ? 5 : 1));
+    }
+    else if (e.key === "Escape") this.closeMenu(true);
+    else return;
+    e.preventDefault();
+  },
+  // tell the host our height (it sizes the iframe to the content)
+  resize() {
+    if (this.sizeRaf) return;
+    this.sizeRaf = requestAnimationFrame(() => {
+      this.sizeRaf = 0;
+      const h = Math.ceil(document.documentElement.getBoundingClientRect().height);
+      if (h === this.lastH || !Host.ready) return;
+      this.lastH = h;
+      Host.notify("ui/notifications/size-changed", { height: h });
+    });
+  },
+};
+
+// ── start ─────────────────────────────────────────────────────────────────
+setLang();
+if (!document.documentElement.dataset.theme) document.documentElement.dataset.theme = matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light";
+Host.handlers["ui/notifications/tool-input"] = (p) => UI.onInput(p.arguments);
+Host.handlers["ui/notifications/tool-result"] = (p) => UI.onResult(p);
+Host.handlers["ui/notifications/tool-cancelled"] = () => UI.status(t("cancelled"));
+Host.handlers["ui/notifications/host-context-changed"] = (p) => Host.applyContext(p);
+$("loop").addEventListener("click", () => { UI.loopTouched = true; UI.setLoop(!Engine.loop); });
+$("seam").addEventListener("click", () => UI.seam());
+$("sub").addEventListener("click", (e) => {
+  const b = e.currentTarget;
+  b.setAttribute("aria-expanded", String(b.getAttribute("aria-expanded") !== "true"));
+  UI.resize();
+});
+document.addEventListener("keydown", (e) => UI.key(e));
+new ResizeObserver(() => { UI.resize(); UI.redrawAll(); }).observe(document.body);
+$("title").textContent = "Audio Studio";
+Host.init().then(() => { if (!UI.args && !UI.result) UI.status(t("loading"), { spin: true }); UI.resize(); })
+  .catch((e) => UI.status(String(e.message || e), { error: true }));
+</script>
+</body>
+</html>

@@ -3,6 +3,7 @@
 Tools: generate_audio, edit_audio (variation / inpaint / continue),
 process_audio (trim, loop, fades, normalize, 48 kHz WAV/OGG/FLAC export; see
 post.py) and unload_models. Every output gets a .json metadata sidecar.
+Clients with MCP Apps show their results in an in-chat player (chat_player.py).
 
 The model runtime is a pluggable backend (backends/): Stable Audio 3 on Apple
 Silicon via MLX, or on NVIDIA GPUs (Windows / Linux) via PyTorch. Models load lazily on the first call and are
@@ -35,9 +36,14 @@ from mcp.server.mcpserver import MCPServer
 from mcp.server.mcpserver.exceptions import ToolError
 from pydantic import AliasChoices, Field
 
-from . import __version__, post, runtime
+from . import __version__, chat_player, post, runtime
 from .backends import Backend, GenerationRequest, create_backend, resolve_backend_name
 from .prompts import DEFAULT_SECONDS, INSTRUCTIONS, prepare_prompt, strip_prefix
+
+# before anything imports huggingface_hub (it reads the cache location once)
+for _name in runtime.adopt_saved_hf_cache():
+    print(f"[audio-studio] {_name}={os.environ[_name]} (from the Windows environment; "
+          f"the MCP client did not pass it)", file=sys.stderr)
 
 # <repo>/outputs in a source checkout, ~/AudioStudio for package installs (uvx)
 OUTPUT_DIR = runtime.output_dir()
@@ -238,15 +244,21 @@ async def _lifespan(_app):
     yield {}
 
 
-server = MCPServer(name="audio-studio", instructions=INSTRUCTIONS, lifespan=_lifespan)
+server = MCPServer(name="audio-studio", instructions=INSTRUCTIONS, lifespan=_lifespan,
+                   extensions=[chat_player.create_apps()])
+# clients without MCP Apps get the tool list they always had
+server.middleware.append(chat_player.AppsGate())
 
 
-def _tool(fn):
+def _tool(fn=None, *, meta: dict | None = None):
     """Register an MCP tool whose failures reach the client as readable errors.
 
     The MCP SDK replaces any exception other than ToolError with a generic
     "Error executing tool" message, which would hide e.g. a missing ffmpeg or
     a failed weight download from the model and the user."""
+    if fn is None:
+        return functools.partial(_tool, meta=meta)
+
     @functools.wraps(fn)
     async def wrapper(*args, **kwargs):
         try:
@@ -258,7 +270,7 @@ def _tool(fn):
         except Exception as e:
             traceback.print_exc(file=sys.stderr)
             raise ToolError(f"{type(e).__name__}: {e}") from e
-    return server.tool()(wrapper)
+    return server.tool(meta=meta)(wrapper)
 
 
 AudioType = Literal["music", "instrument", "sfx", "raw"]
@@ -270,7 +282,7 @@ _Ceiling = Annotated[float | None, Field(ge=-24, le=0, description="Safety ceili
 _SECONDS_ALIASES = AliasChoices("duration_seconds", "seconds")
 
 
-@_tool
+@_tool(meta=chat_player.UI_META)
 async def generate_audio(
     prompt: Annotated[str, Field(description="English description (see server instructions). Optional for sfx when the sound_* fields are given.")] = "",
     audio_type: Annotated[AudioType, Field(description="music = BGM / full instrumental track; instrument = solo instrument, stem or loop; sfx = sound effect, ambience or one-shot; raw = no prefix (prompt used verbatim)")] = "music",
@@ -314,7 +326,7 @@ async def generate_audio(
                        res.included_model_load), "candidates": candidates}
 
 
-@_tool
+@_tool(meta=chat_player.UI_META)
 async def edit_audio(
     input_audio: Annotated[str, Field(description="Absolute path to an existing audio file (wav/mp3/flac/ogg).")],
     mode: Annotated[Literal["variation", "inpaint", "continue"], Field(description="variation = audio-to-audio remix/style or timbre transfer of the whole clip; inpaint = regenerate only [start,end] and keep the rest; continue = extend the clip to duration_seconds, regenerating from just before the end of its audible content (see overlap_seconds)")],
@@ -393,7 +405,7 @@ async def edit_audio(
             "mode": mode, **extra, "candidates": candidates}
 
 
-@_tool
+@_tool(meta=chat_player.UI_META)
 async def process_audio(
     input_audio: Annotated[str, Field(description="Absolute path to an audio file (any format soundfile/ffmpeg reads).")],
     start_seconds: Annotated[float, Field(ge=0, description="Trim: keep from here.")] = 0.0,
@@ -465,6 +477,16 @@ async def process_audio(
         return result
 
     return await asyncio.to_thread(job)
+
+
+@_tool(meta=chat_player.APP_ONLY_META)
+async def audio_preview(
+    path: Annotated[str, Field(description="A result file in the output folder.")],
+    offset: Annotated[int, Field(ge=0, description="Byte offset into the encoded preview.")] = 0,
+    format: Annotated[Literal["ogg", "mp3"], Field(description="Preview encoding.")] = "ogg",
+) -> dict:
+    """Internal helper of the in-chat player, which calls it itself; never call it yourself (it returns base64 audio data, not anything useful to read). Gives a compressed preview of a result file in chunks, with its waveform and metadata in the first one."""
+    return await asyncio.to_thread(chat_player.preview, path, offset, format)
 
 
 @_tool

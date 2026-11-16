@@ -40,6 +40,7 @@
 </tr>
 </table>
 
+- **Listen in the chat:** in Claude Desktop and other clients with MCP Apps, results show up as a player in the conversation. Compare versions, export, or ask for more without opening a file. See [Listen in the chat](#-listen-in-the-chat).
 - **Reproducible:** every file gets a `.json` sidecar with its prompt, seed and settings.
 - **Prompting built in:** the server teaches the client the official Stable Audio 3 prompt format, so a request like "make it sound like a creaky door" becomes a prompt the model understands.
 - **Same output as upstream:** on a Mac, results for the same seed are bit-for-bit identical to the official `sa3` CLI. On Windows it calls the official Stable Audio 3 PyTorch API.
@@ -299,6 +300,34 @@ claude mcp add --scope user --transport http audio-studio http://127.0.0.1:8765/
 > [!WARNING]
 > The web UI is for your own computer only. It listens on `127.0.0.1` only and has no login. Don't make it reachable from other machines (port forwarding, a reverse proxy or a tunnel): anyone who can open it can use your GPU and write files to your output folder.
 
+## 💬 Listen in the chat
+
+In clients that support [MCP Apps](https://modelcontextprotocol.io/extensions/apps/overview), the results of `generate_audio`, `edit_audio` and `process_audio` appear as a player right in the conversation. You don't have to open the files yourself.
+
+<p align="center">
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="docs/assets/chat-player-en-dark.png">
+  <img src="docs/assets/chat-player-en-light.png" alt="In-chat player: three versions of a dungeon loop with waveforms; version 2 is playing, with Use this and Export buttons on each version" width="820">
+</picture>
+<br><sub>Three versions of a dungeon loop, real model output, shown in the MCP Apps reference host.</sub>
+</p>
+
+- **Listen and compare:** waveform, play, pause and seek. Switch versions while one is playing and the next one continues from the same moment. Keys `1`–`9` pick a version, and `0` plays the audio from before an edit.
+- **Check loops:** turn on **Loop** and press **Hear the seam** to hear the end run into the start.
+- **Pick, export, make more:** **Use this** tells the assistant which version you chose. **Export** saves it for a game or a video with the same presets as the web UI. **2 more versions** runs the same prompt again with the next seeds.
+- The player follows the client's language (English, Japanese or Chinese) and its light or dark theme. Nothing leaves your computer: the server sends the player a compressed preview of each file.
+
+| Client | Player |
+|---|---|
+| Claude Desktop | ✅ |
+| VS Code (GitHub Copilot) | ✅ Turn on `chat.mcp.apps.enabled` (experimental) |
+| Cursor, Goose and other clients with MCP Apps | ✅ |
+| Codex app (desktop) | ✅ |
+| Claude Code, Codex CLI and IDE extension, and other clients | Text results, the same as before |
+| claude.ai, ChatGPT | ❌ They need a remote server, and this one runs on your computer |
+
+No player, only text? Restart the client after changing its MCP settings. In Claude Desktop, some versions don't show apps from local servers in regular chats ([anthropics/claude-ai-mcp#1069](https://github.com/anthropics/claude-ai-mcp/issues/1069)); an incognito chat shows them. To turn the player off, set `AUDIO_STUDIO_CHAT_PLAYER=off`.
+
 ## ⚙️ Configuration
 
 <details>
@@ -315,6 +344,7 @@ claude mcp add --scope user --transport http audio-studio http://127.0.0.1:8765/
 | `AUDIO_STUDIO_HOME` | macOS `~/Library/Application Support/audio-studio-mcp`, Windows `%LOCALAPPDATA%\audio-studio-mcp` | Where setup keeps the Stable Audio 3 runtime (~1 MB). The weights stay in the Hugging Face cache |
 | `AUDIO_STUDIO_BACKEND` | `auto` | `auto`, `sa3-mlx` (Apple Silicon) or `sa3-torch` (PyTorch, NVIDIA) |
 | `AUDIO_STUDIO_FFMPEG` | `ffmpeg` on `PATH` | Path to ffmpeg |
+| `AUDIO_STUDIO_CHAT_PLAYER` | `auto` | [In-chat player](#-listen-in-the-chat): `auto` for clients that announce MCP Apps support, `off` for text only everywhere, `on` also for clients that show MCP Apps without announcing it (clients without MCP Apps then list its helper tool) |
 
 Pass them with `claude mcp add ... -e NAME=value` or in the `env` block of your client config.
 </details>
@@ -423,6 +453,7 @@ Use WAV or OGG for loops. MP3 adds padding at the start and end, so it can't loo
 - [x] Windows backend for NVIDIA GPUs (Stable Audio 3, PyTorch)
 - [x] Local web UI (`--web`)
 - [x] One-command install with `uvx`
+- [x] Listen in the chat (MCP Apps player)
 - [ ] LoRA support (the upstream runtime already has it)
 
 Issues and pull requests are welcome.

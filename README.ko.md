@@ -40,6 +40,7 @@
 </tr>
 </table>
 
+- **채팅에서 바로 듣기:** Claude Desktop처럼 MCP Apps를 지원하는 클라이언트에서는 결과가 대화 안에 플레이어로 나타납니다. 파일을 열지 않고도 버전을 비교하고, 내보내고, 더 만들어 달라고 할 수 있습니다. [채팅에서 바로 듣기](#-채팅에서-바로-듣기)를 참고하세요.
 - **재현 가능:** 모든 파일에 프롬프트, 시드, 설정을 기록한 `.json` 사이드카 파일이 함께 저장됩니다.
 - **프롬프트 가이드 내장:** 서버가 클라이언트에 공식 Stable Audio 3 프롬프트 형식을 알려 주므로, "삐걱거리는 문 소리 느낌으로 해 줘" 같은 요청도 모델이 알아듣는 프롬프트로 바뀝니다.
 - **업스트림과 동일한 결과:** Mac에서는 같은 시드라면 공식 `sa3` CLI와 비트 단위까지 동일한 결과가 나옵니다. Windows에서는 공식 Stable Audio 3 PyTorch API를 호출합니다.
@@ -299,6 +300,34 @@ claude mcp add --scope user --transport http audio-studio http://127.0.0.1:8765/
 > [!WARNING]
 > 웹 UI는 로컬 전용입니다. `127.0.0.1`에서만 접속을 받으며 로그인 기능도 없습니다. 포트 포워딩, 리버스 프록시, 터널 등으로 다른 컴퓨터에서 접속할 수 있게 열어 두지 마세요. 웹 UI에 접속할 수 있는 사람은 누구나 내 GPU를 사용하고 출력 폴더에 파일을 저장할 수 있습니다.
 
+## 💬 채팅에서 바로 듣기
+
+[MCP Apps](https://modelcontextprotocol.io/extensions/apps/overview)를 지원하는 클라이언트에서는 `generate_audio`, `edit_audio`, `process_audio`의 결과가 대화 안에 플레이어로 바로 나타납니다. 파일을 직접 열 필요가 없습니다.
+
+<p align="center">
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="docs/assets/chat-player-en-dark.png">
+  <img src="docs/assets/chat-player-en-light.png" alt="채팅 플레이어: 던전 루프 세 버전과 파형. 버전 2를 재생 중이며, 버전마다 Use this와 Export 버튼이 있음" width="820">
+</picture>
+<br><sub>던전 루프 세 버전. 실제 모델 출력을 MCP Apps 레퍼런스 호스트에서 표시한 화면입니다.</sub>
+</p>
+
+- **듣고 비교하기:** 파형을 보면서 재생, 일시 정지, 탐색을 할 수 있습니다. 재생 중에 버전을 바꾸면 새 버전이 같은 지점부터 이어서 재생됩니다. `1`–`9` 키로 버전을 고르고, `0` 키로 편집 전 오디오를 재생합니다.
+- **루프 확인하기:** **Loop**를 켜고 **Hear the seam**을 누르면 끝부분이 시작 부분으로 이어지는 소리를 들을 수 있습니다.
+- **고르고, 내보내고, 더 만들기:** **Use this**를 누르면 어떤 버전을 골랐는지 어시스턴트에게 알려 줍니다. **Export**는 웹 UI와 같은 프리셋으로 게임이나 영상용 파일을 저장합니다. **2 more versions**는 같은 프롬프트를 다음 시드로 다시 실행합니다.
+- 플레이어는 클라이언트의 언어(영어, 일본어, 중국어)와 라이트/다크 테마를 따릅니다. 한국어는 지원하지 않아서 한국어 환경에서는 영어로 표시됩니다. 오디오는 내 컴퓨터 밖으로 나가지 않으며, 서버는 각 파일을 압축한 미리 듣기용 오디오를 플레이어에 보냅니다.
+
+| 클라이언트 | 플레이어 |
+|---|---|
+| Claude Desktop | ✅ |
+| VS Code(GitHub Copilot) | ✅ `chat.mcp.apps.enabled`를 켜야 함(실험적 기능) |
+| Cursor, Goose 등 MCP Apps를 지원하는 클라이언트 | ✅ |
+| Codex 앱(데스크톱) | ✅ |
+| Claude Code, Codex CLI·IDE 확장 등 그 밖의 클라이언트 | 지금처럼 텍스트로 결과 표시 |
+| claude.ai, ChatGPT | ❌ 원격 서버가 필요한데, 이 서버는 내 컴퓨터에서 실행됩니다 |
+
+플레이어 없이 텍스트만 나오나요? MCP 설정을 바꾼 뒤 클라이언트를 재시작하세요. Claude Desktop 일부 버전에서는 로컬 서버의 앱이 일반 채팅에 표시되지 않습니다([anthropics/claude-ai-mcp#1069](https://github.com/anthropics/claude-ai-mcp/issues/1069)). 이때도 시크릿 채팅에서는 표시됩니다. 플레이어를 끄려면 `AUDIO_STUDIO_CHAT_PLAYER=off`로 설정하세요.
+
 ## ⚙️ 설정
 
 <details>
@@ -315,6 +344,7 @@ claude mcp add --scope user --transport http audio-studio http://127.0.0.1:8765/
 | `AUDIO_STUDIO_HOME` | macOS `~/Library/Application Support/audio-studio-mcp`, Windows `%LOCALAPPDATA%\audio-studio-mcp` | setup이 Stable Audio 3 런타임(약 1 MB)을 두는 위치. 가중치는 Hugging Face 캐시에 그대로 있습니다 |
 | `AUDIO_STUDIO_BACKEND` | `auto` | `auto`, `sa3-mlx`(Apple Silicon) 또는 `sa3-torch`(PyTorch, NVIDIA) |
 | `AUDIO_STUDIO_FFMPEG` | `PATH`의 `ffmpeg` | ffmpeg 경로 |
+| `AUDIO_STUDIO_CHAT_PLAYER` | `auto` | [채팅 플레이어](#-채팅에서-바로-듣기): `auto`는 MCP Apps 지원을 알리는 클라이언트에서 사용, `off`는 모든 클라이언트에서 텍스트만, `on`은 지원을 알리지 않지만 MCP Apps를 표시하는 클라이언트에서도 사용(이때 MCP Apps를 지원하지 않는 클라이언트의 도구 목록에는 플레이어용 보조 도구가 나타남) |
 
 `claude mcp add ... -e NAME=value`로 전달하거나 클라이언트 설정의 `env` 블록에 넣으세요.
 </details>
@@ -423,6 +453,7 @@ Rosetta로 실행되는 x86_64 Python(예: `/usr/local` 아래의 오래된 Inte
 - [x] NVIDIA GPU용 Windows 백엔드(Stable Audio 3, PyTorch)
 - [x] 로컬 웹 UI(`--web`)
 - [x] `uvx` 명령 하나로 설치
+- [x] 채팅에서 바로 듣기(MCP Apps 플레이어)
 - [ ] LoRA 지원(업스트림 런타임은 이미 지원)
 
 이슈와 PR은 언제든 환영합니다.

@@ -40,6 +40,7 @@
 </tr>
 </table>
 
+- **在聊天里直接试听：** 在 Claude Desktop 等支持 MCP Apps 的客户端里，结果会以播放器的形式出现在对话中。不用打开文件，就能对比版本、导出，或者让它再多生成几个。见[在聊天里试听](#-在聊天里试听)。
 - **可复现：** 每个文件都带一个 `.json`，记录 prompt、seed 和参数。
 - **内置 prompt 指南：** 服务器会把官方 Stable Audio 3 的 prompt 格式告诉客户端，“来个吱呀作响的木门”这种说法会被改写成模型能理解的 prompt。
 - **结果和官方一致：** 在 Mac 上，同一个 seed 的输出和官方 `sa3` 命令行逐位相同；在 Windows 上直接调用官方的 Stable Audio 3 PyTorch API。
@@ -306,6 +307,34 @@ claude mcp add --scope user --transport http audio-studio http://127.0.0.1:8765/
 > [!WARNING]
 > Web UI 只适合在自己的电脑上使用：它只监听 `127.0.0.1`，没有登录验证。不要通过端口转发、反向代理或隧道让其他机器访问它，否则任何能打开页面的人都能使用你的 GPU，并向你的输出目录写入文件。
 
+## 💬 在聊天里试听
+
+在支持 [MCP Apps](https://modelcontextprotocol.io/extensions/apps/overview) 的客户端里，`generate_audio`、`edit_audio` 和 `process_audio` 的结果会直接以播放器的形式显示在对话中，不用自己去打开文件。
+
+<p align="center">
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="docs/assets/chat-player-zh-dark.png">
+  <img src="docs/assets/chat-player-zh-light.png" alt="聊天内播放器：地牢循环音乐的三个版本及其波形，正在播放版本 2，每个版本都有“用这个”和“导出”按钮" width="820">
+</picture>
+<br><sub>地牢循环音乐的三个版本，均为模型的实际输出，显示在 MCP Apps 的参考宿主中。</sub>
+</p>
+
+- **试听对比：** 显示波形，可以播放、暂停和拖动进度。播放时切换版本，新版本会从同一时刻接着播放。按 `1`–`9` 选择版本，按 `0` 播放编辑前的声音。
+- **检查循环：** 打开“循环”，再点“试听接缝”，就能听到结尾接回开头的效果。
+- **选定、导出、再来几个：** 点“用这个”会告诉 AI 你选了哪个版本。“导出”用和 Web UI 相同的预设，保存成适合游戏或视频的文件。“再生成 2 个版本”会用同样的 prompt 和接下来的 seed 再生成一次。
+- 播放器跟随客户端的语言（英文、日文或中文）和浅色/深色主题。音频不会离开你的电脑：服务器发给播放器的是每个文件的压缩预览。
+
+| 客户端 | 播放器 |
+|---|---|
+| Claude Desktop | ✅ |
+| VS Code（GitHub Copilot） | ✅ 需开启 `chat.mcp.apps.enabled`（实验性功能） |
+| Cursor、Goose 等支持 MCP Apps 的客户端 | ✅ |
+| Codex 桌面应用 | ✅ |
+| Claude Code、Codex CLI 和 IDE 插件等其他客户端 | 和以前一样返回文字结果 |
+| claude.ai、ChatGPT | ❌ 它们需要远程服务器，而本服务器运行在你自己的电脑上 |
+
+没有播放器，只有文字？修改 MCP 设置后请重启客户端。部分版本的 Claude Desktop 在普通对话里不显示本地服务器的应用（[anthropics/claude-ai-mcp#1069](https://github.com/anthropics/claude-ai-mcp/issues/1069)），在无痕对话里可以显示。要关闭播放器，设置 `AUDIO_STUDIO_CHAT_PLAYER=off`。
+
 ## ⚙️ 配置
 
 <details>
@@ -322,6 +351,7 @@ claude mcp add --scope user --transport http audio-studio http://127.0.0.1:8765/
 | `AUDIO_STUDIO_HOME` | macOS `~/Library/Application Support/audio-studio-mcp`，Windows `%LOCALAPPDATA%\audio-studio-mcp` | setup 存放 Stable Audio 3 运行时（约 1 MB）的位置。权重在 Hugging Face 缓存里 |
 | `AUDIO_STUDIO_BACKEND` | `auto` | `auto`、`sa3-mlx`（Apple Silicon）或 `sa3-torch`（PyTorch，NVIDIA） |
 | `AUDIO_STUDIO_FFMPEG` | `PATH` 里的 `ffmpeg` | ffmpeg 路径 |
+| `AUDIO_STUDIO_CHAT_PLAYER` | `auto` | [聊天内播放器](#-在聊天里试听)：`auto` 只对声明支持 MCP Apps 的客户端启用，`off` 在所有客户端都只返回文字，`on` 对没有声明、但能显示 MCP Apps 的客户端也启用（这时不支持 MCP Apps 的客户端会在工具列表里看到播放器的辅助工具） |
 
 用 `claude mcp add ... -e 名称=值` 传入，或写在客户端配置的 `env` 里。
 </details>
@@ -430,6 +460,7 @@ Windows + RTX 3060 12 GB，medium 模型：
 - [x] 面向 NVIDIA 显卡的 Windows 后端（Stable Audio 3、PyTorch）
 - [x] 本地 Web UI（`--web`）
 - [x] 用一条 `uvx` 命令安装
+- [x] 在聊天里试听（MCP Apps 播放器）
 - [ ] LoRA 支持（上游运行时已经支持）
 
 欢迎提 Issue 和 Pull Request。

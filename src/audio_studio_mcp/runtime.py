@@ -127,11 +127,56 @@ def setup_command(model: str | None = None) -> str:
     return f"{run_command()} setup{extra}"
 
 
+# Where the Hugging Face cache is (huggingface_hub reads them at import).
+HF_CACHE_VARS = ("HF_HOME", "HF_HUB_CACHE", "HUGGINGFACE_HUB_CACHE")
+
+
 def custom_folders() -> str:
     """Folders this process was told about that a plain terminal may not know
     (MCP clients pass env vars); setup must use the same ones."""
-    return ", ".join(f"{k}={os.environ[k]}" for k in ("AUDIO_STUDIO_HOME", "HF_HOME", "HF_HUB_CACHE")
+    return ", ".join(f"{k}={os.environ[k]}" for k in ("AUDIO_STUDIO_HOME", *HF_CACHE_VARS)
                      if os.environ.get(k))
+
+
+def _windows_saved_env(name: str) -> str | None:
+    """A variable from the Windows user (then system) environment in the registry."""
+    import winreg
+    keys = ((winreg.HKEY_CURRENT_USER, "Environment"),
+            (winreg.HKEY_LOCAL_MACHINE, r"SYSTEM\CurrentControlSet\Control\Session Manager\Environment"))
+    for root, sub in keys:
+        try:
+            with winreg.OpenKey(root, sub) as key:
+                value, kind = winreg.QueryValueEx(key, name)
+        except OSError:
+            continue
+        if isinstance(value, str) and value.strip():
+            return winreg.ExpandEnvironmentStrings(value) if kind == winreg.REG_EXPAND_SZ else value
+    return None
+
+
+def adopt_saved_hf_cache(environ=None, read=None) -> list[str]:
+    """Claude Desktop (and other clients built on the TypeScript MCP SDK) start
+    stdio servers with only a few system variables, so a Hugging Face cache the
+    user moved with a Windows environment variable (say to D:) goes missing and
+    the weights look "not downloaded". When the client passed none of the cache
+    variables, take them from the user's saved environment. Returns the names set."""
+    environ = os.environ if environ is None else environ
+    if read is None:
+        if os.name != "nt":
+            return []
+        read = _windows_saved_env
+    if any(environ.get(k) for k in HF_CACHE_VARS):
+        return []  # the client chose a cache: keep it as it is
+    adopted = []
+    for name in HF_CACHE_VARS:
+        try:
+            value = read(name)
+        except Exception:  # unreadable registry: same as not set
+            value = None
+        if value:
+            environ[name] = value
+            adopted.append(name)
+    return adopted
 
 
 def runtime_ready(path: Path | None = None) -> bool:

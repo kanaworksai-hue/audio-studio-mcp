@@ -40,6 +40,7 @@
 </tr>
 </table>
 
+- **チャットの中で聴ける：** Claude Desktop など MCP Apps に対応したクライアントでは、結果が会話の中にプレーヤーとして表示されます。ファイルを開かなくても、バージョンの聴き比べや書き出し、追加の生成ができます。詳しくは[チャットで聴く](#-チャットで聴く)を参照してください。
 - **再現できる：** すべてのファイルに、プロンプト・シード・設定を記録した `.json` が付きます。
 - **プロンプト作りも任せられる：** サーバーが公式の Stable Audio 3 プロンプト形式をクライアントに伝えるので、「きしむドアの音」のような頼み方でも、モデルが理解できるプロンプトに書き換えられます。
 - **公式と同じ出力：** Mac では、同じシードなら公式の `sa3` CLI とビット単位で同じ結果になります。Windows では公式の Stable Audio 3 PyTorch API をそのまま呼び出します。
@@ -306,6 +307,34 @@ claude mcp add --scope user --transport http audio-studio http://127.0.0.1:8765/
 > [!WARNING]
 > Web UI は自分のパソコンだけで使うためのものです。待ち受けは `127.0.0.1` のみで、ログイン機能はありません。ポート転送、リバースプロキシ、トンネルなどで他のマシンから開けるようにしないでください。開ける人は誰でも GPU を使い、出力フォルダにファイルを書き込めてしまいます。
 
+## 💬 チャットで聴く
+
+[MCP Apps](https://modelcontextprotocol.io/extensions/apps/overview) に対応したクライアントでは、`generate_audio`、`edit_audio`、`process_audio` の結果が会話の中にプレーヤーとして表示されます。自分でファイルを開く必要はありません。
+
+<p align="center">
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="docs/assets/chat-player-ja-dark.png">
+  <img src="docs/assets/chat-player-ja-light.png" alt="チャット内プレーヤー：ダンジョン用ループ BGM の 3 バージョンと波形。バージョン 2 を再生中で、各バージョンに「これを使う」と「書き出し」のボタンがある" width="820">
+</picture>
+<br><sub>ダンジョン用ループ BGM の 3 バージョン（実際のモデル出力）。MCP Apps のリファレンスホストで表示しています。</sub>
+</p>
+
+- **聴き比べ：** 波形を見ながら再生、一時停止、シークができます。再生中に別のバージョンへ切り替えると、同じ位置から続きが流れます。キーの `1`〜`9` でバージョンを選び、`0` で編集前の音を再生します。
+- **ループの確認：** 「ループ」をオンにして「つなぎ目を聴く」を押すと、終わりから頭へ戻るところを聴けます。
+- **選ぶ・書き出す・もっと作る：** 「これを使う」を押すと、どのバージョンに決めたかを AI に伝えます。「書き出し」は Web UI と同じプリセットで、ゲームや動画向けに保存します。「あと 2 バージョン作る」は、同じプロンプトを続きのシードでもう一度生成します。
+- プレーヤーはクライアントの表示言語（英語・日本語・中国語）と、ライト／ダークのテーマに合わせて表示されます。音声がパソコンの外に送られることはありません。プレーヤーには、サーバーが各ファイルを圧縮したプレビューを渡します。
+
+| クライアント | プレーヤー |
+|---|---|
+| Claude Desktop | ✅ |
+| VS Code（GitHub Copilot） | ✅ `chat.mcp.apps.enabled` をオンにする（実験的機能） |
+| Cursor、Goose など MCP Apps に対応したクライアント | ✅ |
+| Codex アプリ（デスクトップ） | ✅ |
+| Claude Code、Codex の CLI と IDE 拡張などのクライアント | これまでどおりテキストで結果を返します |
+| claude.ai、ChatGPT | ❌ リモートサーバーが必要ですが、このサーバーは自分のパソコンで動きます |
+
+プレーヤーが出ずにテキストだけが表示される場合は、MCP の設定を変えたあとにクライアントを再起動してください。Claude Desktop のバージョンによっては、ローカルサーバーのアプリが通常のチャットに表示されません（[anthropics/claude-ai-mcp#1069](https://github.com/anthropics/claude-ai-mcp/issues/1069)）。その場合もシークレットチャットでは表示されます。プレーヤーを使わないときは `AUDIO_STUDIO_CHAT_PLAYER=off` を設定します。
+
 ## ⚙️ 設定
 
 <details>
@@ -322,6 +351,7 @@ claude mcp add --scope user --transport http audio-studio http://127.0.0.1:8765/
 | `AUDIO_STUDIO_HOME` | macOS `~/Library/Application Support/audio-studio-mcp`、Windows `%LOCALAPPDATA%\audio-studio-mcp` | setup が Stable Audio 3 ランタイム（約 1 MB）を置く場所。重みは Hugging Face のキャッシュに置かれます |
 | `AUDIO_STUDIO_BACKEND` | `auto` | `auto`、`sa3-mlx`（Apple Silicon）、`sa3-torch`（PyTorch、NVIDIA） |
 | `AUDIO_STUDIO_FFMPEG` | `PATH` 上の `ffmpeg` | ffmpeg のパス |
+| `AUDIO_STUDIO_CHAT_PLAYER` | `auto` | [チャット内プレーヤー](#-チャットで聴く)：`auto` は MCP Apps 対応を通知するクライアントで表示、`off` はすべてのクライアントでテキストのみ、`on` は対応を通知せずに MCP Apps を表示できるクライアントでも表示（その場合、MCP Apps 非対応のクライアントではプレーヤー用の補助ツールが一覧に出ます） |
 
 `claude mcp add ... -e 名前=値` で渡すか、クライアント設定の `env` に書きます。
 </details>
@@ -430,6 +460,7 @@ Rosetta で動く x86_64 版の Python（たとえば `/usr/local` にある Int
 - [x] NVIDIA GPU 向けの Windows バックエンド（Stable Audio 3、PyTorch）
 - [x] ローカル Web UI（`--web`）
 - [x] `uvx` のコマンド 1 つでインストール
+- [x] チャットの中で聴く（MCP Apps プレーヤー）
 - [ ] LoRA 対応（上流のランタイムは対応済み）
 
 Issue やプルリクエストを歓迎します。

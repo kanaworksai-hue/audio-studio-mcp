@@ -103,7 +103,7 @@ def nvidia_gpu_present() -> bool:
 def cpu_torch_message(version: str) -> str:
     return (f"PyTorch {version} is the CPU-only build, but this machine has an NVIDIA GPU. PyPI only "
             "has CPU builds of PyTorch for Windows: start Audio Studio with --torch-backend cu126 "
-            f"(uv 0.9.19 or newer), here and in your MCP client's config:\n  {UVX_NVIDIA} setup")
+            f"(uv 0.9.20 or newer), here and in your MCP client's config:\n  {UVX_NVIDIA} setup")
 
 
 def run_command() -> str:

@@ -99,10 +99,18 @@ def test_data_home_per_platform(monkeypatch, tmp_path):
     monkeypatch.setattr(runtime.Path, "home", classmethod(lambda cls: tmp_path))
     monkeypatch.setattr(runtime.sys, "platform", "darwin")
     assert runtime.data_home() == tmp_path / "Library" / "Application Support" / "audio-studio-mcp"
+    # Fake os.name for runtime only: patching the real one breaks pathlib on Windows
+    # (Path() would build a PosixPath there, which raises).
+    import os
+    import types
+    monkeypatch.setattr(runtime, "os", types.SimpleNamespace(name="posix", environ=os.environ))
     monkeypatch.setattr(runtime.sys, "platform", "linux")
-    monkeypatch.setattr(runtime.os, "name", "posix")
     monkeypatch.setenv("XDG_DATA_HOME", str(tmp_path / "xdg"))
     assert runtime.data_home() == tmp_path / "xdg" / "audio-studio-mcp"
+    monkeypatch.setattr(runtime, "os", types.SimpleNamespace(name="nt", environ=os.environ))
+    monkeypatch.setattr(runtime.sys, "platform", "win32")
+    monkeypatch.setenv("LOCALAPPDATA", str(tmp_path / "local"))
+    assert runtime.data_home() == tmp_path / "local" / "audio-studio-mcp"
 
 
 def test_installers_pin_the_same_commit():
@@ -177,7 +185,10 @@ def test_mlx_missing_weights(tmp_path):
         models = up / "optimized" / "mlx" / "models" / "mlx"
         models.mkdir(parents=True)
         (models / "dit.npz").touch()
-        (models / "dec.npz").symlink_to(tmp_path / "cleared-hf-cache-file")  # dangling link
+        try:
+            (models / "dec.npz").symlink_to(tmp_path / "cleared-hf-cache-file")  # dangling link
+        except OSError:  # Windows without Developer Mode: WinError 1314
+            pytest.skip("creating symlinks needs Developer Mode or admin rights on Windows")
         assert weights.missing("sa3-mlx", "medium", up) == ["models/mlx/dec.npz", "models/mlx/t5.npz"]
         assert weights.file_count("medium", up) == 3
     finally:
@@ -209,7 +220,7 @@ def anyio_backend():
 @pytest.mark.anyio
 async def test_package_install_requires_setup_before_generating(fake, package_install):
     fake.missing_weights = lambda: ["models/mlx/dit_medium_f16.npz"]
-    with pytest.raises(Exception, match=r"not downloaded yet.*uvx --python 3\.11 audio-studio-mcp setup"):
+    with pytest.raises(Exception, match=r"not downloaded yet.*" + re.escape(runtime.setup_command())):
         await server.generate_audio(prompt="x", duration_seconds=1)
     assert fake.requests == []  # nothing ran (no silent 7 GB download inside a tool call)
 
@@ -294,14 +305,34 @@ def test_setup_downloads_after_showing_the_size(package_install, fake_download, 
         state["missing"] = []
         return 0
     monkeypatch.setattr(weights, "download", download)
+    try:
+        import huggingface_hub  # noqa: F401
+    except ImportError:  # Linux without the cuda extra (CI): setup only reads the cache path
+        import sys
+        import types
+        fake_hf = types.ModuleType("huggingface_hub")
+        fake_hf.constants = types.SimpleNamespace(HF_HUB_CACHE="hf-cache")
+        monkeypatch.setitem(sys.modules, "huggingface_hub", fake_hf)
     assert firstrun.main(["-y"]) == 0
     out = capsys.readouterr().out
     assert "Download size:" in out and "~6.9 GB" in out and "Stability AI Community License" in out
     assert calls == [("sa3-mlx", ["medium"], runtime.upstream_dir())]
-    assert "claude mcp add --scope user audio-studio -- uvx --python 3.11 audio-studio-mcp" in out
+    # The uvx line of the OS the tests run on (the backend is faked as sa3-mlx).
+    assert f"claude mcp add --scope user audio-studio -- {runtime.run_command()}\n" in out
 
     assert firstrun.main([]) == 0  # second run: nothing to download
     assert "already downloaded" in capsys.readouterr().out and len(calls) == 1
+
+
+def test_null_stdin_is_not_a_terminal():
+    """Agents often start setup with stdin = NUL / /dev/null. On Windows isatty()
+    is true for NUL, and setup used to ask "Download now?", read EOF and stop."""
+    import subprocess
+    import sys
+    code = "from audio_studio_mcp import firstrun; print(firstrun.stdin_is_terminal())"
+    out = subprocess.run([sys.executable, "-c", code], stdin=subprocess.DEVNULL,
+                         capture_output=True, text=True, timeout=60, check=True).stdout
+    assert out.strip() == "False"
 
 
 def test_server_json_matches_the_package():

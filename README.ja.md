@@ -71,7 +71,7 @@ flowchart LR
 
 ## 🚀 クイックスタート
 
-必要なのは [uv](https://docs.astral.sh/uv/) 0.9.19 以降と [ffmpeg](https://ffmpeg.org) だけです。clone は不要で、`uvx` が公開パッケージをダウンロードして実行します。
+必要なのは [uv](https://docs.astral.sh/uv/) 0.9.20 以降と [ffmpeg](https://ffmpeg.org) だけです。clone は不要で、`uvx` が公開パッケージをダウンロードして実行します。
 
 | | macOS | Windows |
 |---|---|---|
@@ -92,7 +92,7 @@ uvx --python 3.11 audio-studio-mcp setup
 uvx --python 3.11 --torch-backend cu126 audio-studio-mcp setup
 ```
 
-`--torch-backend cu126` は uv に CUDA 版の PyTorch を入れさせるオプションです（PyPI には Windows 向けの CPU 版しかありません）。`--python 3.11` は、PyTorch がまだ対応していない新しい Python が選ばれるのを防ぎます。Windows で Hugging Face にまだログインしていない場合は、setup が手順を表示します。モデルのページでライセンスに同意し、**ご自身のターミナルで** `uvx --from huggingface_hub hf auth login` を実行してログインしてから、setup をもう一度実行してください。
+`--torch-backend cu126` は uv に CUDA 版の PyTorch を入れさせるオプションです（PyPI には Windows 向けの CPU 版しかありません）。`--python 3.11` は、PyTorch がまだ対応していない新しい Python が選ばれるのを防ぎます。uvx が `unexpected argument '--torch-backend'` と表示する場合は uv が古いので、`winget upgrade astral-sh.uv`（または `uv self update`）で更新してください。Windows で Hugging Face にまだログインしていない場合は、setup が手順を表示します。モデルのページでライセンスに同意し、**ご自身のターミナルで** `uvx --from huggingface_hub hf auth login` を実行してログインしてから、setup をもう一度実行してください。
 
 **2. MCP クライアントに登録します。** `setup` を外した同じコマンドを使います：
 

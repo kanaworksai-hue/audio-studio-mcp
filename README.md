@@ -71,7 +71,7 @@ flowchart LR
 
 ## 🚀 Quick start
 
-You need [uv](https://docs.astral.sh/uv/) 0.9.19 or newer and [ffmpeg](https://ffmpeg.org). There is nothing to clone: `uvx` downloads and runs the published package.
+You need [uv](https://docs.astral.sh/uv/) 0.9.20 or newer and [ffmpeg](https://ffmpeg.org). There is nothing to clone: `uvx` downloads and runs the published package.
 
 | | macOS | Windows |
 |---|---|---|
@@ -92,7 +92,7 @@ uvx --python 3.11 audio-studio-mcp setup
 uvx --python 3.11 --torch-backend cu126 audio-studio-mcp setup
 ```
 
-`--torch-backend cu126` makes uv install the CUDA build of PyTorch (PyPI only has the CPU build for Windows), and `--python 3.11` keeps uv away from a Python that PyTorch doesn't support yet. On Windows, if you aren't logged in to Hugging Face yet, setup prints the steps: accept the license on the model page, then log in **in your own terminal** with `uvx --from huggingface_hub hf auth login` and run setup again.
+`--torch-backend cu126` makes uv install the CUDA build of PyTorch (PyPI only has the CPU build for Windows), and `--python 3.11` keeps uv away from a Python that PyTorch doesn't support yet. If uvx answers `unexpected argument '--torch-backend'`, your uv is too old: update it with `winget upgrade astral-sh.uv` (or `uv self update`). On Windows, if you aren't logged in to Hugging Face yet, setup prints the steps: accept the license on the model page, then log in **in your own terminal** with `uvx --from huggingface_hub hf auth login` and run setup again.
 
 **2. Register it with your MCP client.** Use the same command without `setup`:
 

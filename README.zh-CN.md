@@ -71,7 +71,7 @@ flowchart LR
 
 ## 🚀 快速开始
 
-只需要 [uv](https://docs.astral.sh/uv/) 0.9.19 或更新版本和 [ffmpeg](https://ffmpeg.org)。不用 clone 仓库：`uvx` 会下载并运行已发布的包。
+只需要 [uv](https://docs.astral.sh/uv/) 0.9.20 或更新版本和 [ffmpeg](https://ffmpeg.org)。不用 clone 仓库：`uvx` 会下载并运行已发布的包。
 
 | | macOS | Windows |
 |---|---|---|
@@ -92,7 +92,7 @@ uvx --python 3.11 audio-studio-mcp setup
 uvx --python 3.11 --torch-backend cu126 audio-studio-mcp setup
 ```
 
-`--torch-backend cu126` 让 uv 安装 CUDA 版的 PyTorch（PyPI 上 Windows 只有 CPU 版），`--python 3.11` 避免 uv 选中 PyTorch 还不支持的新版 Python。在 Windows 上如果还没登录 Hugging Face，setup 会打印步骤：在模型页面同意许可，然后**在你自己的终端里**运行 `uvx --from huggingface_hub hf auth login` 登录，再运行一次 setup。
+`--torch-backend cu126` 让 uv 安装 CUDA 版的 PyTorch（PyPI 上 Windows 只有 CPU 版），`--python 3.11` 避免 uv 选中 PyTorch 还不支持的新版 Python。如果 uvx 提示 `unexpected argument '--torch-backend'`，说明 uv 太旧，用 `winget upgrade astral-sh.uv`（或 `uv self update`）更新。在 Windows 上如果还没登录 Hugging Face，setup 会打印步骤：在模型页面同意许可，然后**在你自己的终端里**运行 `uvx --from huggingface_hub hf auth login` 登录，再运行一次 setup。
 
 **2. 注册到 MCP 客户端。** 用同一条命令，去掉 `setup`：
 

@@ -67,6 +67,24 @@ def check_torch() -> bool:
     return True
 
 
+def stdin_is_terminal() -> bool:
+    """True when someone can answer a question. On Windows isatty() is also true
+    for NUL (a character device), which is what agents and other non-interactive
+    runners often pass as stdin, so ask the console API there."""
+    try:
+        if not sys.stdin or not sys.stdin.isatty():
+            return False
+        if os.name != "nt":
+            return True
+        import ctypes
+        import msvcrt
+        mode = ctypes.c_uint32()
+        handle = msvcrt.get_osfhandle(sys.stdin.fileno())
+        return bool(ctypes.windll.kernel32.GetConsoleMode(handle, ctypes.byref(mode)))
+    except (OSError, ValueError, AttributeError):
+        return False
+
+
 def confirm(question: str) -> bool:
     try:
         reply = input(f"  {question} [Y/n] ")
@@ -89,6 +107,9 @@ def main(argv: list[str] | None = None) -> int:
     args = ap.parse_args(argv)
     for name in ("httpx", "httpx2", "huggingface_hub"):  # no per-request log lines
         logging.getLogger(name).setLevel(logging.WARNING)
+    # Windows without Developer Mode can't make symlinks; the Hugging Face cache
+    # then copies files instead, which works, but its long warning reads like an error.
+    os.environ.setdefault("HF_HUB_DISABLE_SYMLINKS_WARNING", "1")
     # Windows consoles and pipes may use a legacy code page; never crash on ✓ / →.
     for stream in (sys.stdout, sys.stderr):
         stream.reconfigure(errors="replace")
@@ -152,7 +173,7 @@ def main(argv: list[str] | None = None) -> int:
                   "  is interrupted, run setup again and finished files are kept.\n"
                   f"  Saved to the Hugging Face cache: {constants.HF_HUB_CACHE}\n"
                   f"  {weights.LICENSE_NOTE}", flush=True)
-            if not args.yes and sys.stdin.isatty() and not confirm("Download now?"):
+            if not args.yes and stdin_is_terminal() and not confirm("Download now?"):
                 print(f"\nNothing downloaded. Run setup again when you are ready: {runtime.setup_command()}")
                 return 1
         rc = weights.download(backend, todo, upstream, retry)

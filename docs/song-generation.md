@@ -16,7 +16,7 @@ uvx --python 3.11 --torch-backend cu126 audio-studio-mcp song-setup
 
 From the source checkout, run `uv run audio-studio-mcp song-setup`. Add `--profile quality` to install Q8_0, or `--profile both` to let Auto choose between the two profiles.
 
-On Apple Silicon, setup checks installed memory against the song policy before prompting for the license or looking for build tools. Setup then builds the pinned audio.cpp CLI using Git, CMake and Xcode with the Metal compiler installed. Set DEVELOPER_DIR to the full Xcode Developer directory when Xcode lives outside its standard location. Both song-setup --check and the Songs tab report when installed memory is below the policy minimum or the Metal runtime needs installation.
+On Apple Silicon, setup builds the pinned audio.cpp CLI using Git, CMake and Xcode with the Metal compiler installed. Set DEVELOPER_DIR to the full Xcode Developer directory when Xcode lives outside its standard location. Both `song-setup --check` and the Songs tab show installed-memory recommendations and help identify a missing runtime.
 
 On Windows x64, setup installs the pinned audio.cpp v0.9.5 application and CUDA 13.3 redistributable ZIPs (0.86 GB of downloads, about 1.12 GB installed). Use an NVIDIA R610 or newer driver and a GPU with compute capability 7.5 or newer. CUDA DLLs are installed beside the CLI. The NVIDIA graphics driver supplies nvidia-smi and the system CUDA driver. A separate CUDA Toolkit install is unnecessary. For offline import or runtime repair, pass --runtime-from DIR with the two official Windows x64 CUDA 13.3 ZIPs. [Pinned Windows release](https://github.com/0xShug0/audio.cpp/releases/tag/v0.9.5) · [NVIDIA driver branches](https://docs.nvidia.com/cuda/cuda-toolkit-release-notes/index.html#cuda-driver)
 
@@ -56,17 +56,17 @@ The JSON sidecar records lyrics, style, seed, full request, runtime/weights revi
 
 ## Resource policy
 
-Auto tries the highest precision installed profile that fits current RAM, GPU headroom, and the waiting-time estimate for the requested duration. Fast selects Q4_0. Highest quality selects Q8_0. Manual and replay modes still check resources and may exceed the Auto time budget. Auto can retry Q4 after a Q8 allocation failure if Q4 is installed and fits the refreshed resource checks and remaining time. Install --profile both to let Auto use either profile.
+Auto considers installed profiles within the wait budget. It prefers the highest precision that meets the memory recommendations. If no profile meets those recommendations, it tries the lightest installed profile within the budget and reports the advisory. Fast selects Q4_0 and Highest quality selects Q8_0. Manual selection and replay use the chosen profile and can exceed the Auto time budget. If the runtime reports an allocation failure, Auto can retry Q4 after Q8 when Q4 is installed and fits the remaining time. Install `--profile both` to let Auto choose either profile.
 
 After each finished song, the server compares its synthesis time with the policy estimate for the audio length it actually generated. It stores the ratio in `songs/speed.json` under AUDIO_STUDIO_HOME by profile, device, runtime and length (up to 60 seconds, over 60 to under 150 seconds, or 150 seconds and above). Each ratio is limited to 0.25–8× and averaged with the previous value in the same group. The job estimate, Auto budget check and `song-setup --check` use the group for the requested length. When that group has no measurements, they use the policy estimate. Older entries without length information are ignored. Delete the file to reset calibration.
 
-During synthesis the server watches memory. On macOS, critical memory pressure stops the song at once, and warning-level pressure stops it if it lasts 15 seconds; short warnings while the model loads are tolerated. If macOS kills audio.cpp (SIGKILL), the job reports a memory error and Auto can fall back from Q8 to Q4 like any other allocation failure. On Windows, the song stops when available RAM or commit headroom falls below 1 GiB.
+During synthesis, macOS reports elevated or critical memory pressure and Windows reports when available RAM or commit headroom falls below 1 GiB. These advisories appear in job status while generation continues. You can cancel the job at any time. An actual allocation failure or a macOS SIGKILL is reported as a memory error.
 
 For a long request that exceeds the default Auto budget, raise wait_budget_seconds or use the Auto time budget field in the WebUI's Advanced settings.
 
 ### macOS Metal
 
-| Setting | Q4_0 | Q8_0 |
+| Recommendation or estimate | Q4_0 | Q8_0 |
 | --- | ---: | ---: |
 | Total unified RAM | 32 GiB | 32 GiB |
 | Estimated system RAM available at start | 10 GiB | 14.5 GiB |
@@ -77,18 +77,18 @@ The starting values come from the 32 GiB Apple M6 measurements. On that machine 
 
 ### Windows CUDA
 
-| Setting | Q4_0 | Q8_0 |
+| Recommendation or estimate | Q4_0 | Q8_0 |
 | --- | ---: | ---: |
 | System RAM detected by Windows | 31 GiB | 31 GiB |
 | Available RAM and commit headroom at start | 8 GiB | 10 GiB |
 | Free dedicated VRAM at start | 6 GiB | 8.2 GiB |
 | Estimated wall time for a 180 s request | 164 s | 177 s |
 
-The default Windows budget is 180 seconds. Profile thresholds are based on the tested RTX 3060 12 GiB system. Windows may expose slightly less physical memory than installed. Auto takes the lower of the CUDA and NVIDIA driver free-memory readings and checks again after unloading local SA3. When Q8 is ineligible, Auto considers Q4 if installed. Free VRAM can change as other GPU apps run. These checks describe runtime headroom. Support on smaller VRAM or RAM configurations still needs separate real hardware validation.
+The default Windows budget is 180 seconds. Memory recommendations come from the tested RTX 3060 12 GiB system. Windows may expose slightly less physical memory than installed. Auto takes the lower of the CUDA and NVIDIA driver free-memory readings and checks again after unloading local SA3. Free VRAM can change as other GPU apps run. These checks describe runtime headroom. Support on smaller VRAM or RAM configurations still needs separate real hardware validation.
 
 ### Overrides
 
-Set wait_budget_seconds per Auto request or set AUDIO_STUDIO_SONG_POLICY to an absolute path to a local JSON file. Omitted top-level fields take their defaults. When supplying q4 or q8, include all four tuning fields. The following example uses the macOS defaults.
+Set wait_budget_seconds per Auto request or set AUDIO_STUDIO_SONG_POLICY to an absolute path to a local JSON file. Omitted top-level fields take their defaults. When supplying q4 or q8, include all four tuning fields. The three min_*_gib fields tune memory advisories and Auto recommendations. The following example uses the macOS defaults.
 
 ~~~json
 {

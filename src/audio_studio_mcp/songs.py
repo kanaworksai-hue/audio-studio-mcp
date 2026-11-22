@@ -37,7 +37,6 @@ WEIGHT_FILES = {
 VAE = "yue2-vae-f16.gguf"
 SHARED_FILES = (VAE, *(name for name in WEIGHT_FILES if name.startswith("sidecars/")))
 GIB = 1 << 30
-PRESSURE_GRACE_SECONDS = 15
 SPEED_FACTOR_LIMITS = (0.25, 8.0)
 DEFAULT_DURATION_SECONDS = 180
 MAX_DURATION_SECONDS = 240
@@ -61,7 +60,7 @@ Replay = Annotated[str | None, Field(max_length=4096, description=(
     "other arguments are ignored."))]
 Title = Annotated[str | None, Field(max_length=200, description="Short name used for the file name and metadata.")]
 ModeArg = Annotated[Mode, Field(description=(
-    "auto = best installed profile that fits memory and the wait budget; fast = Q4_0; quality = Q8_0."))]
+    "auto = recommends an installed profile using memory estimates and the wait budget; fast = Q4_0; quality = Q8_0."))]
 
 
 class SongRequest(BaseModel):
@@ -123,10 +122,10 @@ class Profile:
 
 @dataclass(frozen=True)
 class Resources:
-    total_gib: float
-    available_gib: float
+    total_gib: float | None
+    available_gib: float | None
     gpu_available_gib: float
-    pressure: int
+    pressure: int | None
     device: str
     device_index: int | None = None
     gpu_total_gib: float | None = None
@@ -225,22 +224,41 @@ def installed_profiles(root: Path, candidates: tuple[Profile, ...]) -> set[str]:
     return {p.id for p in candidates if has_file(root / p.model_file, WEIGHT_FILES[p.model_file][0])}
 
 
-def require_installed_ram(config: Policy, total_gib: float) -> None:
-    if total_gib < config.min_total_gib:
-        raise SongMemoryError(f"Song policy requires {config.min_total_gib:g} GiB installed RAM "
-                              f"({total_gib:.1f} GiB detected).")
+def ram_advisory(config: Policy, total_gib: float | None) -> str | None:
+    if total_gib is not None and total_gib < config.min_total_gib:
+        return (f"{total_gib:.1f} GiB installed RAM is below the song recommendation "
+                f"of {config.min_total_gib:g} GiB.")
+    return None
+
+
+def _mac_pressure_advisory(level: int | None, during_run: bool = False) -> str | None:
+    if level is not None and level > 1:
+        severity = "critical" if level >= 4 else "elevated"
+        action = "You can cancel this song." if during_run else "Generation may be slow or fail."
+        return f"macOS memory pressure is {severity}. {action}"
+    return None
+
+
+def _profile_advisories(profile: Profile, resources: Resources, backend: Backend) -> list[str]:
+    tune = profile.tuning
+    name = profile.quantization
+    notes = []
+    if resources.available_gib is not None and resources.available_gib < tune.min_available_gib:
+        notes.append(f"{name} recommends {tune.min_available_gib:g} GiB available RAM "
+                     f"({resources.available_gib:.1f} GiB now).")
+    if resources.gpu_available_gib < tune.min_gpu_gib:
+        memory = "free NVIDIA VRAM" if backend == "cuda" else "Metal working-set headroom"
+        notes.append(f"{name} recommends {tune.min_gpu_gib:g} GiB {memory} "
+                     f"({resources.gpu_available_gib:.1f} GiB now).")
+    return notes
 
 
 def select(config: Policy, resources: Resources, installed: set[str],
            request: SongRequest, *, pinned: str | None = None,
            excluded: set[str] | None = None, backend: Backend = "metal") -> Selection:
-    """Choose the highest precision eligible installed build, with explicit diagnostics."""
-    if resources.pressure != 1:
-        system = "Windows" if backend == "cuda" else "macOS"
-        raise SongMemoryError(f"{system} memory pressure is elevated. Free some memory and retry.")
-    require_installed_ram(config, resources.total_gib)
-    gpu_memory = "free NVIDIA VRAM" if backend == "cuda" else "Metal working-set headroom"
+    """Rank installed profiles within the Auto time budget, using memory as advice."""
     high, fast = profiles(config, backend)
+    auto = pinned is None and request.mode == "auto"
     candidates = [p for p in (high, fast) if p.id == pinned] if pinned else {
         "auto": [high, fast], "fast": [fast], "quality": [high],
     }[request.mode]
@@ -248,26 +266,29 @@ def select(config: Policy, resources: Resources, installed: set[str],
         raise ValueError("The original song profile is unavailable on this platform.")
     budget = request.wait_budget_seconds or config.wait_budget_seconds
     speed = speed_factors(candidates, resources.device, request.duration_seconds)
+    common = tuple(filter(None, (ram_advisory(config, resources.total_gib),
+                                 _mac_pressure_advisory(resources.pressure))))
     reasons: list[str] = []
+    fallback = None
     for p in candidates:
-        tune = p.tuning
         factor = speed.get(p.id, 1.0)
         estimate = p.estimate(request.duration_seconds, factor)
         if p.id in (excluded or ()):
             reasons.append(f"{p.quantization} ran out of memory.")
         elif p.id not in installed:
             reasons.append(f"{p.quantization} weights are not installed.")
-        elif resources.available_gib < tune.min_available_gib:
-            reasons.append(f"{p.quantization} needs {tune.min_available_gib:g} GiB available RAM "
-                           f"({resources.available_gib:.1f} GiB now).")
-        elif resources.gpu_available_gib < tune.min_gpu_gib:
-            reasons.append(f"{p.quantization} needs {tune.min_gpu_gib:g} GiB {gpu_memory} "
-                           f"({resources.gpu_available_gib:.1f} GiB now).")
-        elif pinned is None and request.mode == "auto" and estimate > budget:
+        elif auto and estimate > budget:
             reasons.append(f"{p.quantization} estimate {estimate}s exceeds the {budget}s Auto budget.")
         else:
-            return Selection(p, estimate, tuple(reasons), factor)
-    detail = (" ".join(reasons) + " Check available memory, duration, and installed profiles.")
+            advisories = _profile_advisories(p, resources, backend)
+            selection = Selection(p, estimate, (*reasons, *common, *advisories), factor)
+            if not auto or not (common or advisories) or p == fast:
+                return selection
+            fallback = selection
+            reasons.extend(advisories)
+    if fallback is not None:
+        return fallback
+    detail = (" ".join(reasons) + " Check the duration and installed profiles.")
     if any(p.id not in installed for p in candidates):
         missing = next(p for p in candidates if p.id not in installed)
         mode = "quality" if missing.id == high.id else "fast"
@@ -361,19 +382,41 @@ def metal_installed_ram() -> float:
     return total / GIB
 
 
+def installed_ram(backend: Backend) -> float | None:
+    if backend == "metal":
+        return read_memory(metal_installed_ram)
+    memory = read_memory(song_cuda.memory_status)
+    return memory[0] / GIB if memory is not None else None
+
+
+def _metal_available_ram() -> float:
+    vm = _read_command("/usr/bin/vm_stat")
+    size = re.search(r"page size of (\d+) bytes", vm)
+    pages = {k.lower(): int(v) for k, v in re.findall(r"^Pages (\w+):\s+(\d+)\.", vm, re.M)}
+    needed = ("free", "inactive", "speculative")
+    if size is None or not all(page in pages for page in needed):
+        raise ValueError("vm_stat did not report available memory pages.")
+    return sum(pages[page] for page in needed) * int(size[1]) / GIB
+
+
+def read_memory(read):
+    """Memory telemetry is advisory even when a system reading is unavailable."""
+    try:
+        return read()
+    except (OSError, ValueError, SongRuntimeError, subprocess.SubprocessError):
+        return None
+
+
 def probe_metal(binary: Path) -> Resources:
     try:
-        vm = _read_command("/usr/bin/vm_stat")
-        page_size = int(re.search(r"page size of (\d+) bytes", vm)[1])
-        pages = {k.lower(): int(v) for k, v in re.findall(r"^Pages (\w+):\s+(\d+)\.", vm, re.M)}
         result = subprocess.run([str(binary), "--list-devices", "--json"], text=True,
                                 capture_output=True, timeout=60, check=True)
         devices = json.loads(result.stdout)["devices"]
         metal = next(item for item in devices if item["backend"] == "metal")
         return Resources(
-            total_gib=metal_installed_ram(),
-            available_gib=(pages["free"] + pages["inactive"] + pages["speculative"]) * page_size / GIB,
-            pressure=memory_pressure(),
+            total_gib=read_memory(metal_installed_ram),
+            available_gib=read_memory(_metal_available_ram),
+            pressure=read_memory(memory_pressure),
             gpu_available_gib=metal["memory"]["free_bytes"] / GIB,
             device=metal["description"],
         )
@@ -386,10 +429,11 @@ def probe_metal(binary: Path) -> Resources:
 def probe_cuda(binary: Path) -> Resources:
     try:
         device = song_cuda.probe(binary)
-        total, available = song_cuda.memory_status()
     except (OSError, RuntimeError) as error:
         raise SongRuntimeError(f"{error} Check the song runtime with: {setup_command()}") from error
-    return Resources(total / GIB, available / GIB, device.free_bytes / GIB, 1,
+    memory = read_memory(song_cuda.memory_status)
+    total, available = (value / GIB for value in memory) if memory is not None else (None, None)
+    return Resources(total, available, device.free_bytes / GIB, 1,
                      device.name, device.index, device.total_bytes / GIB, device.driver, device.compute)
 
 
@@ -445,27 +489,18 @@ def runtime_options(backend: Backend, device: int | None) -> dict:
     return options
 
 
-def _check_memory_during_run(backend: Backend, state: dict, now: float) -> None:
+def _running_memory_advisory(backend: Backend) -> str | None:
     if backend == "cuda":
-        if song_cuda.memory_status()[1] < GIB:
-            raise SongMemoryError("Available Windows RAM or commit headroom fell below 1 GiB during synthesis.")
-        return
-    # 1 = normal, 2 = warn, 4 = critical. Model loading briefly reaches warn on smaller Macs,
-    # so warn only stops the song when it persists; critical stops it at once.
-    level = memory_pressure()
-    if level >= 4:
-        raise SongMemoryError("macOS memory pressure became critical during song synthesis.")
-    if level == 1:
-        state.pop("elevated_since", None)
-        return
-    since = state.setdefault("elevated_since", now)
-    if now - since >= PRESSURE_GRACE_SECONDS:
-        raise SongMemoryError(f"macOS memory pressure stayed elevated for {PRESSURE_GRACE_SECONDS} s "
-                              "during song synthesis.")
+        memory = read_memory(song_cuda.memory_status)
+        if memory is not None and memory[1] < GIB:
+            return "Available Windows RAM or commit headroom is below 1 GiB. You can cancel this song."
+        return None
+    return _mac_pressure_advisory(read_memory(memory_pressure), during_run=True)
 
 
 def _run_cli(binary, weights, request, profile, work, cancel, update, *,
-             backend: Backend = "metal", device: int | None = None) -> tuple[float, bool]:
+             backend: Backend = "metal", device: int | None = None,
+             selection: Selection | None = None) -> tuple[float, bool]:
     path = work / "request.json"
     output = work / "result"
     output.mkdir()
@@ -491,7 +526,7 @@ def _run_cli(binary, weights, request, profile, work, cancel, update, *,
                         f"yue2.attention={options['attention']}"])
         process_options = song_cuda.process_options()
     start = last_pressure_check = time.monotonic()
-    pressure_state: dict = {}
+    phase, advisory = "loading", None
     log = work / "runtime.log"
     with log.open("wb") as log_out, log.open("r", encoding="utf-8", errors="replace") as log_in:
         with subprocess.Popen(command, cwd=work, stdin=subprocess.DEVNULL, stdout=log_out,
@@ -501,13 +536,21 @@ def _run_cli(binary, weights, request, profile, work, cancel, update, *,
                     if cancel.wait(0.2):
                         raise gpu.Cancelled()
                     for line in log_in:
-                        for event, phase in _STAGE.items():
+                        for event, next_phase in _STAGE.items():
                             if event in line:
+                                phase = next_phase
                                 update(phase)
                     now = time.monotonic()
                     if now - last_pressure_check >= 2:
                         last_pressure_check = now
-                        _check_memory_during_run(backend, pressure_state, now)
+                        if selection is not None:
+                            current = _running_memory_advisory(backend)
+                            if current != advisory:
+                                advisory = current
+                                view = selection.view()
+                                if advisory is not None:
+                                    view["reasons"].append(advisory)
+                                update(phase, view)
             finally:
                 if process.poll() is None:
                     process.terminate()
@@ -562,8 +605,6 @@ def generate(request: SongRequest, work: Path, cancel, update, *, pinned: str | 
     if backend is None:
         raise SongRuntimeError(UNSUPPORTED)
     config = policy(backend)
-    if backend == "metal":
-        require_installed_ram(config, metal_installed_ram())
     binary, weights = binary_path(backend), model_dir()
     if problem := runtime_problem(binary, backend):
         raise runtime.SetupRequired(f"{problem} Install or repair YuE2 with: {setup_command(request.mode)}")
@@ -584,7 +625,7 @@ def generate(request: SongRequest, work: Path, cancel, update, *, pinned: str | 
         attempt.mkdir()
         try:
             generation_time, truncated = _run_cli(binary, weights, request, p, attempt, cancel, update,
-                                                  backend=backend, device=resources.device_index)
+                                                  backend=backend, device=resources.device_index, selection=selection)
             break
         except SongMemoryError:
             if pinned is not None or request.mode != "auto" or p.quantization == "Q4_0":

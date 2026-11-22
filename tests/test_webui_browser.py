@@ -619,3 +619,33 @@ def test_layout_polish(web, browser, shots):
             assert not page.evaluate(ORPHANS_JS), f"{lang} {width} export"
     page.select_option("#lang", "auto")
     assert not errors, errors
+
+
+@pytest.mark.parametrize("installed", [False, True])
+def test_song_memory_advisory_leaves_setup_and_generation_available(web, browser, installed):
+    page = browser.new_page()
+
+    def low_memory(route):
+        response = route.fetch()
+        status = response.json()
+        status["songs"].update(
+            supported=True,
+            preflight={"reason": "installed_ram", "recommended_gib": 32, "detected_gib": 16},
+            preflight_error=None,
+            runtime_problem=None,
+            installed_modes={"auto": installed, "fast": installed, "quality": installed},
+        )
+        route.fulfill(response=response, json=status)
+
+    try:
+        page.route("**/api/status", low_memory)
+        page.goto(web + "/")
+        page.locator("#tab-songs").click()
+        playwright.expect(page.locator("#song-preflight")).to_contain_text("16 GiB")
+        if installed:
+            page.locator("#song-mode").select_option("quality")
+            playwright.expect(page.locator("#song-submit")).to_be_enabled()
+        else:
+            playwright.expect(page.locator("#song-setup")).to_be_visible()
+    finally:
+        page.close()

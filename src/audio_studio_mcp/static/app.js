@@ -336,8 +336,7 @@ function renderSongSetup() {
   const hasWeights = song.installed_modes[mode];
   const preflight = $("#song-preflight");
   const ram = song.preflight?.reason === "installed_ram" ? song.preflight : null;
-  preflight.textContent = ram ? t("song.preflightRam", { required: ram.required_gib, detected: ram.detected_gib })
-    : song.preflight_error || "";
+  preflight.textContent = song.preflight_error || (ram ? t("song.preflightRam", { recommended: ram.recommended_gib, detected: ram.detected_gib }) : "");
   preflight.hidden = !preflight.textContent;
   $("#song-unsupported").hidden = song.supported;
   $("#song-setup").hidden = !song.supported || Boolean(song.preflight_error) || hasWeights;

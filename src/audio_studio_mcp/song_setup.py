@@ -149,8 +149,9 @@ def _install_cuda_runtime(binary: Path, source: Path | None) -> None:
 
 
 def _print_resources(resources: songs.Resources) -> None:
-    print(f"{resources.device}: {resources.total_gib:.1f} GiB RAM, "
-          f"{resources.available_gib:.1f} GiB available.")
+    total = "unknown" if resources.total_gib is None else f"{resources.total_gib:.1f} GiB"
+    available = "unknown" if resources.available_gib is None else f"{resources.available_gib:.1f} GiB"
+    print(f"{resources.device}: {total} RAM, {available} available.")
     if resources.driver is not None:
         print(f"NVIDIA driver {resources.driver}, compute {resources.compute_capability}, "
               f"{resources.gpu_available_gib:.1f}/{resources.gpu_total_gib:.1f} GiB free VRAM.")
@@ -184,11 +185,14 @@ def _auto_profile(backend: songs.Backend, config: songs.Policy,
     if backend == "metal":
         return fast
     devices = song_cuda.nvidia_devices()
-    total, available = song_cuda.memory_status()
-    songs.require_installed_ram(config, total / songs.GIB)
+    memory = songs.read_memory(song_cuda.memory_status)
+    if memory is None:
+        return fast
+    total, available = memory
     # After installation the CUDA probe will check the actual visible device.
     free_vram = max(device.free_bytes for device in devices.values()) / songs.GIB
     if (free_vram >= high.tuning.min_gpu_gib
+            and total / songs.GIB >= config.min_total_gib
             and available / songs.GIB >= high.tuning.min_available_gib
             and high.estimate(songs.DEFAULT_DURATION_SECONDS) <= config.wait_budget_seconds):
         return high
@@ -213,8 +217,6 @@ def main(argv: list[str]) -> int:
         parser.error("--runtime-from applies to Windows CUDA setup.")
     try:
         config = songs.policy(backend)
-        if backend == "metal":
-            songs.require_installed_ram(config, songs.metal_installed_ram())
         binary = songs.binary_path(backend)
         if args.check:
             _diagnose(binary, backend, config)
@@ -230,7 +232,7 @@ def main(argv: list[str]) -> int:
         print(f"YuE2 3B for {label}: {', '.join(p.quantization for p in selected)} ({gb:.2f} GB of weights).")
         if args.profile == "auto":
             print(f"Auto recommends {recommended.quantization} for this installation. "
-                  "Generation checks available resources again.")
+                  "Generation uses current memory readings for recommendations.")
         if backend == "cuda" and (song_cuda.runtime_problem(binary) or args.runtime_from):
             print("The pinned CUDA runtime ZIPs total 0.86 GB and unpack to about 1.12 GB.")
         print("Weights: CC BY-NC 4.0. Review the additional terms for individual creators and companies.")
@@ -247,7 +249,8 @@ def main(argv: list[str]) -> int:
                 _install_metal_runtime(binary)
             available = songs.probe_resources(binary, backend)
             _print_resources(available)
-            songs.require_installed_ram(config, available.total_gib)
+            if advisory := songs.ram_advisory(config, available.total_gib):
+                print(f"Memory advisory: {advisory}")
             _install_weights(songs.model_dir(), files, args.weights_from)
     except (OSError, ValueError, RuntimeError, subprocess.SubprocessError, zipfile.BadZipFile) as error:
         print(f"audio-studio-mcp song-setup: {error}", file=sys.stderr)

@@ -480,17 +480,16 @@ async def api_status(_: Request) -> Response:
     backend = songs.song_backend()
     high, fast = songs.profiles(songs.Policy(), backend or "metal")
     preflight_error = preflight = None
-    if backend == "metal":
+    if backend:
         try:
-            total_gib = await asyncio.to_thread(songs.metal_installed_ram)
             config = songs.policy(backend)
-            if total_gib < config.min_total_gib:
-                # structured too, so the page can show it in the user's language
-                preflight = {"reason": "installed_ram", "required_gib": config.min_total_gib,
-                             "detected_gib": round(total_gib, 1)}
-            songs.require_installed_ram(config, total_gib)
-        except (OSError, ValueError, songs.SongRuntimeError) as error:
+        except (OSError, ValueError) as error:
             preflight_error = str(error)
+        else:
+            total = await asyncio.to_thread(songs.installed_ram, backend)
+            if total is not None and total < config.min_total_gib:
+                preflight = {"reason": "installed_ram", "recommended_gib": config.min_total_gib,
+                             "detected_gib": round(total, 1)}
     problem = songs.runtime_problem(songs.binary_path(backend), backend) if backend and not preflight_error else None
     installed = (songs.installed_profiles(songs.model_dir(), (high, fast))
                  if backend and not (preflight_error or problem) else set())

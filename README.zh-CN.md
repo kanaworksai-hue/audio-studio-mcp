@@ -168,7 +168,7 @@ tool_timeout_sec = 900
 
 ### 可选：生成带人声的歌曲
 
-Audio Studio MCP 1.3.0 起，YuE2 可以独立于 Stable Audio 3 安装。Q4_0 和 Q8_0 权重都适用 YuE2 的模型条款。macOS 默认需要 Apple Silicon、至少 32 GiB 统一内存，以及带 Metal 编译器的 Xcode。Windows 需要受支持的 NVIDIA CUDA 显卡（至少 6 GiB 空闲显存）和 32 GB 系统内存。驱动要求、模型条款和下载大小见 [YuE2 安装指南（英文）](docs/song-generation.md#install-when-needed)。
+Audio Studio MCP 1.3.0 起，YuE2 可以独立于 Stable Audio 3 安装。Q4_0 和 Q8_0 权重都适用 YuE2 的模型条款。macOS 需要 Apple Silicon 和带 Metal 编译器的 Xcode。Windows x64 需要受支持的 NVIDIA CUDA 显卡。驱动要求、模型条款和下载大小见 [YuE2 安装指南（英文）](docs/song-generation.md#install-when-needed)。
 
 ```bash
 # macOS
@@ -344,7 +344,7 @@ claude mcp add --scope user --transport http audio-studio http://127.0.0.1:8765/
 
 ### 带人声的歌曲
 
-Web UI 的 **歌曲** 标签页和 MCP 工具 `generate_song` 可以借助可选的 YuE2 模型，根据歌词生成人声和伴奏。支持 Apple Silicon 的 Mac，以及配备 NVIDIA CUDA 显卡的 Windows x64。默认设置下，Mac 需要 32 GB 内存，Windows 需要 32 GB 内存和至少 6 GB 空闲显存。模型许可、下载大小和 Auto 设置见[歌曲安装与使用指南（英文）](docs/song-generation.md)。
+Web UI 的 **歌曲** 标签页和 MCP 工具 `generate_song` 可以借助可选的 YuE2 模型，根据歌词生成人声和伴奏。支持 Apple Silicon 的 Mac，以及配备 NVIDIA CUDA 显卡的 Windows x64。Auto 根据内存和显存读数推荐档位。两个档位只要已安装，都可以手动尝试生成。模型许可、下载大小和 Auto 设置见[歌曲安装与使用指南（英文）](docs/song-generation.md)。
 
 ## 💬 在聊天里试听
 

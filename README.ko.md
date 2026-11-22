@@ -300,9 +300,13 @@ claude mcp add --scope user --transport http audio-studio http://127.0.0.1:8765/
 > [!WARNING]
 > 웹 UI는 로컬 전용입니다. `127.0.0.1`에서만 접속을 받으며 로그인 기능도 없습니다. 포트 포워딩, 리버스 프록시, 터널 등으로 다른 컴퓨터에서 접속할 수 있게 열어 두지 마세요. 웹 UI에 접속할 수 있는 사람은 누구나 내 GPU를 사용하고 출력 폴더에 파일을 저장할 수 있습니다.
 
+### 보컬이 있는 노래
+
+웹 UI의 **Songs** 탭과 MCP 도구 `generate_song`으로, 선택 사항인 YuE2 모델을 사용해 가사로 보컬과 반주를 만들 수 있습니다. Apple Silicon Mac과 NVIDIA CUDA GPU가 있는 Windows x64에서 동작합니다. 기본 설정에서는 Mac은 메모리 32GB, Windows는 RAM 32GB와 여유 VRAM 6GB 이상이 필요합니다. 모델 이용 조건, 다운로드 크기, Auto 설정은 [노래 설치 및 사용 가이드(영어)](docs/song-generation.md)를 참고하세요.
+
 ## 💬 채팅에서 바로 듣기
 
-[MCP Apps](https://modelcontextprotocol.io/extensions/apps/overview)를 지원하는 클라이언트에서는 `generate_audio`, `edit_audio`, `process_audio`의 결과가 대화 안에 플레이어로 바로 나타납니다. 파일을 직접 열 필요가 없습니다.
+[MCP Apps](https://modelcontextprotocol.io/extensions/apps/overview)를 지원하는 클라이언트에서는 `generate_audio`, `edit_audio`, `process_audio`, `generate_song`의 결과가 대화 안에 플레이어로 바로 나타납니다. 파일을 직접 열 필요가 없습니다. 노래 카드는 WAV 파일이 완성될 때까지 진행 상황을 표시합니다.
 
 <p align="center">
 <picture>

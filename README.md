@@ -300,9 +300,13 @@ claude mcp add --scope user --transport http audio-studio http://127.0.0.1:8765/
 > [!WARNING]
 > The web UI is for your own computer only. It listens on `127.0.0.1` only and has no login. Don't make it reachable from other machines (port forwarding, a reverse proxy or a tunnel): anyone who can open it can use your GPU and write files to your output folder.
 
+### Songs with vocals
+
+The **Songs** tab and the `generate_song` MCP tool can generate vocals and accompaniment from lyrics using the optional YuE2 model on Apple Silicon or Windows x64 with an NVIDIA CUDA GPU. The default settings need a Mac with 32 GB of memory, or a Windows PC with 32 GB of RAM and at least 6 GB of free VRAM. See the [song setup and usage guide](docs/song-generation.md) for the model terms, download sizes, and Auto settings.
+
 ## 💬 Listen in the chat
 
-In clients that support [MCP Apps](https://modelcontextprotocol.io/extensions/apps/overview), the results of `generate_audio`, `edit_audio` and `process_audio` appear as a player right in the conversation. You don't have to open the files yourself.
+In clients that support [MCP Apps](https://modelcontextprotocol.io/extensions/apps/overview), the results of `generate_audio`, `edit_audio`, `process_audio` and `generate_song` appear as a player right in the conversation. You don't have to open the files yourself. A song card shows its progress until the WAV is ready.
 
 <p align="center">
 <picture>

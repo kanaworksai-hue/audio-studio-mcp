@@ -228,7 +228,7 @@ function route() {
     try { file = decodeURIComponent(h.slice(6)); } catch { file = null; }  // malformed link
   }
   if (file) openEditor(file);
-  else showPage(h === "#library" ? "library" : h === "#edit" ? "edit" : "generate", false);
+  else showPage(["#library", "#edit", "#songs"].includes(h) ? h.slice(1) : "generate", false);
 }
 function initTabs() {
   document.querySelectorAll(".tabs [role=tab]").forEach((b) => b.addEventListener("click", () => showPage(b.dataset.page)));
@@ -258,6 +258,7 @@ function renderStatus() {
   $("#queue-info").textContent = (s.jobs.running || s.jobs.queued) ? t("jobs.queueInfo", s.jobs) : "";
   $("#lib-folder").textContent = t("lib.folder", { dir: s.output_dir });
   updateDurationUI();
+  renderSongSetup();
 }
 async function refreshStatus() {
   try { state.status = await api("/api/status"); state.loaded = state.status.loaded; }
@@ -326,6 +327,58 @@ function updateSubmitLabel() {
 const ADV_FIELDS = ["seed", "cfg", "steps", "peak_ceiling_db", "negative_prompt", "title"];
 function updateAdvancedDot() {
   $("#adv-dot").hidden = !ADV_FIELDS.some((k) => field(k).value.trim() !== "");
+}
+
+function renderSongSetup() {
+  const song = state.status?.songs;
+  if (!song) return;
+  const mode = $("#song-mode").value;
+  const hasWeights = song.installed_modes[mode];
+  const preflight = $("#song-preflight");
+  const ram = song.preflight?.reason === "installed_ram" ? song.preflight : null;
+  preflight.textContent = ram ? t("song.preflightRam", { required: ram.required_gib, detected: ram.detected_gib })
+    : song.preflight_error || "";
+  preflight.hidden = !preflight.textContent;
+  $("#song-unsupported").hidden = song.supported;
+  $("#song-setup").hidden = !song.supported || Boolean(song.preflight_error) || hasWeights;
+  const runtimeProblem = $("#song-runtime-problem");
+  runtimeProblem.textContent = song.runtime_missing ? t("song.runtimeMissing") : song.runtime_problem || "";
+  runtimeProblem.hidden = !song.runtime_problem;
+  $("#song-setup-command").textContent = song.setup_command + (mode === "quality" ? " --profile quality" : "");
+  $("#song-submit").disabled = !song.supported || Boolean(song.preflight_error) || !hasWeights;
+}
+
+function queueSong(args) {
+  const box = $("#song-error");
+  box.hidden = true;
+  return queueJob("generate_song", args, {
+    onError: (e) => { box.textContent = e.message; box.hidden = false; },
+  });
+}
+
+function initSongForm() {
+  const form = $("#song-form");
+  const length = $("#song-length"), shortHint = $("#song-short-hint");
+  function updateShortHint() {
+    shortHint.hidden = !(length.valueAsNumber <= 30);
+    length.setAttribute("aria-describedby", shortHint.hidden ? "" : shortHint.id);
+  }
+  length.addEventListener("input", updateShortHint);
+  updateShortHint();
+  $("#song-mode").addEventListener("change", renderSongSetup);
+  $("#song-copy-setup").addEventListener("click", () => copyText($("#song-setup-command").textContent));
+  form.addEventListener("submit", (event) => {
+    event.preventDefault();
+    const data = new FormData(form), args = {
+      lyrics: data.get("lyrics"), style: data.get("style"), duration_seconds: Number(data.get("duration_seconds")),
+      mode: data.get("mode"),
+    };
+    if (data.get("title").trim()) args.title = data.get("title").trim();
+    for (const name of ["seed", "wait_budget_seconds"]) {
+      if (data.get(name) !== "") args[name] = Number(data.get(name));
+    }
+    queueSong(args);
+  });
 }
 
 // Sent as typed; the server validates (a seed of 1.5 is an error, not 1).
@@ -465,6 +518,7 @@ function estimate(job) {
 function jobStateText(job) {
   if (job.status === "queued") return t("jobs.queued", { n: job.position ?? 1 });
   if (job.status === "running") {
+    if (job.tool === "generate_song") return t(`song.phase.${job.phase || "checking"}`) + ` · ${fmtTime(job.elapsed)}`;
     if (job.tool !== "process_audio" && !state.loaded) return t("jobs.loading", { t: fmtTime(job.elapsed) });
     const est = estimate(job);
     return est ? t("jobs.runningEst", { t: fmtTime(job.elapsed), e: fmtTime(est) }) : t("jobs.running", { t: fmtTime(job.elapsed) });
@@ -490,7 +544,7 @@ function jobTitle(job) {
     if (a.mode === "continue") return t("edit.jobContinue", { len: a.duration_seconds ? `${a.duration_seconds} s` : "—" });
     return t(`mode.${a.mode}`);
   }
-  return (a.title && a.title.trim()) || promptLabel(a) || "—";
+  return (a.title && a.title.trim()) || (job.tool === "generate_song" ? a.style : promptLabel(a)) || "—";
 }
 // Under a titled result: the prompt it was made from.
 function jobSubtitle(job) {
@@ -500,10 +554,11 @@ function jobSubtitle(job) {
 // Full detail for the title tooltip: the prompt, the input, the processing steps.
 function jobDetail(job) {
   const a = job.arguments || {}, r = job.result || {};
-  return [...new Set([jobTitle(job), promptLabel(a), a.input_audio && baseName(a.input_audio), r.steps && r.steps.join(" → ")].filter(Boolean))].join("\n");
+  return [...new Set([jobTitle(job), a.style || promptLabel(a), a.input_audio && baseName(a.input_audio), r.steps && r.steps.join(" → ")].filter(Boolean))].join("\n");
 }
 function jobBadge(job) {
   if (job.tool === "process_audio") return t("kind.process");
+  if (job.tool === "generate_song") return t("type.song");
   return t(`type.${(job.arguments || {}).audio_type || "music"}`);
 }
 const LETTERS = "ABCD";
@@ -557,10 +612,14 @@ function jobCard(job) {
     el("span", { class: "job-state" }, active ? el("span", { class: "spinner", "aria-hidden": "true" }) : null,
       el("span", { class: "job-state-text", text: jobStateText(job) })));
   const card = el("article", { class: "panel job", dataset: { status: job.status, id: job.id, tool: job.tool }, onkeydown: (e) => abKeys(e, card) }, head);
-  if (job.status === "queued") {
+  if (job.status === "queued" || job.status === "running" && job.tool === "generate_song") {
     head.append(el("button", { class: "btn btn-sm btn-quiet", type: "button", text: t("act.cancel"), onclick: () => cancelJob(job) }));
   }
   if (job.status === "running") card.append(el("div", { class: "progress", "aria-hidden": "true" }, el("div")));
+  if (job.tool === "generate_song") {
+    card.append(el("p", { class: "muted small song-selection" }));
+    updateSongSelection(card, job);
+  }
   if (job.status === "error") card.append(el("p", { class: "job-error", text: job.error || "" }));
   if (job.status === "done") {
     const cands = resultCandidates(job);
@@ -578,9 +637,22 @@ function jobCard(job) {
         el("button", { class: "btn btn-sm", type: "button", text: t("act.moreLike"), onclick: () => moreLikeThis(job) }),
         el("button", { class: "btn btn-sm btn-quiet", type: "button", text: t("act.reuse"), onclick: () => reuseSettings(job) })));
     }
+    if (job.tool === "generate_song" && job.result?.replay_from) {
+      foot.append(el("button", { class: "btn btn-sm", type: "button", text: t("act.regen"),
+        onclick: () => queueSong({ replay_from: job.result.replay_from }) }));
+    }
     if (foot.children.length) card.append(foot);
   }
   return card;
+}
+function updateSongSelection(card, job) {
+  const line = card.querySelector(".song-selection");
+  if (!line) return;
+  const s = job.selection;
+  const output = job.result?.end_reason === "duration_limit" ? t("song.limit") : "";
+  line.textContent = s ? [`${s.model} · ${s.quantization}`, t("song.eta", { time: fmtTime(s.eta_seconds) }),
+    ...s.reasons, output].filter(Boolean).join(" · ") : "";
+  line.hidden = !line.textContent;
 }
 function updateProgress(card, job) {
   const bar = card.querySelector(".progress > div"), est = estimate(job);
@@ -643,6 +715,7 @@ function renderJobList(box, list) {
       const st = old.querySelector(".job-state-text");
       if (st) st.textContent = jobStateText(job);
       updateProgress(old, job);
+      updateSongSelection(old, job);
       return old;
     }
     const card = jobCard(job);
@@ -658,11 +731,14 @@ function renderJobList(box, list) {
 function renderJobs() {
   const list = [...state.jobs.values()].sort((x, y) => y.created - x.created);
   const gen = list.filter((j) => j.tool === "generate_audio");
+  const songs = list.filter((j) => j.tool === "generate_song");
+  renderJobList($("#song-jobs"), songs);
+  $("#song-empty").hidden = songs.length > 0;
   renderJobList($("#jobs"), gen);
   $("#jobs-empty").hidden = gen.length > 0;
   // once: what to do with a finished result
   $("#next-tip").hidden = !gen.some((j) => j.status === "done") || localStorage.getItem("as.tip.next") === "1";
-  Editor.renderJobs(list.filter((j) => j.tool !== "generate_audio"));
+  Editor.renderJobs(list.filter((j) => j.tool === "edit_audio" || j.tool === "process_audio"));
 }
 let unseen = 0;
 function noteFinished() {
@@ -688,7 +764,7 @@ async function pollJobs() {
           if (prev && prev.status !== j.status && (j.status === "done" || j.status === "error")) {
             finished = true;
             if (j.status === "done") { learnRate(j); noteFinished(); }
-            if (j.tool !== "generate_audio") Editor.jobFinished(j);
+            if (j.tool === "edit_audio" || j.tool === "process_audio") Editor.jobFinished(j);
           }
           if (prev || j.status === "queued" || j.status === "running") state.jobs.set(j.id, j);
           seen.add(j.id);
@@ -751,6 +827,11 @@ function kindLabel(m) {
 }
 function regenerate(item) {
   const m = item.meta;
+  if (m.kind === "song") {
+    showPage("songs");
+    queueSong({ replay_from: item.path });
+    return;
+  }
   fillForm(m);
   showPage("generate");
   const args = readForm();
@@ -765,7 +846,7 @@ function libraryItem(item) {
   const prompt = promptLabel({ prompt: m.prompt, ...prefixSound(m.sound_fields) }) || (m.source && m.source.prompt) || "";
   const title = m.title || prompt || item.file;
   // The form has no "raw" type, so only these can be regenerated faithfully.
-  const canRegen = m.kind === "generate" && m.seed != null && TYPES.includes(m.audio_type);
+  const canRegen = m.kind === "song" || m.kind === "generate" && m.seed != null && TYPES.includes(m.audio_type);
   const details = el("dl", { class: "item-details", hidden: true },
     metaRows(item).flatMap(([k, v]) => [el("dt", { text: k }), el("dd", { text: String(v) })]));
   const toggle = el("button", { class: "btn btn-sm btn-quiet", type: "button", "aria-expanded": "false", text: t("act.details") });
@@ -833,7 +914,7 @@ async function loadLibrary(reset) {
   renderLibrary();
 }
 // Type filter chips above the library list.
-const LIB_KINDS = ["", "music", "instrument", "sfx", "edit", "process"];
+const LIB_KINDS = ["", "music", "instrument", "sfx", "song", "edit", "process"];
 function renderKinds() {
   replaceKeepFocus($("#lib-kinds"), ...LIB_KINDS.map((k) => el("button", { type: "button", class: "chip",
     "aria-pressed": String(state.lib.kind === k), text: t(`lib.kind.${k || "all"}`),
@@ -893,6 +974,7 @@ initAutoGrow();
 Player.init();
 initSettings();
 initForm();
+initSongForm();
 initLibrary();
 Editor.init();
 applyI18n();

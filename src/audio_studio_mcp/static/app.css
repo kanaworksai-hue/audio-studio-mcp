@@ -179,9 +179,13 @@ select {
 .link-btn:disabled { color: var(--muted); cursor: not-allowed; text-decoration: none; }
 
 /* layout */
-#page-generate { display: grid; grid-template-columns: minmax(340px, 460px) minmax(0, 1fr); gap: 24px; align-items: start; }
-@media (max-width: 900px) { #page-generate { grid-template-columns: minmax(0, 1fr); } }
+#page-generate, #page-songs { display: grid; grid-template-columns: minmax(340px, 460px) minmax(0, 1fr); gap: 24px; align-items: start; }
+@media (max-width: 900px) { #page-generate, #page-songs { grid-template-columns: minmax(0, 1fr); } }
 .panel { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); }
+#song-form { position: static; }
+#song-setup { flex-wrap: wrap; }
+#song-setup code { overflow-wrap: anywhere; }
+.song-selection { margin: 0; padding: 0 16px 10px; }
 .form { padding: 20px; display: flex; flex-direction: column; gap: 16px; position: sticky; top: 80px; }
 .panel-title { font-size: 20px; letter-spacing: -0.01em; }
 .panel-head { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; }

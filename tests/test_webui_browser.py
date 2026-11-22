@@ -130,7 +130,7 @@ def browser():
         b = None
         for kw in ({"channel": "chrome"}, {}):
             try:
-                b = p.chromium.launch(**kw)
+                b = p.chromium.launch(args=["--mute-audio"], **kw)
                 break
             except Exception:
                 continue

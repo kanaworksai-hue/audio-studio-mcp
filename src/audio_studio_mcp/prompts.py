@@ -50,13 +50,19 @@ def strip_prefix(prompt: str) -> str:
 
 
 INSTRUCTIONS = """\
-Local Stable Audio 3 running on this machine, for BGM and sound effects.
-Instrumental only — it cannot produce intelligible vocals/lyrics.
+Audio generation runs locally. Use Stable Audio 3 for instrumental BGM and sound effects.
 generate_audio/edit_audio write 44.1 kHz 24-bit stereo WAV + a .json sidecar
 (prompt, seed, settings) next to each file; process_audio trims, loops, fades,
 normalizes and exports 48 kHz WAV/OGG/FLAC for video or game engines.
 
-Prompting (official SA3 prompt guide + prompt-assistant rules):
+For a song with vocals, use generate_song with the original lyrics in their
+language, section tags such as [Verse] and [Chorus], and a style description.
+It queues a local YuE2 job. Use song_status for progress/results and cancel_song
+to stop it. The WAV is stereo at 48 kHz. Song duration is an upper bound.
+To repeat a song with its recorded settings and seed, pass replay_from to
+generate_song with the song WAV path.
+
+Stable Audio 3 prompting (official prompt guide + prompt-assistant rules):
 - Pick audio_type; the server adds the official prefix the model was trained on:
   music → "TrackType: Music, VocalType: Instrumental, ", instrument (solo/stem/loop)
   → "TrackType: Instrument, ", sfx (sound effects, ambience, one-shots) →

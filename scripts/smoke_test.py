@@ -41,7 +41,7 @@ async def run(out_dir: Path, server: list[str]) -> None:
     async with Client(params, read_timeout_seconds=900) as c:
         tools = sorted(t.name for t in (await c.list_tools()).tools)
         print("tools:", tools)
-        assert tools == ["edit_audio", "generate_audio", "process_audio", "unload_models"], tools
+        assert {"edit_audio", "generate_audio", "process_audio", "unload_models"} <= set(tools), tools
 
         sfx = await call(c, "generate_audio", {
             "audio_type": "sfx", "duration_seconds": 3, "variations": 2, "seed": 42,

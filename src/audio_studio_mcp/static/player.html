@@ -159,6 +159,7 @@ h1 { font-size: 15px; font-weight: 600; margin: 0; line-height: 1.3; overflow-wr
     </div>
   </header>
   <div class="status" id="status" role="status" aria-live="polite"></div>
+  <button class="btn" id="song-cancel" type="button" hidden></button>
   <ol class="rows" id="rows"></ol>
   <footer class="foot" id="foot"></footer>
 </main>
@@ -175,6 +176,20 @@ const DECODED_BUDGET_SEC = 900;  // decoded audio kept at once (~300 MB stereo);
 // ── strings (English, Japanese, Simplified Chinese; the web UI's wording) ──
 const STRINGS = {
   en: {
+    "type.song": "Song",
+    "song.limit": "Reached the maximum length",
+    "song.cancel": "Cancel song",
+    "song.pollHint": "Check job {id} with song_status.",
+    "song.phase.queued": "Waiting in queue",
+    "song.phase.waiting_gpu": "Waiting for the GPU",
+    "song.phase.checking": "Checking resources",
+    "song.phase.loading": "Loading YuE2",
+    "song.phase.planning": "Planning the song",
+    "song.phase.lyrics": "Generating the song structure",
+    "song.phase.synthesis": "Synthesizing vocals and music",
+    "song.phase.decoding": "Decoding audio",
+    "song.phase.saving": "Saving the WAV",
+    "song.phase.cancelling": "Cancelling",
     "work.generate": "Generating on this computer…", "work.edit": "Editing on this computer…",
     "work.process": "Exporting…", "loading": "Loading audio…", "row.loading": "Loading…",
     "type.music": "Music", "type.instrument": "Instrument loop", "type.sfx": "Sound effect", "type.raw": "Audio",
@@ -209,6 +224,20 @@ const STRINGS = {
     "preset.video_bgmSpec": "WAV 48 kHz · −14 LUFS", "preset.originalSpec": "WAV 24-bit · original rate",
   },
   ja: {
+    "type.song": "楽曲",
+    "song.limit": "長さの上限に到達",
+    "song.cancel": "生成をキャンセル",
+    "song.pollHint": "song_status でジョブ {id} の進み具合を確認できます。",
+    "song.phase.queued": "順番待ち",
+    "song.phase.waiting_gpu": "GPU の空き待ち",
+    "song.phase.checking": "空きメモリを確認中",
+    "song.phase.loading": "YuE2 を読み込み中",
+    "song.phase.planning": "楽曲を構想中",
+    "song.phase.lyrics": "曲の構成を生成中",
+    "song.phase.synthesis": "歌声と伴奏を合成中",
+    "song.phase.decoding": "音声をデコード中",
+    "song.phase.saving": "WAV を保存中",
+    "song.phase.cancelling": "キャンセル中",
     "work.generate": "このパソコンで生成しています…", "work.edit": "このパソコンで編集しています…",
     "work.process": "書き出しています…", "loading": "音声を読み込み中…", "row.loading": "読み込み中…",
     "type.music": "音楽", "type.instrument": "楽器ソロ／ループ", "type.sfx": "効果音", "type.raw": "音声",
@@ -243,6 +272,20 @@ const STRINGS = {
     "preset.video_bgmSpec": "WAV 48 kHz · −14 LUFS", "preset.originalSpec": "WAV 24 bit · 元のサンプルレート",
   },
   zh: {
+    "type.song": "歌曲",
+    "song.limit": "已达到时长上限",
+    "song.cancel": "取消歌曲",
+    "song.pollHint": "可用 song_status 查看任务 {id} 的进度。",
+    "song.phase.queued": "排队中",
+    "song.phase.waiting_gpu": "等待 GPU",
+    "song.phase.checking": "检查可用资源",
+    "song.phase.loading": "加载 YuE2",
+    "song.phase.planning": "规划歌曲",
+    "song.phase.lyrics": "生成歌曲结构",
+    "song.phase.synthesis": "合成人声和伴奏",
+    "song.phase.decoding": "解码音频",
+    "song.phase.saving": "保存 WAV",
+    "song.phase.cancelling": "正在取消",
     "work.generate": "正在本机生成…", "work.edit": "正在本机编辑…",
     "work.process": "正在导出…", "loading": "正在加载音频…", "row.loading": "加载中…",
     "type.music": "音乐", "type.instrument": "单乐器 / 循环", "type.sfx": "音效", "type.raw": "音频",
@@ -714,11 +757,13 @@ class Row {
 // ── the card ──────────────────────────────────────────────────────────────
 const UI = {
   args: null, result: null, rows: [], canAct: false, actions: [], openMenu: null, stopStatus: null,
+  songPoll: null,
   get candidates() { return this.rows.filter((r) => r.kind === "cand"); },
   toolName() {
     const n = Host.ctx.toolInfo && Host.ctx.toolInfo.tool && Host.ctx.toolInfo.tool.name;
     if (n) return n;
     const r = this.result || {};
+    if (r.job_id || this.args?.lyrics || this.args?.replay_from) return "generate_song";
     if (r.candidates) return r.mode ? "edit_audio" : "generate_audio";
     if (r.steps && r.format) return "process_audio";
     return this.args && this.args.input_audio ? (this.args.mode ? "edit_audio" : "process_audio") : "generate_audio";
@@ -735,8 +780,9 @@ const UI = {
   header() {
     const a = this.args || {}, m = (this.candidates[0] || this.rows[0] || {}).meta || {};
     const tool = this.toolName();
-    const type = a.audio_type || m.audio_type || "music";
-    const given = a.title || m.title;
+    const song = tool === "generate_song" || tool === "song_status";
+    const type = song ? "song" : a.audio_type || m.audio_type || "music";
+    const given = a.title || m.title || this.result?.title;
     let title = given;
     if (!title) {
       if (tool === "process_audio") title = t("kind.process");
@@ -744,7 +790,7 @@ const UI = {
       else title = t(`type.${type}`);
     }
     $("title").textContent = title;
-    const promptText = a.prompt || m.prompt || [a.sound_source, a.sound_action, a.sound_material, a.sound_space].filter(Boolean).join(", ")
+    const promptText = a.style || a.prompt || m.prompt || [a.sound_source, a.sound_action, a.sound_material, a.sound_space].filter(Boolean).join(", ")
       || (m.prompt_used || (this.result && this.result.prompt_used) || "").replace(/^TrackType:[^,]*,\s*(VocalType:[^,]*,\s*)?/, "");
     const sub = $("sub");
     sub.textContent = promptText || "";
@@ -754,6 +800,8 @@ const UI = {
     if (tool === "edit_audio" && given) facts.push(t(`mode.${a.mode || m.mode || "variation"}`));
     const secs = (this.result && this.result.seconds) || (this.rows[0] && this.rows[0].seconds);
     if (secs) facts.push(secs < 60 ? `${Number(secs).toFixed(secs < 10 ? 1 : 0)} s` : fmtClock(secs));
+    if (song && this.result?.quantization) facts.push(`${this.result.model} · ${this.result.quantization}`);
+    if (song && this.result?.end_reason === "duration_limit") facts.push(t("song.limit"));
     if (a.bpm || m.bpm) facts.push(`${a.bpm || m.bpm} BPM`);
     const n = this.candidates.length;
     if (n > 1) facts.push(t("versions", { n }));
@@ -770,6 +818,7 @@ const UI = {
     this.header();
     setButton($("loop"), ICON.loop, t("loop"));
     $("seam").textContent = t("seam"); $("seam").title = t("seam.title");
+    $("song-cancel").textContent = t("song.cancel");
     for (const r of this.rows) r.relabel();
     this.footer();
   },
@@ -808,6 +857,58 @@ const UI = {
     if (res && res.isError) { this.header(); this.status(`${t("error")} ${text}`, { error: true }); return; }
     const r = resultJson(res);
     if (!r) { this.status(text, { error: true }); return; }
+    if (r.job_id) {
+      this.songPoll = null;
+      $("song-cancel").hidden = true;
+      if (r.status !== "done") { this.followSong(r); return; }
+    }
+    this.showResult(r);
+  },
+  async followSong(r) {
+    this.result = r;
+    this.header();
+    const job = { id: r.job_id };
+    this.songPoll = job;
+    const button = $("song-cancel");
+    button.textContent = t("song.cancel");
+    button.disabled = false;
+    try {
+      while (this.songPoll === job) {
+        if (r.status === "done") { this.showResult(r); break; }
+        if (r.status === "error") { this.status(r.error || t("error"), { error: true }); break; }
+        if (r.status === "cancelled") { this.status(t("cancelled")); break; }
+        if (!Host.caps.serverTools) { this.status(t("song.pollHint", { id: job.id })); break; }
+        const phase = r.status === "queued" ? "queued" : (r.phase || "checking");
+        const model = r.selection && `${r.selection.model} ${r.selection.quantization} · ~${clock(r.selection.eta_seconds)}`;
+        this.status([t(`song.phase.${phase}`), clock(r.elapsed), model, ...(r.selection?.reasons || [])].filter(Boolean).join(" · "));
+        button.hidden = false;
+        await new Promise((resolve) => setTimeout(resolve, 1500));
+        if (this.songPoll === job) r = await Host.callTool("song_status", { job_id: job.id });
+      }
+    } catch (e) {
+      if (this.songPoll === job) this.status(`${e.message} · ${t("song.pollHint", { id: job.id })}`, { error: true });
+    } finally {
+      if (this.songPoll === job) {
+        this.songPoll = null;
+        button.hidden = true;
+        this.resize();
+      }
+    }
+  },
+  async cancelSong() {
+    const job = this.songPoll, button = $("song-cancel");
+    if (!job || button.disabled) return;
+    button.disabled = true;
+    try {
+      await Host.callTool("cancel_song", { job_id: job.id });
+    } catch (e) {
+      if (this.songPoll === job) {
+        button.disabled = false;
+        this.status(e.message, { error: true });
+      }
+    }
+  },
+  showResult(r) {
     this.result = r;
     this.canAct = !!Host.caps.serverTools;
     $("rows").replaceChildren(); this.rows = [];
@@ -945,7 +1046,9 @@ const UI = {
     const stop = progress(row.note, t("exporting"));
     row.note.className = "note"; this.resize();
     try {
-      const r = await Host.callTool("process_audio", { input_audio: row.path, ...PRESETS[preset], title: `${stemOf(row.path)}_${preset}` });
+      const settings = { ...PRESETS[preset] };
+      if (preset === "original" && row.meta.sample_rate) settings.sample_rate = row.meta.sample_rate;
+      const r = await Host.callTool("process_audio", { input_audio: row.path, ...settings, title: `${stemOf(row.path)}_${preset}` });
       stop();
       row.setNote([el("span", { text: t("exported") }), el("code", { text: r.path })], "ok");
       const x = new Row({ path: r.path, kind: "export", preset, exportOf: row });
@@ -955,7 +1058,7 @@ const UI = {
       this.rows.splice(after + 1, 0, x);
       this.rows[after].node.after(x.node);
       this.footer();
-      this.remember(`exported ${row.modelName} with the "${preset}" preset (${PRESETS[preset].format}, ${PRESETS[preset].sample_rate} Hz): ${r.path}`);
+      this.remember(`exported ${row.modelName} with the "${preset}" preset (${settings.format}, ${settings.sample_rate} Hz): ${r.path}`);
       x.loading = true;
       await x.load();
       if (preset === "game_loop" && !Engine.playing) this.setLoop(true);
@@ -977,7 +1080,7 @@ const UI = {
       if (next != null && next <= 2 ** 31 - 5) a.seed = next; else delete a.seed;
       return a;
     };
-    if (tool === "process_audio") return null;
+    if (tool === "process_audio" || tool === "generate_song" || tool === "song_status") return null;
     if (this.args) return { tool, args: withSeed({ ...this.args, variations: 2 }) };
     if (tool !== "generate_audio") return null;
     const m = (this.candidates[0] || {}).meta || {};
@@ -1060,6 +1163,7 @@ Host.handlers["ui/notifications/tool-cancelled"] = () => UI.status(t("cancelled"
 Host.handlers["ui/notifications/host-context-changed"] = (p) => Host.applyContext(p);
 $("loop").addEventListener("click", () => { UI.loopTouched = true; UI.setLoop(!Engine.loop); });
 $("seam").addEventListener("click", () => UI.seam());
+$("song-cancel").addEventListener("click", () => UI.cancelSong());
 $("sub").addEventListener("click", (e) => {
   const b = e.currentTarget;
   b.setAttribute("aria-expanded", String(b.getAttribute("aria-expanded") !== "true"));

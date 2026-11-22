@@ -2,8 +2,8 @@
   "$schema": "https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json",
   "name": "io.github.kanaworksai-hue/audio-studio-mcp",
   "title": "Audio Studio",
-  "description": "Local AI BGM and sound effects with Stable Audio 3 (Apple Silicon MLX, NVIDIA CUDA)",
-  "version": "1.2.0",
+  "description": "Generate local BGM, sound effects, and songs with vocals using Stable Audio 3 and YuE2",
+  "version": "1.3.0",
   "repository": {
     "url": "https://github.com/kanaworksai-hue/audio-studio-mcp",
     "source": "github"
@@ -13,7 +13,7 @@
     {
       "registryType": "pypi",
       "identifier": "audio-studio-mcp",
-      "version": "1.2.0",
+      "version": "1.3.0",
       "runtimeHint": "uvx",
       "runtimeArguments": [
         {

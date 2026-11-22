@@ -1,6 +1,6 @@
 <!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 <title>Audio Studio MCP · Samples</title>
-<meta name="description" content="Music and sound effects generated locally by Audio Studio MCP with Stable Audio 3 on an Apple Silicon Mac.">
+<meta name="description" content="Listen to vocal songs, instrumental music and sound effects generated locally by Audio Studio MCP.">
 <meta property="og:image" content="https://kanaworksai-hue.github.io/audio-studio-mcp/assets/social-preview.jpg">
 <link rel="icon" href="brand/favicon.png">
 <style>
@@ -24,9 +24,25 @@ h3{margin:0;font-size:18px} .meta{font-size:13px;color:var(--muted)}
 .dl{font-size:13px;color:var(--accent);text-decoration:none;align-self:flex-start}
 footer{margin-top:56px;color:var(--muted);font-size:14px;text-align:center} .made{display:inline-flex;flex-direction:column;align-items:center;gap:8px;text-decoration:none;color:var(--fg);font-size:16px} .made b{color:#e0a800} footer a{color:var(--accent)}
 </style></head><body>
-<div class="hero"><img src="assets/banner-en.jpg" alt="Audio Studio MCP: local AI music and sound effects for Claude Code and any MCP client"></div>
-<main><nav><a class="brand" href="https://github.com/kanaworksai-hue"><img src="brand/kanaworks-mark.png" alt="">KanaWorks_AI</a><a href="#music">Music</a><a href="#sfx">Sound effects</a><a href="#loop">Loops</a><a href="#edit">Editing</a><a href="https://github.com/kanaworksai-hue/audio-studio-mcp">GitHub</a></nav>
-<p class="intro">Every sample below was generated on an M1 Mac by <a href="https://github.com/kanaworksai-hue/audio-studio-mcp">Audio Studio MCP</a> with the Stable Audio 3 medium model, using the prompt and seed shown. Nothing was mixed or edited by hand. Pass the same prompt and seed to <code>generate_audio</code> to get the same file.</p>
+<div class="hero"><img src="assets/banner-en.jpg" alt="Audio Studio MCP: local vocal songs, instrumental music and sound effects for Claude Code and other MCP clients"></div>
+<main><nav><a class="brand" href="https://github.com/kanaworksai-hue"><img src="brand/kanaworks-mark.png" alt="">KanaWorks_AI</a><a href="#songs">Vocal songs</a><a href="#music">Music</a><a href="#sfx">Sound effects</a><a href="#loop">Loops</a><a href="#edit">Editing</a><a href="https://github.com/kanaworksai-hue/audio-studio-mcp">GitHub</a></nav>
+<p class="intro">Listen to samples generated locally by <a href="https://github.com/kanaworksai-hue/audio-studio-mcp">Audio Studio MCP</a>. YuE2 turns lyrics and a musical style into vocals and accompaniment. Stable Audio 3 generates instrumental music and sound effects.</p>
+<section id="songs">
+  <h2>Vocal songs</h2>
+  <p class="lead">Original lyrics performed by YuE2. See the <a href="https://github.com/kanaworksai-hue/audio-studio-mcp/blob/main/docs/song-generation.md">song setup guide</a> for local installation and model terms.</p>
+  <div class="grid">
+    <article class="card" id="porch_light_at_dawn">
+      <header><h3>Porch Light at Dawn</h3><span class="meta">English vocal · acoustic indie pop</span></header>
+      <audio controls preload="none" src="samples/porch_light_at_dawn.mp3" aria-label="Listen to Porch Light at Dawn"></audio>
+      <a class="dl" href="samples/porch_light_at_dawn.mp3" download>Download MP3</a>
+    </article>
+    <article class="card" id="ameagari_no_sakamichi">
+      <header><h3 lang="ja">雨上がりの坂道</h3><span class="meta">Japanese vocal · city pop · Q8_0</span></header>
+      <audio controls preload="none" src="samples/ameagari_no_sakamichi.mp3" aria-label="Listen to Ameagari no Sakamichi"></audio>
+      <a class="dl" href="samples/ameagari_no_sakamichi.mp3" download>Download MP3</a>
+    </article>
+  </div>
+</section>
 <section id="music"><h2>Music &amp; BGM</h2><p class="lead">Full instrumental tracks from one sentence.</p><div class="grid"><article class="card" id="lofi_cafe"><header><h3>Lo-fi cafe</h3><span class="meta">music · 30 s · 85 BPM · seed 3000</span></header>
 <img class="wave" src="samples/lofi_cafe.svg" alt="" loading="lazy"><audio controls preload="none" src="samples/lofi_cafe.mp3"></audio>
 <p class="prompt">Lo-fi hip-hop chill track with mellow electric piano, soft vinyl crackle, low-pass filtered drums and soft plucked bass for a relaxed, dreamy vibe</p><a class="dl" href="samples/lofi_cafe.mp3" download>Download MP3</a></article><article class="card" id="epic_orchestral"><header><h3>Epic orchestral</h3><span class="meta">music · 30 s · seed 202</span></header>
@@ -56,5 +72,5 @@ footer{margin-top:56px;color:var(--muted);font-size:14px;text-align:center} .mad
 <p class="prompt">Lo-fi hip-hop chill track with mellow electric piano, soft vinyl crackle, low-pass filtered drums and soft plucked bass for a relaxed, dreamy vibe</p><a class="dl" href="samples/lofi_cafe.mp3" download>Download MP3</a></article><article class="card" id="lofi_cafe_bossa"><header><h3>Lo-fi cafe → bossa nova</h3><span class="meta">music · 30 s · 85 BPM · seed 44</span></header>
 <img class="wave" src="samples/lofi_cafe_bossa.svg" alt="" loading="lazy"><audio controls preload="none" src="samples/lofi_cafe_bossa.mp3"></audio>
 <p class="prompt">Bossa nova jazz version with nylon guitar, brushed drums and upright bass, warm and relaxed</p><div class="edit">edit_audio · variation · strength 0.5 · from <a href="#lofi_cafe">Lo-fi cafe</a></div><a class="dl" href="samples/lofi_cafe_bossa.mp3" download>Download MP3</a></article></div></section>
-<footer><a class="made" href="https://x.com/KanaWorks_AI"><img src="brand/kana-wave.png" alt="Kana, the KanaWorks_AI mascot, waving" width="96" height="96"><span>Made with ♥ by <b>KanaWorks_AI</b></span></a><p>Generated with Stable Audio 3 (Stability AI Community License). Samples are compressed to 160 kbps MP3 for the web; the tools write 24-bit WAV.</p></footer>
+<footer><a class="made" href="https://x.com/KanaWorks_AI"><img src="brand/kana-wave.png" alt="Kana, the KanaWorks_AI mascot, waving" width="96" height="96"><span>Made with ♥ by <b>KanaWorks_AI</b></span></a><p>Vocal songs were generated with <a href="https://huggingface.co/m-a-p/YuE2-3B">YuE2-3B</a> (<a href="https://github.com/multimodal-art-projection/YuE/blob/1116bea76032bee5668e5f097294d082fa0b84f0/MODEL_LICENSE">model terms</a>). The other examples were generated with Stable Audio 3 (Stability AI Community License). The web previews are MP3s.</p></footer>
 </main></body></html>

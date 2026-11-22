@@ -24,6 +24,8 @@
 
 O **Audio Studio MCP** dá ao Claude Code, ao Claude Desktop, ao Cursor e a qualquer outro cliente [MCP](https://modelcontextprotocol.io) um estúdio de som que roda no seu próprio Mac ou PC com Windows. Peça uma música de fundo ou um efeito sonoro em linguagem natural; o modelo gera tudo localmente com o [Stable Audio 3](https://github.com/Stability-AI/stable-audio-3). Em seguida, dá para transformar o áudio em loop, normalizar a loudness e exportar tudo para a sua engine de jogo ou o seu editor de vídeo. Sem serviço em nuvem, sem chave de API e sem pagar nada por geração.
 
+Para criar músicas cantadas, forneça a letra e o estilo musical ao modelo opcional YuE2. A voz e o acompanhamento são gerados no seu computador.
+
 <p align="center">
   <img src="docs/assets/demo-en.png" alt="Uma sessão real do Claude Code: um único pedido gera duas versões de música de fundo lo-fi e um loop OGG sem emenda para o Godot" width="820">
   <br><sub>Uma sessão real (em inglês), resumida. O Claude escolheu um loop de exatamente 11 compassos para que a batida não saia do tempo quando o loop recomeça.</sub>
@@ -47,7 +49,14 @@ O **Audio Studio MCP** dá ao Claude Code, ao Claude Desktop, ao Cursor e a qual
 
 ## 🎧 Ouça
 
-Todos os exemplos abaixo saíram deste servidor, num Mac M1, sem nenhuma edição manual. **[Abrir a página de exemplos →](https://kanaworksai-hue.github.io/audio-studio-mcp/)**
+### Exemplos de músicas com voz
+
+- [Voz em inglês · Porch Light at Dawn](https://kanaworksai-hue.github.io/audio-studio-mcp/#porch_light_at_dawn)
+- [Voz em japonês · 雨上がりの坂道](https://kanaworksai-hue.github.io/audio-studio-mcp/#ameagari_no_sakamichi)
+
+### Música instrumental e efeitos sonoros
+
+As faixas instrumentais e os efeitos sonoros da tabela foram gerados com o Stable Audio 3 num Mac M1, sem edição manual. **[Abrir a página de exemplos →](https://kanaworksai-hue.github.io/audio-studio-mcp/)**
 
 | | Exemplo | Prompt |
 |---|---|---|
@@ -65,14 +74,18 @@ Os MP3 estão em [`docs/samples/`](docs/samples), com os prompts e as seeds em [
 ```mermaid
 flowchart LR
     U["Você<br/>“crie uma trilha aconchegante de cafeteria”"] --> C["Claude Code · Desktop<br/>Cursor · qualquer cliente MCP"]
-    C -- "MCP" --> S["audio-studio-mcp<br/>gerar · editar · processar"]
+    C -- "MCP" --> S["audio-studio-mcp<br/>gerar · editar · processar · generate_song"]
     S --> M["Stable Audio 3<br/>MLX no Apple Silicon<br/>PyTorch em GPUs NVIDIA"]
+    S --> Y["YuE2<br/>Metal / CUDA"]
     M --> F["WAV / OGG / FLAC + .json<br/>prontos para jogos e vídeos"]
+    Y --> F
 ```
 
 ## 🚀 Início rápido
 
 Você precisa do [uv](https://docs.astral.sh/uv/) 0.9.20 ou mais recente e do [ffmpeg](https://ffmpeg.org). Não é preciso clonar nada: o `uvx` baixa e executa o pacote publicado.
+
+As etapas abaixo instalam o Stable Audio 3 para faixas instrumentais e efeitos sonoros. Para gerar músicas com voz, execute `song-setup` seguindo o [guia de instalação do YuE2 (em inglês)](docs/song-generation.md#install-when-needed).
 
 | | macOS | Windows |
 |---|---|---|
@@ -250,6 +263,9 @@ Depois, é só pedir:
 | Ferramenta | O que faz |
 |---|---|
 | `generate_audio` | Gera música de fundo, loop/stem de instrumento ou efeito sonoro a partir de texto. 1–4 versões por chamada, `bpm`, campos estruturados para efeitos sonoros |
+| `generate_song` | Gera voz e acompanhamento com o YuE2 a partir de uma letra e de um estilo |
+| `song_status` | Consulta o progresso da geração e recupera a música quando ela estiver pronta |
+| `cancel_song` | Cancela uma tarefa de geração que está na fila ou em andamento |
 | `edit_audio` | `variation` (muda o estilo do clipe inteiro), `inpaint` (gera de novo um trecho), `continue` (estende). 1–4 versões |
 | `process_audio` | Corte → remoção de silêncio → mono → reamostragem / loudness → loop sem emenda → fades → normalização de pico ou teto → WAV / OGG / FLAC. Nunca altera o arquivo original |
 | `unload_models` | Libera a memória do modelo na hora |
@@ -430,13 +446,13 @@ O ambiente foi criado com um Python x86_64 (por exemplo, um Homebrew antigo para
 <details>
 <summary><b>Dá para fazer músicas com voz?</b></summary>
 
-Não. O Stable Audio 3 gera música instrumental e efeitos sonoros. Ele não consegue produzir canto ou letras inteligíveis.
+Sim. Instale o modelo opcional YuE2 e use a aba Songs ou a ferramenta `generate_song` para gerar voz e acompanhamento a partir de uma letra e de um estilo. O Stable Audio 3 é usado para faixas instrumentais e efeitos sonoros. Consulte o [guia de instalação do YuE2 (em inglês)](docs/song-generation.md).
 </details>
 
 <details>
 <summary><b>Posso usar o áudio gerado comercialmente?</b></summary>
 
-O código deste repositório é MIT. Os pesos do modelo estão sob a [Stability AI Community License](https://huggingface.co/stabilityai/stable-audio-3-optimized), que define os termos de uso do modelo e do que ele gera. Leia a licença antes de qualquer uso comercial. No momento em que este texto foi escrito, ela permite uso comercial por pessoas e organizações com receita anual total inferior a US$ 1 milhão.
+O código do projeto é distribuído sob a licença MIT. Antes de usar o áudio comercialmente, consulte os termos do modelo com que ele foi gerado: [Stable Audio 3](https://huggingface.co/stabilityai/stable-audio-3-optimized) ou [YuE2 (em inglês)](docs/song-generation.md#install-when-needed).
 </details>
 
 <details>
@@ -458,6 +474,7 @@ Use WAV ou OGG para loops. O MP3 adiciona um preenchimento (padding) no início 
 - [x] Web UI local (`--web`)
 - [x] Instalação com um único comando via `uvx`
 - [x] Ouça no chat (player com MCP Apps)
+- [x] Geração local de músicas com voz a partir de letras (YuE2, Metal no macOS e CUDA no Windows)
 - [ ] Suporte a LoRA (o runtime upstream já tem)
 
 Issues e pull requests são bem-vindos.
@@ -504,7 +521,8 @@ Uma nova plataforma entra como mais um backend em `backends/`.
 
 - **Este projeto:** [MIT](LICENSE).
 - **Runtime do Stable Audio 3:** baixado pelo `setup` (ou em `vendor/` pelos scripts de instalação) num commit fixo. É © Stability AI e licenciado sob MIT.
-- **Pesos do modelo:** licenciados sob a [Stability AI Community License](https://huggingface.co/stabilityai/stable-audio-3-optimized). São baixados do Hugging Face (macOS: `stable-audio-3-optimized`; Windows: `stable-audio-3-medium` e os modelos pequenos) e não são redistribuídos aqui.
+- **Pesos do modelo Stable Audio 3:** licenciados sob a [Stability AI Community License](https://huggingface.co/stabilityai/stable-audio-3-optimized). São baixados do Hugging Face (macOS: `stable-audio-3-optimized`; Windows: `stable-audio-3-medium` e os modelos pequenos) e não são redistribuídos aqui.
+- Os pesos e o ambiente de execução do YuE2 são instalados sob demanda. Consulte os [termos de uso e o guia de instalação (em inglês)](docs/song-generation.md#install-when-needed).
 - **Marca:** o nome KanaWorks_AI, o logotipo e a personagem Kana são © 東京AI映像合同会社 (Tokyo AI Visuals LLC) e **não** estão cobertos pela licença MIT. Veja [docs/brand](docs/brand/README.md).
 - **Fontes:** a web UI inclui a fonte IBM Plex Sans, © IBM Corp., sob a SIL Open Font License 1.1 ([`OFL.txt`](src/audio_studio_mcp/static/fonts/OFL.txt)). As imagens da Kana na web UI ([`static/brand`](src/audio_studio_mcp/static/brand/README.md)) estão cobertas pelo item Marca acima.
 - **Desenvolvido com:** [Stable Audio 3](https://github.com/Stability-AI/stable-audio-3), [MLX](https://github.com/ml-explore/mlx), [PyTorch](https://pytorch.org) e o [Model Context Protocol](https://modelcontextprotocol.io).

@@ -24,6 +24,8 @@
 
 **Audio Studio MCP** 给 Claude Code、Claude Desktop、Cursor 以及任何 [MCP](https://modelcontextprotocol.io) 客户端配上一个在你自己的 Mac 或 Windows 电脑上运行的音频工作室。用自然语言要一段 BGM 或一个音效，模型就会用 [Stable Audio 3](https://github.com/Stability-AI/stable-audio-3) 在本机生成。之后还能做成循环、统一响度，导出给游戏引擎或剪辑软件。不用云服务，不需要 API Key，生成不花钱。
 
+想做带人声的歌，可以使用可选模型 YuE2。输入歌词和曲风，就能在本机生成人声和伴奏。
+
 <p align="center">
   <img src="docs/assets/demo-zh.png" alt="真实的 Claude Code 会话：一句话生成两个 lo-fi BGM 候选，并导出 Godot 用的无缝循环 OGG" width="820">
   <br><sub>真实会话（有删减）。Claude 把循环长度定成正好 11 小节，这样循环时节拍不会乱。</sub>
@@ -47,7 +49,14 @@
 
 ## 🎧 试听
 
-下面全部由这个服务器在 M1 Mac 上生成，没有人工修改。**[打开试听页面 →](https://kanaworksai-hue.github.io/audio-studio-mcp/)**
+### 带人声的歌曲试听
+
+- [英文演唱 · Porch Light at Dawn](https://kanaworksai-hue.github.io/audio-studio-mcp/#porch_light_at_dawn)
+- [日文演唱 · 雨上がりの坂道](https://kanaworksai-hue.github.io/audio-studio-mcp/#ameagari_no_sakamichi)
+
+### 纯音乐和音效
+
+下表的纯音乐和音效由 Stable Audio 3 在 M1 Mac 上生成，没有人工编辑。 **[打开试听页面 →](https://kanaworksai-hue.github.io/audio-studio-mcp/)**
 
 | | 样例 | Prompt |
 |---|---|---|
@@ -65,14 +74,18 @@ MP3 文件在 [`docs/samples/`](docs/samples)，prompt 和 seed 在 [`samples.js
 ```mermaid
 flowchart LR
     U["你<br/>“做一段温馨咖啡馆 BGM”"] --> C["Claude Code · Desktop<br/>Cursor · 任何 MCP 客户端"]
-    C -- "MCP" --> S["audio-studio-mcp<br/>生成 · 编辑 · 后期"]
+    C -- "MCP" --> S["audio-studio-mcp<br/>生成 · 编辑 · 后期 · generate_song"]
     S --> M["Stable Audio 3<br/>Apple Silicon 上的 MLX<br/>NVIDIA 显卡上的 PyTorch"]
+    S --> Y["YuE2<br/>Metal / CUDA"]
     M --> F["WAV / OGG / FLAC + .json<br/>直接用于游戏和视频"]
+    Y --> F
 ```
 
 ## 🚀 快速开始
 
 只需要 [uv](https://docs.astral.sh/uv/) 0.9.20 或更新版本和 [ffmpeg](https://ffmpeg.org)。不用 clone 仓库：`uvx` 会下载并运行已发布的包。
+
+下面的步骤安装用于纯音乐和音效的 Stable Audio 3。要生成带人声的歌曲，按 [YuE2 安装指南（英文）](docs/song-generation.md#install-when-needed)运行 `song-setup`。
 
 | | macOS | Windows |
 |---|---|---|
@@ -257,6 +270,9 @@ macOS 上下载不需要登录，用 `hf auth login` 登录后 Hugging Face 的�
 | 工具 | 用途 |
 |---|---|
 | `generate_audio` | 文本生成 BGM、乐器 loop/分轨或音效。每次 1–4 个候选，支持 `bpm` 和结构化音效字段 |
+| `generate_song` | 用 YuE2 根据歌词和曲风生成人声及伴奏 |
+| `song_status` | 查询歌曲生成进度并获取结果 |
+| `cancel_song` | 取消排队中或运行中的歌曲生成任务 |
 | `edit_audio` | `variation`（整段换风格）、`inpaint`（重绘某个时间段）、`continue`（续写延长），同样 1–4 个候选 |
 | `process_audio` | 裁剪 → 去首尾静音 → 单声道 → 重采样/响度 → 无缝循环 → 淡入淡出 → 峰值归一化或峰值上限 → WAV / OGG / FLAC。不修改原文件 |
 | `unload_models` | 立刻释放模型占用的内存 |
@@ -437,13 +453,13 @@ Windows + RTX 3060 12 GB，medium 模型：
 <details>
 <summary><b>能生成带人声的歌吗？</b></summary>
 
-不能。Stable Audio 3 只生成纯音乐和音效，唱不出能听清的歌词。
+可以。安装可选的 YuE2 后，在 Web UI 的「歌曲」标签页或通过 `generate_song` 输入歌词和曲风，即可生成人声及伴奏。纯音乐和音效由 Stable Audio 3 生成。详见 [YuE2 安装指南（英文）](docs/song-generation.md)。
 </details>
 
 <details>
 <summary><b>生成的音频可以商用吗？</b></summary>
 
-本项目代码是 MIT 协议。模型权重适用 [Stability AI Community License](https://huggingface.co/stabilityai/stable-audio-3-optimized)，模型和生成内容的使用条件由它规定，商用前请先阅读。截至本文撰写时，该许可证允许年收入低于 100 万美元的个人和组织商用。
+本项目代码采用 MIT 许可证。商用前请查看实际使用的模型条款：[Stable Audio 3](https://huggingface.co/stabilityai/stable-audio-3-optimized) 或 [YuE2（英文）](docs/song-generation.md#install-when-needed)。
 </details>
 
 <details>
@@ -465,6 +481,7 @@ Windows + RTX 3060 12 GB，medium 模型：
 - [x] 本地 Web UI（`--web`）
 - [x] 用一条 `uvx` 命令安装
 - [x] 在聊天里试听（MCP Apps 播放器）
+- [x] 用歌词在本地生成带人声的歌曲（YuE2，macOS Metal 和 Windows CUDA）
 - [ ] LoRA 支持（上游运行时已经支持）
 
 欢迎提 Issue 和 Pull Request。
@@ -511,7 +528,8 @@ src/audio_studio_mcp/
 
 - **本项目：** [MIT](LICENSE)。
 - **Stable Audio 3 运行时：** 由 `setup`（安装脚本则是 `vendor/`）按固定的 commit 下载，© Stability AI，MIT 协议。
-- **模型权重：** 适用 [Stability AI Community License](https://huggingface.co/stabilityai/stable-audio-3-optimized)。权重从 Hugging Face 下载（macOS：`stable-audio-3-optimized`；Windows：`stable-audio-3-medium` 及小模型），本项目不分发。
+- **Stable Audio 3 模型权重：** 适用 [Stability AI Community License](https://huggingface.co/stabilityai/stable-audio-3-optimized)。权重从 Hugging Face 下载（macOS：`stable-audio-3-optimized`；Windows：`stable-audio-3-medium` 及小模型），本项目不分发。
+- YuE2 模型权重和运行时：按需安装。详见 [YuE2 条款与安装指南（英文）](docs/song-generation.md#install-when-needed)。
 - **品牌：** KanaWorks_AI 名称、logo 和 Kana 形象版权归东京AI映像合同会社所有，**不在** MIT 授权范围内。详见 [docs/brand](docs/brand/README.md)。
 - **字体：** Web UI 附带 IBM Plex Sans 字体，© IBM Corp.，采用 SIL Open Font License 1.1（[`OFL.txt`](src/audio_studio_mcp/static/fonts/OFL.txt)）。Web UI 中的 Kana 图片（[`static/brand`](src/audio_studio_mcp/static/brand/README.md)）适用上面“品牌”一条。
 - **基于：** [Stable Audio 3](https://github.com/Stability-AI/stable-audio-3)、[MLX](https://github.com/ml-explore/mlx)、[PyTorch](https://pytorch.org) 和 [Model Context Protocol](https://modelcontextprotocol.io)。

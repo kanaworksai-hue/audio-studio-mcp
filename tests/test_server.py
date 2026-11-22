@@ -25,7 +25,8 @@ async def call(name, args):
 async def test_tools_listed():
     async with Client(server.server) as c:
         names = sorted(t.name for t in (await c.list_tools()).tools)
-    assert names == ["edit_audio", "generate_audio", "process_audio", "unload_models"]
+    assert names == ["cancel_song", "edit_audio", "generate_audio", "generate_song",
+                     "process_audio", "song_status", "unload_models"]
 
 
 async def test_generate_writes_wav_and_sidecar(fake):

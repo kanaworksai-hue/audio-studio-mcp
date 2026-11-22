@@ -307,9 +307,13 @@ claude mcp add --scope user --transport http audio-studio http://127.0.0.1:8765/
 > [!WARNING]
 > Web UI 只适合在自己的电脑上使用：它只监听 `127.0.0.1`，没有登录验证。不要通过端口转发、反向代理或隧道让其他机器访问它，否则任何能打开页面的人都能使用你的 GPU，并向你的输出目录写入文件。
 
+### 带人声的歌曲
+
+Web UI 的 **歌曲** 标签页和 MCP 工具 `generate_song` 可以借助可选的 YuE2 模型，根据歌词生成人声和伴奏。支持 Apple Silicon 的 Mac，以及配备 NVIDIA CUDA 显卡的 Windows x64。默认设置下，Mac 需要 32 GB 内存，Windows 需要 32 GB 内存和至少 6 GB 空闲显存。模型许可、下载大小和 Auto 设置见[歌曲安装与使用指南（英文）](docs/song-generation.md)。
+
 ## 💬 在聊天里试听
 
-在支持 [MCP Apps](https://modelcontextprotocol.io/extensions/apps/overview) 的客户端里，`generate_audio`、`edit_audio` 和 `process_audio` 的结果会直接以播放器的形式显示在对话中，不用自己去打开文件。
+在支持 [MCP Apps](https://modelcontextprotocol.io/extensions/apps/overview) 的客户端里，`generate_audio`、`edit_audio`、`process_audio` 和 `generate_song` 的结果会直接以播放器的形式显示在对话中，不用自己去打开文件。歌曲卡片会一直显示生成进度，直到 WAV 文件生成完成。
 
 <p align="center">
 <picture>

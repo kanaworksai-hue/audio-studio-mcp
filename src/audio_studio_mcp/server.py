@@ -26,6 +26,7 @@ import json
 import os
 import re
 import sys
+import tempfile
 import traceback
 from datetime import datetime
 from pathlib import Path
@@ -36,7 +37,7 @@ from mcp.server.mcpserver import MCPServer
 from mcp.server.mcpserver.exceptions import ToolError
 from pydantic import AliasChoices, Field
 
-from . import __version__, chat_player, post, runtime
+from . import __version__, chat_player, gpu, post, runtime, songs
 from .backends import Backend, GenerationRequest, create_backend, resolve_backend_name
 from .prompts import DEFAULT_SECONDS, INSTRUCTIONS, prepare_prompt, strip_prefix
 
@@ -489,6 +490,123 @@ async def audio_preview(
     return await asyncio.to_thread(chat_player.preview, path, offset, format)
 
 
+def _song_view(job) -> dict:
+    from .web import jobs
+
+    view = jobs.view(job)
+    arguments = view.pop("arguments")
+    result = view.pop("result")
+    return {**view, "job_id": job.id, "title": arguments.get("title"), **(result or {})}
+
+
+@_tool(meta=chat_player.UI_META)
+async def generate_song(
+    lyrics: songs.Lyrics = "",
+    style: songs.Style = "",
+    title: songs.Title = None,
+    duration_seconds: songs.Duration = songs.DEFAULT_DURATION_SECONDS,
+    seed: _Seed = None,
+    mode: songs.ModeArg = "auto",
+    wait_budget_seconds: songs.Budget = None,
+    replay_from: songs.Replay = None,
+) -> dict:
+    """Queue a local YuE2 song with vocals. Provide original lyrics with section labels and a style
+    description, or replay_from a song WAV in the output folder to reuse its exact settings and seed.
+    duration_seconds sets the cap. The model may end earlier. For caps of 30 seconds or less, suggest a
+    single short chorus and a style prompt requesting the lead vocal on the first beat before submitting.
+    Returns a job_id. Use song_status to check progress and retrieve the WAV. Use cancel_song to stop
+    a waiting or running job."""
+    from .web import jobs, resolve_input
+
+    if not songs.supported():
+        raise ToolError(songs.UNSUPPORTED)
+    fade_ms = songs.DURATION_LIMIT_FADE_MS
+    if replay_from is not None:
+        source = resolve_input(replay_from)
+        if source is None or source.suffix.lower() != ".wav" or source.with_suffix(".wav.json").is_symlink():
+            raise ValueError("replay_from must be a song WAV in the Audio Studio output folder.")
+        request, pinned, fade_ms = songs.replay_request(_load_sidecar(source) or {})
+    else:
+        request = songs.check_request(songs.SongRequest(
+            lyrics=lyrics, style=style, title=title, duration_seconds=duration_seconds,
+            seed=_seeds(seed, 1)[0], mode=mode, wait_budget_seconds=wait_budget_seconds,
+        ))
+        pinned = None
+    return _song_view(jobs.submit_song(request, pinned, duration_limit_fade_ms=fade_ms))
+
+
+def _find_song(job_id: str):
+    from .web import jobs
+
+    job = jobs.jobs.get(job_id)
+    if job is None or job.tool != "generate_song":
+        raise ValueError("Unknown or expired song job.")
+    return job
+
+
+@_tool  # text only: the generate_song card already polls; a card per poll would pile up in the chat
+async def song_status(job_id: Annotated[str, Field(description="job_id returned by generate_song.")]) -> dict:
+    """Get the status, selected profile, estimate and WAV result of a song job. Clients that show the
+    generate_song player card do not need to poll; the card follows the job itself."""
+    return _song_view(_find_song(job_id))
+
+
+@_tool
+async def cancel_song(job_id: Annotated[str, Field(description="job_id returned by generate_song.")]) -> dict:
+    """Cancel a queued or running song. Poll song_status until it is cancelled."""
+    from .web import jobs
+
+    job = _find_song(job_id)
+    jobs.cancel(job)
+    return _song_view(job)
+
+
+async def run_song_job(job) -> dict:
+    backend = _backend
+    request = songs.SongRequest.model_validate(job.arguments)
+
+    def work(path):
+        with gpu.lease(job.cancel_event):
+            job.phase = "checking"
+            if backend is not None and backend.loaded():
+                backend.unload_for_song()
+            return songs.generate(request, path, job.cancel_event, job.update_song, pinned=job.pinned_profile,
+                                  duration_limit_fade_ms=job.duration_limit_fade_ms)
+
+    OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
+    job.phase = "waiting_gpu"
+    with tempfile.TemporaryDirectory(prefix=".song-", dir=OUTPUT_DIR) as folder:
+        executor = backend.executor if backend is not None else None
+        future = asyncio.get_running_loop().run_in_executor(executor, work, Path(folder))
+        try:
+            audio, meta = await asyncio.shield(future)
+        except asyncio.CancelledError:
+            job.cancel_event.set()
+            with contextlib.suppress(Exception):
+                await asyncio.shield(future)
+            raise
+        if job.cancel_event.is_set():
+            raise gpu.Cancelled()
+        job.phase = "saving"
+        stem, suffix = _auto_stem(request.title, request.style, request.seed)
+        path = _out_path(stem, tail=suffix)
+        sidecar = path.with_suffix(".wav.json")
+        try:
+            meta.update(file=path.name, created=datetime.now().isoformat(timespec="seconds"))
+            post.write_sidecar(audio, meta).replace(sidecar)
+            audio.replace(path)
+        except BaseException:
+            path.unlink(missing_ok=True)
+            sidecar.unlink(missing_ok=True)
+            raise
+        return {
+            **{k: meta[k] for k in ("title", "model", "backend", "quantization", "profile", "seconds",
+                                    "wall_seconds", "end_reason", "runtime_revision", "weights_revision")},
+            "candidates": [{"path": str(path), "seed": request.seed, "metadata": str(sidecar)}],
+            "replay_from": str(path), "included_model_load": True,
+        }
+
+
 @_tool
 async def unload_models() -> dict:
     """Free the ~5–7 GB of memory held by the loaded models now (they reload on the next call)."""
@@ -510,11 +628,14 @@ def main(argv: list[str] | None = None) -> None:
     if argv[:1] == ["setup"]:
         from . import firstrun
         sys.exit(firstrun.main(argv[1:]))
+    if argv[:1] == ["song-setup"]:
+        from . import song_setup
+        sys.exit(song_setup.main(argv[1:]))
 
     ap = argparse.ArgumentParser(
         prog="audio-studio-mcp", description=__doc__.split("\n")[0],
         epilog="First run: `audio-studio-mcp setup` downloads the Stable Audio 3 runtime and model "
-               "weights (see `audio-studio-mcp setup --help`).")
+               "weights. Optional YuE2 song setup: `audio-studio-mcp song-setup --help`.")
     mode = ap.add_mutually_exclusive_group()
     mode.add_argument("--http", type=int, metavar="PORT",
                       help="serve streamable HTTP on 127.0.0.1:PORT instead of stdio (local only)")

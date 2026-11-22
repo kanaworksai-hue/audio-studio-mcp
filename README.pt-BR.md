@@ -300,9 +300,13 @@ claude mcp add --scope user --transport http audio-studio http://127.0.0.1:8765/
 > [!WARNING]
 > A web UI foi feita para uso só no seu computador. Ela escuta apenas em `127.0.0.1` e não tem login. Não a exponha para outras máquinas (por redirecionamento de porta, proxy reverso ou túnel): qualquer pessoa que consiga abri-la pode usar a sua GPU e gravar arquivos na sua pasta de saída.
 
+### Músicas com voz
+
+A aba **Songs** da interface web e a ferramenta MCP `generate_song` geram voz e acompanhamento a partir de uma letra com o modelo opcional YuE2, em Macs com Apple Silicon ou no Windows x64 com GPU NVIDIA CUDA. Com as configurações padrão, é preciso um Mac com 32 GB de memória ou um PC Windows com 32 GB de RAM e pelo menos 6 GB de VRAM livre. Veja os termos do modelo, os tamanhos de download e as configurações do modo Auto no [guia de instalação e uso de músicas (em inglês)](docs/song-generation.md).
+
 ## 💬 Ouça no chat
 
-Nos clientes compatíveis com [MCP Apps](https://modelcontextprotocol.io/extensions/apps/overview), os resultados de `generate_audio`, `edit_audio` e `process_audio` aparecem como um player direto na conversa. Você não precisa abrir os arquivos.
+Nos clientes compatíveis com [MCP Apps](https://modelcontextprotocol.io/extensions/apps/overview), os resultados de `generate_audio`, `edit_audio`, `process_audio` e `generate_song` aparecem como um player direto na conversa. Você não precisa abrir os arquivos. O card de uma música mostra o progresso até o WAV ficar pronto.
 
 <p align="center">
 <picture>

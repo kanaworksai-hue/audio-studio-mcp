@@ -23,6 +23,7 @@
   </div>
   <nav class="tabs" role="tablist">
     <button role="tab" id="tab-generate" aria-controls="page-generate" aria-selected="true" data-page="generate" data-i18n="nav.generate">Generate</button>
+    <button role="tab" id="tab-songs" aria-controls="page-songs" aria-selected="false" data-page="songs" data-i18n="nav.songs">Songs</button>
     <button role="tab" id="tab-edit" aria-controls="page-edit" aria-selected="false" data-page="edit" data-i18n="nav.edit">Edit</button>
     <button role="tab" id="tab-library" aria-controls="page-library" aria-selected="false" data-page="library" data-i18n="nav.library">Library</button>
   </nav>
@@ -160,6 +161,74 @@
           <li><strong data-i18n="steps.3"></strong><span class="muted small" data-i18n="steps.3d"></span></li>
         </ol>
         <p class="muted small" data-i18n="jobs.emptyHint"></p>
+      </div>
+    </div>
+  </section>
+
+  <section id="page-songs" class="page" role="tabpanel" aria-labelledby="tab-songs" hidden>
+    <form id="song-form" class="panel form">
+      <div class="panel-head">
+        <h1 class="panel-title" data-i18n="song.title">New song</h1>
+      </div>
+      <div id="song-setup" class="tip" hidden>
+        <span id="song-runtime-problem" hidden></span>
+        <span data-i18n="song.setup">Install the YuE2 runtime and weights in your terminal.</span>
+        <code id="song-setup-command"></code>
+        <button id="song-copy-setup" type="button" class="btn btn-sm" data-i18n="act.copy">Copy</button>
+      </div>
+      <p id="song-preflight" class="hint" hidden></p>
+      <p id="song-unsupported" class="hint" data-i18n="song.unsupported" hidden>Song generation requires Apple Silicon or Windows x64 with an NVIDIA CUDA GPU.</p>
+      <div class="field">
+        <label for="song-title" data-i18n="song.name">Title (optional)</label>
+        <input id="song-title" name="title" type="text" maxlength="200">
+      </div>
+      <div class="field">
+        <label for="song-lyrics" data-i18n="song.lyrics">Lyrics</label>
+        <textarea id="song-lyrics" name="lyrics" rows="8" maxlength="16000" aria-describedby="song-lyrics-hint" required></textarea>
+        <p id="song-lyrics-hint" class="hint" data-i18n="song.lyricsHint">Mark the structure with [Verse], [Chorus] and [Bridge].</p>
+      </div>
+      <div class="field">
+        <label for="song-style" data-i18n="song.style">Style</label>
+        <textarea id="song-style" name="style" rows="2" maxlength="1200" required></textarea>
+      </div>
+      <div class="row">
+        <div class="field">
+          <label for="song-length" data-i18n="song.duration">Maximum length (seconds)</label>
+          <input id="song-length" name="duration_seconds" type="number" min="8" max="240" step="1" value="180" required>
+        </div>
+        <div class="field">
+          <label for="song-mode" data-i18n="song.mode">Generation mode</label>
+          <select id="song-mode" name="mode">
+            <option value="auto" data-i18n="song.auto">Auto</option>
+            <option value="fast" data-i18n="song.fast">Fast</option>
+            <option value="quality" data-i18n="song.quality">Highest quality</option>
+          </select>
+        </div>
+      </div>
+      <p id="song-short-hint" class="hint" data-i18n="song.shortHint" hidden>For 30 seconds or less, use one short chorus and ask for the lead vocal on the first beat in Style.</p>
+      <details class="advanced">
+        <summary data-i18n="gen.advanced">Advanced</summary>
+        <div class="row">
+          <div class="field">
+            <label for="song-seed" data-i18n="adv.seed">Seed</label>
+            <input id="song-seed" name="seed" type="number" min="0" max="2147483643" step="1" data-i18n-placeholder="adv.seedPh">
+          </div>
+          <div class="field">
+            <label for="song-budget" data-i18n="song.budget">Auto time budget (seconds)</label>
+            <input id="song-budget" name="wait_budget_seconds" type="number" min="1" max="3600" step="1">
+          </div>
+        </div>
+      </details>
+      <p id="song-error" class="form-error" role="alert" hidden></p>
+      <div class="submit-row">
+        <button id="song-submit" type="submit" class="btn btn-primary btn-lg" data-i18n="song.submit">Generate song</button>
+      </div>
+    </form>
+    <div class="results">
+      <div class="results-head"><h2 data-i18n="jobs.title">Results</h2></div>
+      <div id="song-jobs" class="jobs"></div>
+      <div class="empty-state" id="song-empty">
+        <p class="empty-title" data-i18n="song.empty">Your songs appear here.</p>
       </div>
     </div>
   </section>

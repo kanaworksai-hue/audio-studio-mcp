@@ -16,13 +16,15 @@ import asyncio
 import json
 import os
 import threading
+from functools import partial
 from pathlib import Path
 
 import pytest
 
 playwright = pytest.importorskip("playwright.sync_api")
 
-from audio_studio_mcp import chat_player, server  # noqa: E402
+from audio_studio_mcp import chat_player, server, songs  # noqa: E402
+from test_songs import native, finish_cli  # noqa: E402
 from test_webui_browser import CONTRAST_JS, KEYS_JS  # noqa: E402
 
 # the CSP the ext-apps spec tells hosts to apply when a resource declares none
@@ -161,6 +163,29 @@ def generate(loop, **args):
     return base, call_tool(loop, "generate_audio", base)
 
 
+def test_song_player_polls_then_plays_and_exports(browser, loop, native, monkeypatch):
+    monkeypatch.setattr(songs, "_run_cli", partial(finish_cli, seconds=10))
+    args = {"lyrics": "[Verse]\nBright sky", "style": "city pop", "title": "Bright Sky", "seed": 1234}
+    queued = call_tool(loop, "generate_song", args)
+    assert body(queued)["status"] == "queued"
+    page, frame = open_player(browser, loop, tool="generate_song", args=args, result=queued)
+    wait_ready(page, 1)
+    assert frame.locator("#title").inner_text() == "Bright Sky"
+    assert "YuE2 3B · Q4_0" in frame.locator("#facts").inner_text()
+    assert page.evaluate("log.calls.some(c => c.name === 'song_status')")
+    row = frame.locator(".row").first
+    frame.locator("#loop").click()
+    row.locator(".play").click()
+    player(page).wait_for_function("() => Engine.loop && Engine.playing && Engine.position() > 0.1")
+    row.locator("button[aria-expanded]").press("Enter")
+    row.get_by_role("button", name="Plain WAV").press("Enter")
+    page.wait_for_function("() => log.calls.some(c => c.name === 'process_audio')")
+    player(page).wait_for_function("() => UI.rows.some(r => r.kind === 'export' && r.buffer)")
+    assert page.evaluate("log.calls.find(c => c.name === 'process_audio').arguments.sample_rate") == 48000
+    assert not page.errors, page.errors
+    page.close()
+
+
 def test_generate_play_ab_choose_export_more(browser, loop, fake, shots):
     args, result = generate(loop)
     page, frame = open_player(browser, loop, args=args, result=result)
@@ -223,7 +248,10 @@ def test_generate_play_ab_choose_export_more(browser, loop, fake, shots):
 
     # two more versions: the same prompt with the next seeds, appended as versions 3 and 4
     frame.get_by_role("button", name="2 more versions").click()
-    p.wait_for_function("() => UI.candidates.length === 4 && UI.candidates.every((r) => r.buffer)", timeout=30000)
+    try:
+        p.wait_for_function("() => UI.candidates.length === 4 && UI.candidates.every((r) => r.buffer)", timeout=30000)
+    except playwright.TimeoutError:
+        pytest.fail(f"{frame.locator('#status').inner_text()}\n{page.errors}\n{page.evaluate('log.calls')}")
     more = page.evaluate("log.calls.filter((c) => c.name === 'generate_audio').pop().arguments")
     assert more["prompt"] == "calm piano" and more["variations"] == 2 and more["seed"] == 13
     labels = p.evaluate("UI.rows.map((r) => r.label)")

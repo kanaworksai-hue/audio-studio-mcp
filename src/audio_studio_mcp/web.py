@@ -39,14 +39,14 @@ from starlette.responses import FileResponse, JSONResponse, Response
 from starlette.routing import Mount, Route
 from starlette.staticfiles import StaticFiles
 
-from . import __version__, post, server
+from . import __version__, gpu, post, server, songs
 from .prompts import DEFAULT_SECONDS
 
 STATIC_DIR = Path(__file__).with_name("static")
 AUDIO_EXTS = {".wav": "audio/wav", ".ogg": "audio/ogg", ".flac": "audio/flac", ".mp3": "audio/mpeg"}
 # Tools the page may queue. edit/process read `input_audio`; from the page that
 # must be an audio file directly inside OUTPUT_DIR (see resolve_input).
-JOB_TOOLS = {"generate_audio", "edit_audio", "process_audio"}
+JOB_TOOLS = {"generate_audio", "edit_audio", "process_audio", "generate_song"}
 INPUT_TOOLS = {"edit_audio", "process_audio"}
 MAX_FINISHED_JOBS = 200
 MAX_PEAKS = 20000
@@ -66,10 +66,20 @@ class Job:
     finished: float | None = None
     result: Any = None
     error: str | None = None
+    pinned_profile: str | None = None
+    duration_limit_fade_ms: int = songs.DURATION_LIMIT_FADE_MS
+    phase: str | None = None
+    selection: dict | None = None
+    cancel_event: threading.Event = field(default_factory=threading.Event)
+
+    def update_song(self, phase: str, selection: dict | None = None) -> None:
+        self.phase = phase
+        if selection is not None:
+            self.selection = selection
 
     def view(self, position: int | None) -> dict:
         end = self.finished or time.time()
-        return {
+        view = {
             "id": self.id, "tool": self.tool, "arguments": self.arguments,
             "status": self.status, "position": position,
             "created": self.created, "started": self.started, "finished": self.finished,
@@ -77,6 +87,10 @@ class Job:
             "waited": round((self.started or end) - self.created, 1),
             "result": self.result, "error": self.error,
         }
+        if self.tool == "generate_song":
+            view.update(phase="cancelling" if self.status == "running" and self.cancel_event.is_set() else self.phase,
+                        selection=self.selection)
+        return view
 
 
 def _tool_result(r) -> Any:
@@ -105,7 +119,8 @@ class JobQueue:
         self._worker: asyncio.Task | None = None
         self._loop: asyncio.AbstractEventLoop | None = None
 
-    def submit(self, tool: str, arguments: dict) -> Job:
+    def submit(self, tool: str, arguments: dict, *, pinned_profile: str | None = None,
+               duration_limit_fade_ms: int = songs.DURATION_LIMIT_FADE_MS) -> Job:
         loop = asyncio.get_running_loop()
         if self._loop is not loop:  # first call, or the app was restarted on a new loop
             self._loop, self._queue = loop, asyncio.Queue()
@@ -115,11 +130,16 @@ class JobQueue:
             self._worker = None
         if self._worker is None or self._worker.done():
             self._worker = loop.create_task(self._run())
-        job = Job(id=secrets.token_hex(6), tool=tool, arguments=arguments, seq=next(self._seq))
+        job = Job(id=secrets.token_hex(6), tool=tool, arguments=arguments, seq=next(self._seq),
+                  pinned_profile=pinned_profile, duration_limit_fade_ms=duration_limit_fade_ms)
         self.jobs[job.id] = job
         self._queue.put_nowait(job)
         self._prune()
         return job
+
+    def submit_song(self, request, pinned_profile: str | None, *, duration_limit_fade_ms: int) -> Job:
+        return self.submit("generate_song", request.model_dump(), pinned_profile=pinned_profile,
+                           duration_limit_fade_ms=duration_limit_fade_ms)
 
     def positions(self) -> dict[str, int]:
         """1-based place of each queued job (started jobs have none)."""
@@ -130,7 +150,10 @@ class JobQueue:
         return job.view((positions if positions is not None else self.positions()).get(job.id))
 
     def cancel(self, job: Job) -> bool:
-        """Drop a job that has not started yet (a running model call cannot stop)."""
+        """Drop a waiting job, or signal the running song subprocess to exit."""
+        if job.tool == "generate_song" and job.status == "running":
+            job.cancel_event.set()
+            return True
         if job.status != "queued":
             return False
         job.status, job.finished = "cancelled", time.time()
@@ -148,8 +171,8 @@ class JobQueue:
     async def _run(self) -> None:
         queue = self._queue
         assert queue is not None
-        while True:
-            job = await queue.get()
+        while not queue.empty():
+            job = queue.get_nowait()
             if job.status == "cancelled":
                 queue.task_done()
                 continue
@@ -158,8 +181,14 @@ class JobQueue:
                 if job.tool in INPUT_TOOLS and resolve_input(job.arguments.get("input_audio")) is None:
                     # checked at submit time; the file may have been replaced since
                     raise ValueError("input_audio must be an audio file in the output folder")
-                job.result = _tool_result(await server.server.call_tool(job.tool, job.arguments))
+                if job.tool == "generate_song":
+                    job.result = await server.run_song_job(job)
+                    job.phase = "done"
+                else:
+                    job.result = _tool_result(await server.server.call_tool(job.tool, job.arguments))
                 job.status = "done"
+            except gpu.Cancelled:
+                job.status, job.phase = "cancelled", "cancelled"
             except Exception as e:  # ToolError carries the same text MCP clients see
                 job.error, job.status = str(e), "error"
             except asyncio.CancelledError:  # server shutting down
@@ -279,7 +308,7 @@ def _search_text(e: dict) -> str:
     return " ".join(str(p) for p in parts if p is not None and p != "").lower()
 
 
-LIBRARY_KINDS = ("music", "instrument", "sfx", "edit", "process")
+LIBRARY_KINDS = ("music", "instrument", "sfx", "song", "edit", "process")
 
 
 def _kind_matches(e: dict, kind: str) -> bool:
@@ -448,11 +477,33 @@ class LocalOnly:
 
 async def api_status(_: Request) -> Response:
     b = server.get_backend()
+    backend = songs.song_backend()
+    high, fast = songs.profiles(songs.Policy(), backend or "metal")
+    preflight_error = preflight = None
+    if backend == "metal":
+        try:
+            total_gib = await asyncio.to_thread(songs.metal_installed_ram)
+            config = songs.policy(backend)
+            if total_gib < config.min_total_gib:
+                # structured too, so the page can show it in the user's language
+                preflight = {"reason": "installed_ram", "required_gib": config.min_total_gib,
+                             "detected_gib": round(total_gib, 1)}
+            songs.require_installed_ram(config, total_gib)
+        except (OSError, ValueError, songs.SongRuntimeError) as error:
+            preflight_error = str(error)
+    problem = songs.runtime_problem(songs.binary_path(backend), backend) if backend and not preflight_error else None
+    installed = (songs.installed_profiles(songs.model_dir(), (high, fast))
+                 if backend and not (preflight_error or problem) else set())
     return JSONResponse({
         "version": __version__, "backend": b.name, "model": b.model_label,
         "loaded": bool(b.loaded()), "max_seconds": b.max_seconds, "sample_rate": b.sample_rate,
         "output_dir": str(_output_dir()), "default_seconds": DEFAULT_SECONDS,
         "jobs": jobs.counts(),
+        "songs": {"supported": backend is not None, "setup_command": songs.setup_command(),
+                  "preflight_error": preflight_error, "preflight": preflight, "runtime_problem": problem,
+                  "runtime_missing": bool(problem) and not songs.binary_path(backend).exists(),
+                  "installed_modes": {"auto": bool(installed), "fast": fast.id in installed,
+                                      "quality": high.id in installed}},
     })
 
 
@@ -499,7 +550,14 @@ async def api_jobs_create(request: Request) -> Response:
     if errors:
         msg = "; ".join(f"{e['field']}: {e['message']}" for e in errors)
         return _err(422, f"invalid arguments: {msg}", fields=errors)
-    job = jobs.submit(tool, arguments)
+    if tool == "generate_song":
+        try:
+            submitted = _tool_result(await server.server.call_tool(tool, arguments))
+        except ToolError as e:
+            return _err(422, str(e))
+        job = jobs.jobs[submitted["job_id"]]
+    else:
+        job = jobs.submit(tool, arguments)
     return JSONResponse(jobs.view(job), status_code=202)
 
 
@@ -520,7 +578,8 @@ async def api_job_cancel(request: Request) -> Response:
     if job is None:
         return _err(404, "no such job")
     if not jobs.cancel(job):
-        return _err(409, f"job is {job.status}, only waiting jobs can be cancelled")
+        detail = "only waiting jobs can be cancelled" if job.tool != "generate_song" else "song has finished"
+        return _err(409, f"job is {job.status}, {detail}")
     return JSONResponse(jobs.view(job))
 
 

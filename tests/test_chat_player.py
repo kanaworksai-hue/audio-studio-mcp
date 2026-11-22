@@ -17,8 +17,8 @@ from conftest import sine
 
 pytestmark = pytest.mark.anyio
 
-UI_TOOLS = {"generate_audio", "edit_audio", "process_audio"}
-CORE_TOOLS = ["edit_audio", "generate_audio", "process_audio", "unload_models"]
+UI_TOOLS = {"generate_audio", "edit_audio", "process_audio", "generate_song"}
+CORE_TOOLS = sorted(UI_TOOLS | {"unload_models", "song_status", "cancel_song"})
 
 
 class AppsClient(ClientExtension):

@@ -16,6 +16,8 @@ from dataclasses import dataclass, field
 
 import numpy as np
 
+from .. import gpu
+
 
 @dataclass
 class GenerationRequest:
@@ -80,7 +82,8 @@ class Backend(ABC):
     async def generate(self, seeds: list[int], req: GenerationRequest) -> GenerationResult:
         def job():
             try:
-                return self._generate(seeds, req)
+                with gpu.lease():
+                    return self._generate(seeds, req)
             finally:
                 # Stamped on the executor thread, so an idle check queued behind
                 # a long generation sees it before it runs.
@@ -90,7 +93,16 @@ class Backend(ABC):
         return await asyncio.wrap_future(self.executor.submit(job))
 
     async def unload(self) -> bool:
-        return await asyncio.wrap_future(self.executor.submit(self._unload))
+        return await asyncio.wrap_future(self.executor.submit(self._gpu_call, self._unload))
+
+    def unload_for_song(self) -> bool:
+        """Unload on this backend's worker while a song already owns the GPU lease."""
+        return self._unload()
+
+    @staticmethod
+    def _gpu_call(fn):
+        with gpu.lease():
+            return fn()
 
     def preload(self) -> None:
         def report(fut):
@@ -100,7 +112,7 @@ class Backend(ABC):
                 print("[audio-studio] models preloaded", file=sys.stderr)
 
         self._last_used = time.time()
-        self.executor.submit(self._preload).add_done_callback(report)
+        self.executor.submit(self._gpu_call, self._preload).add_done_callback(report)
 
     def start_idle_reaper(self, minutes: float) -> None:
         """Free the models after `minutes` without a request (0 = never)."""
@@ -110,7 +122,7 @@ class Backend(ABC):
         def unload_if_idle():
             # Runs on the executor, so it is serialized with generations.
             if self.loaded() and time.time() - self._last_used > minutes * 60:
-                self._unload()
+                self._gpu_call(self._unload)
                 print(f"[audio-studio] idle {minutes:g} min → models unloaded", file=sys.stderr)
 
         def loop():

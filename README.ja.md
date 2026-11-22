@@ -307,9 +307,13 @@ claude mcp add --scope user --transport http audio-studio http://127.0.0.1:8765/
 > [!WARNING]
 > Web UI は自分のパソコンだけで使うためのものです。待ち受けは `127.0.0.1` のみで、ログイン機能はありません。ポート転送、リバースプロキシ、トンネルなどで他のマシンから開けるようにしないでください。開ける人は誰でも GPU を使い、出力フォルダにファイルを書き込めてしまいます。
 
+### 歌入りの楽曲
+
+Web UI の **楽曲** タブと MCP ツール `generate_song` では、オプションの YuE2 モデルで歌詞から歌声と伴奏を生成できます。対応環境は Apple Silicon 搭載の Mac と、NVIDIA CUDA GPU を搭載した Windows x64 です。既定では、Mac はメモリ 32 GB、Windows は RAM 32 GB と 6 GB 以上の空き VRAM が必要です。モデルの利用条件、ダウンロードサイズ、Auto の設定は[楽曲のセットアップと使い方（英語）](docs/song-generation.md)をご覧ください。
+
 ## 💬 チャットで聴く
 
-[MCP Apps](https://modelcontextprotocol.io/extensions/apps/overview) に対応したクライアントでは、`generate_audio`、`edit_audio`、`process_audio` の結果が会話の中にプレーヤーとして表示されます。自分でファイルを開く必要はありません。
+[MCP Apps](https://modelcontextprotocol.io/extensions/apps/overview) に対応したクライアントでは、`generate_audio`、`edit_audio`、`process_audio`、`generate_song` の結果が会話の中にプレーヤーとして表示されます。自分でファイルを開く必要はありません。楽曲のカードは、WAV が完成するまで進行状況を表示します。
 
 <p align="center">
 <picture>

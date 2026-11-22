@@ -1,6 +1,6 @@
 <div align="center">
 
-<img src="docs/assets/banner-zh.jpg" alt="Audio Studio MCP：在本机用 AI 生成 BGM 和音效，给 Claude Code 和所有 MCP 客户端" width="820">
+<img src="docs/assets/banner-zh.jpg" alt="Audio Studio MCP：在 MCP 客户端本地生成人声歌曲、BGM 和音效" width="820">
 
 <p>
   <a href="LICENSE"><img alt="License: MIT" src="https://img.shields.io/badge/license-MIT-6b4dff?style=flat-square"></a>
@@ -166,14 +166,33 @@ tool_timeout_sec = 900
 
 生成的文件保存在 `~/AudioStudio`（要改的话设置 `AUDIO_STUDIO_OUTPUT_DIR`）。uvx 会一直用第一次装的版本；要更新，先运行 `uv cache clean audio-studio-mcp`，再运行一次 setup。
 
+### 可选：生成带人声的歌曲
+
+Audio Studio MCP 1.3.0 起，YuE2 可以独立于 Stable Audio 3 安装。Q4_0 和 Q8_0 权重都适用 YuE2 的模型条款。macOS 默认需要 Apple Silicon、至少 32 GiB 统一内存，以及带 Metal 编译器的 Xcode。Windows 需要受支持的 NVIDIA CUDA 显卡（至少 6 GiB 空闲显存）和 32 GB 系统内存。驱动要求、模型条款和下载大小见 [YuE2 安装指南（英文）](docs/song-generation.md#install-when-needed)。
+
+```bash
+# macOS
+uvx --python 3.11 audio-studio-mcp song-setup
+```
+
+```powershell
+# Windows
+uvx --python 3.11 --torch-backend cu126 audio-studio-mcp song-setup
+```
+
+运行对应平台的命令，按提示阅读模型条款。在同一条命令末尾加 `--check`，可以检查运行时、权重和设备是否就绪，检查过程无需下载。MCP 服务器只需注册一次，两个模型都可以使用。
+
 > [!TIP]
 > **让 AI 帮你装。** 把这句话贴给 Claude Code：
 > *“按照 Audio Studio MCP 服务器（https://github.com/kanaworksai-hue/audio-studio-mcp）的 README（包括写给 AI agent 的说明）安装它。”*
 >
+> 如果还需要生成人声歌曲，在请求里注明。
+>
 > **写给 AI agent 的说明：**
-> - 由你自己运行与用户系统对应的 setup 命令，加上 `-y`，超时设长一些：macOS 上约下载 7 GB，Windows 上约 13 GB（模型加 PyTorch）。中途断了就再运行一次，下载完的文件会保留。然后按上面的方法注册服务器。
-> - 在 Windows 上，模型权重需要用户本人的 Hugging Face 登录。如果 setup 打印登录步骤后停止，请把步骤转告用户，等用户说完成后再运行 setup。不要让用户把 token 贴到聊天里。
-> - setup 完成之前服务器也能启动，但调用任何工具都会返回需要运行的 setup 命令。
+> - 用户需要不含人声的 BGM 或音效时，运行对应平台的 `setup -y` 安装 Stable Audio 3。给模型下载留足时间。
+> - 在 Windows 上，下载 Stable Audio 3 权重时，用户需要登录自己的 Hugging Face 账号。如果 setup 打印登录步骤后停止，请把步骤转告用户，等用户说完成后再运行 setup。不要让用户把 token 贴到聊天里。
+> - 用户需要人声歌曲时，先在对应平台的 `song-setup` 命令末尾加上 `--check`，再执行命令。如果需要安装 YuE2，把模型条款和下载大小告诉用户。非交互安装时，等用户接受 YuE2 条款后再加 `--accept-license`。安装完成后再运行一次 `--check`。
+> - 无论使用哪种模型，MCP 服务都只需注册一次。 BGM 和音效用 `generate_audio`。人声歌曲用 `generate_song`，传入原歌词和曲风，再用返回的任务 ID 调用 `song_status`，直到状态为 `done`、`error` 或 `cancelled`。状态为 `done` 时可获取 WAV。
 
 ### 其他方式：从源码安装
 

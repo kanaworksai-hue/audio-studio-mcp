@@ -1,6 +1,6 @@
 <div align="center">
 
-<img src="docs/assets/banner-en.jpg" alt="Audio Studio MCP: local AI music and sound effects for Claude Code and any MCP client" width="820">
+<img src="docs/assets/banner-en.jpg" alt="Audio Studio MCP: songs with vocals, BGM and sound effects generated locally for MCP clients" width="820">
 
 <p>
   <a href="LICENSE"><img alt="License: MIT" src="https://img.shields.io/badge/license-MIT-6b4dff?style=flat-square"></a>
@@ -166,14 +166,33 @@ tool_timeout_sec = 900
 
 Generated files go to `~/AudioStudio` (set `AUDIO_STUDIO_OUTPUT_DIR` to change it). uvx keeps the version it installed; to update, run `uv cache clean audio-studio-mcp` and then setup again.
 
+### Optional: enable vocal songs
+
+Audio Studio MCP 1.3.0 or later can set up YuE2 independently of Stable Audio 3. The Q4_0 and Q8_0 weights follow the YuE2 model terms. The default macOS setup needs Apple Silicon, at least 32 GiB of unified memory, and Xcode with the Metal compiler. On Windows, use a supported NVIDIA CUDA GPU with at least 6 GiB of free VRAM and a PC with 32 GB of system RAM. See the [YuE2 setup guide](docs/song-generation.md#install-when-needed) for compatible drivers, model terms, and download sizes.
+
+```bash
+# macOS
+uvx --python 3.11 audio-studio-mcp song-setup
+```
+
+```powershell
+# Windows
+uvx --python 3.11 --torch-backend cu126 audio-studio-mcp song-setup
+```
+
+Run the command for your platform and review the model terms at the prompt. Add `--check` to inspect the YuE2 runtime, weights and device readiness without downloading. Use the existing MCP registration for both models.
+
 > [!TIP]
 > **Let your agent install it.** Paste this into Claude Code:
 > *"Install the Audio Studio MCP server (https://github.com/kanaworksai-hue/audio-studio-mcp) by following its README, including the notes for AI agents."*
 >
+> If you want songs with vocals, mention that in your request.
+>
 > **Notes for AI agents:**
-> - Run the setup command for the user's OS yourself, with `-y` added, and give it a long timeout: it downloads about 7 GB on macOS and about 13 GB on Windows (model and PyTorch). If it is cut off, run it again; finished files are kept. Then register the server as shown above.
-> - On Windows the model weights are gated and need the user's own Hugging Face login. If setup stops with the login steps, pass them on to the user and wait until they say they are done, then run setup again. Never ask the user to paste their token into the chat.
-> - Before setup has finished, the server starts but every tool call answers with the setup command to run.
+> - Install Stable Audio 3 with the platform's `setup -y` command when the user needs instrumental BGM or sound effects. Allow time for the model download.
+> - On Windows the Stable Audio 3 weights are gated and need the user's own Hugging Face login. If setup stops with the login steps, pass them on to the user and wait until they say they are done, then run setup again. Never ask the user to paste their token into the chat.
+> - For vocals, run the platform's `song-setup` command with `--check` first. If YuE2 needs installation, show the user the model terms and download size. In a non-interactive session, add `--accept-license` only after the user accepts the YuE2 terms. Run `--check` again after installation.
+> - Register the MCP server once for either setup. Use `generate_audio` for BGM and sound effects. Use `generate_song` with the original lyrics and a style for vocals, then poll `song_status` with the returned job ID until it reports `done`, `error` or `cancelled`. The WAV is available on `done`.
 
 ### Alternative: install from source
 

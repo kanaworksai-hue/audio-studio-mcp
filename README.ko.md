@@ -168,7 +168,7 @@ tool_timeout_sec = 900
 
 ### 선택 사항: 보컬이 들어간 곡 생성 활성화
 
-Audio Studio MCP 1.3.0부터 Stable Audio 3와 별도로 YuE2를 설치할 수 있습니다. Q4_0과 Q8_0 가중치에는 YuE2 이용 조건이 적용됩니다. macOS 기본 구성에는 Apple Silicon, 통합 메모리 32 GiB 이상, Metal 컴파일러가 포함된 Xcode가 필요합니다. Windows에서는 지원되는 NVIDIA CUDA GPU(여유 VRAM 6 GiB 이상)와 시스템 RAM 32 GB가 필요합니다. 지원 드라이버와 모델 이용 조건, 다운로드 용량은 [YuE2 설치 가이드(영어)](docs/song-generation.md#install-when-needed)를 참고하세요.
+Audio Studio MCP 1.3.0부터 Stable Audio 3와 별도로 YuE2를 설치할 수 있습니다. Q4_0과 Q8_0 가중치에는 YuE2 이용 조건이 적용됩니다. macOS에서는 Apple Silicon과 Metal 컴파일러가 포함된 Xcode가 필요합니다. Windows x64에서는 지원되는 NVIDIA CUDA GPU가 필요합니다. 지원 드라이버와 모델 이용 조건, 다운로드 용량은 [YuE2 설치 가이드(영어)](docs/song-generation.md#install-when-needed)를 참고하세요.
 
 ```bash
 # macOS
@@ -337,7 +337,7 @@ claude mcp add --scope user --transport http audio-studio http://127.0.0.1:8765/
 
 ### 보컬이 있는 노래
 
-웹 UI의 **Songs** 탭과 MCP 도구 `generate_song`으로, 선택 사항인 YuE2 모델을 사용해 가사로 보컬과 반주를 만들 수 있습니다. Apple Silicon Mac과 NVIDIA CUDA GPU가 있는 Windows x64에서 동작합니다. 기본 설정에서는 Mac은 메모리 32GB, Windows는 RAM 32GB와 여유 VRAM 6GB 이상이 필요합니다. 모델 이용 조건, 다운로드 크기, Auto 설정은 [노래 설치 및 사용 가이드(영어)](docs/song-generation.md)를 참고하세요.
+웹 UI의 **Songs** 탭과 MCP 도구 `generate_song`으로, 선택 사항인 YuE2 모델을 사용해 가사로 보컬과 반주를 만들 수 있습니다. Apple Silicon Mac과 NVIDIA CUDA GPU가 있는 Windows x64에서 동작합니다. 메모리와 VRAM 측정값은 Auto의 추천에 사용됩니다. 설치된 프로필은 어느 쪽이든 수동으로 실행해 볼 수 있습니다. 모델 이용 조건, 다운로드 크기, Auto 설정은 [노래 설치 및 사용 가이드(영어)](docs/song-generation.md)를 참고하세요.
 
 ## 💬 채팅에서 바로 듣기
 

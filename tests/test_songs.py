@@ -9,6 +9,7 @@ import sys
 import threading
 import time
 from pathlib import Path
+from types import SimpleNamespace
 
 import anyio
 import numpy as np
@@ -32,89 +33,68 @@ def metal_setup(tmp_path, monkeypatch):
     return songs.binary_path("metal")
 
 
-def test_metal_setup_checks_ram_before_license_and_install(metal_setup, tmp_path, monkeypatch, capsys):
+@pytest.mark.parametrize("backend", ["metal", "cuda"])
+def test_setup_can_install_on_low_ram(metal_setup, monkeypatch, capsys, backend):
     events = []
-
-    def read_command(*args):
-        assert args == ("/usr/sbin/sysctl", "-n", "hw.memsize")
-        events.append("ram")
-        return str(16 * songs.GIB)
-
-    def license_prompt(_):
-        events.append("license")
-        return "yes"
-
-    def install_runtime(binary):
-        assert binary == metal_setup
-        events.append("build")
-
-    monkeypatch.setattr(songs, "_read_command", read_command)
-    monkeypatch.setattr(song_setup.firstrun, "stdin_is_terminal", lambda: True)
-    monkeypatch.setattr("builtins.input", license_prompt)
-    monkeypatch.setattr(song_setup, "_install_metal_runtime", install_runtime)
+    monkeypatch.setattr(songs, "song_backend", lambda: backend)
+    monkeypatch.setattr(song_setup.song_cuda, "nvidia_devices",
+                        lambda: {0: song_setup.song_cuda.NvidiaDevice("610.88", (8, 6), 2 * songs.GIB)})
+    monkeypatch.setattr(song_setup.song_cuda, "memory_status", lambda: (16 * songs.GIB, 2 * songs.GIB))
+    monkeypatch.setattr(song_setup, "_install_metal_runtime", lambda *_: events.append("build"))
+    monkeypatch.setattr(song_setup, "_install_cuda_runtime", lambda *_: events.append("install runtime"))
     monkeypatch.setattr(song_setup, "_install_weights", lambda *_: events.append("weights"))
-    monkeypatch.setattr(songs, "probe_resources",
-                        lambda *_: songs.Resources(16, 8, 12, 1, "Apple M1"))
+    monkeypatch.setattr(songs, "probe_resources", lambda *_: songs.Resources(16, 2, 2, 4, "Test GPU"))
 
-    for flags in ([], ["--accept-license", "--profile", "both"], ["--check"]):
-        assert song_setup.main(flags) == 1
-        captured = capsys.readouterr()
-        assert captured.out == ""
-        assert "32 GiB installed RAM (16.0 GiB detected)" in captured.err
-        assert not metal_setup.parent.exists()
-    assert events == ["ram"] * 3
-
-    override = tmp_path / "policy.json"
-    override.write_text('{"min_total_gib": 16}', encoding="utf-8")
-    monkeypatch.setenv("AUDIO_STUDIO_SONG_POLICY", str(override))
-    assert song_setup.main([]) == 0
-    assert events[3:] == ["ram", "license", "build", "weights"]
+    assert song_setup.main(["--accept-license", "--profile", "both"]) == 0
+    assert events == ["build" if backend == "metal" else "install runtime", "weights"]
+    output = capsys.readouterr()
+    assert "16.0 GiB installed RAM is below the song recommendation" in output.out
+    assert not output.err
 
 
-def test_metal_status_and_check_distinguish_ram_runtime_and_probe_errors(
-        metal_setup, fake, monkeypatch, capsys, tmp_path):
-    def read_command(*args):
-        if args[-1] == "hw.memsize":
-            return str(16 * songs.GIB)
-        raise OSError("test vm_stat failure")
-
-    monkeypatch.setattr(songs, "_read_command", read_command)
+@pytest.mark.parametrize("backend", ["metal", "cuda"])
+def test_low_ram_status_keeps_setup_and_installed_modes_available(
+        metal_setup, fake, monkeypatch, capsys, backend):
+    monkeypatch.setattr(songs, "song_backend", lambda: backend)
+    monkeypatch.setattr(songs, "metal_installed_ram", lambda: 16)
+    monkeypatch.setattr(song_setup.song_cuda, "memory_status", lambda: (16 * songs.GIB, 2 * songs.GIB))
+    binary = songs.binary_path(backend)
     with TestClient(web.create_app(), base_url="http://127.0.0.1") as client:
         result = client.get("/api/status").json()["songs"]
         assert result["supported"] and not any(result["installed_modes"].values())
-        assert "32 GiB installed RAM (16.0 GiB detected)" in result["preflight_error"]
-        assert result["preflight"] == {"reason": "installed_ram", "required_gib": 32, "detected_gib": 16.0}
-        assert result["runtime_problem"] is None
-        with pytest.raises(songs.SongMemoryError, match=r"32 GiB installed RAM \(16\.0 GiB detected\)"):
-            songs.generate(REQUEST, tmp_path, threading.Event(), lambda *_: None)
+        assert result["preflight_error"] is None
+        assert result["preflight"] == {"reason": "installed_ram", "recommended_gib": 32 if backend == "metal" else 31,
+                                       "detected_gib": 16}
+        assert result["runtime_problem"] and result["runtime_missing"]
+        assert song_setup.main(["--check"]) == 1
+        assert binary.name in capsys.readouterr().err
 
-        override = tmp_path / "policy.json"
-        override.write_text('{"min_total_gib": 16}', encoding="utf-8")
-        monkeypatch.setenv("AUDIO_STUDIO_SONG_POLICY", str(override))
+        binary.parent.mkdir(parents=True)
+        binary.touch(mode=0o755)
+        if backend == "cuda":
+            for name in song_setup.song_cuda.REQUIRED_DLLS:
+                (binary.parent / name).touch()
+        monkeypatch.setattr(songs, "installed_profiles", lambda *_: {f"{backend}-q4"})
+        monkeypatch.setattr(song_setup, "_verify", lambda _, name: "q8_0" not in name)
+        monkeypatch.setattr(songs, "probe_resources", lambda *_: songs.Resources(16, 2, 2, 4, "Test GPU"))
+        result = client.get("/api/status").json()["songs"]
+        assert result["installed_modes"] == {"auto": True, "fast": True, "quality": False}
+        assert result["runtime_problem"] is None
+        assert song_setup.main(["--check"]) == 0
+        assert "Auto at 180 s: Q4_0" in capsys.readouterr().out
+
+        def broken_read(*_):
+            raise OSError("test memory read failure")
+
+        monkeypatch.setattr(songs, "metal_installed_ram", broken_read)
+        monkeypatch.setattr(song_setup.song_cuda, "memory_status", broken_read)
         result = client.get("/api/status").json()["songs"]
         assert result["preflight_error"] is None and result["preflight"] is None
-        assert "Metal runtime is not installed" in result["runtime_problem"]
-        assert result["runtime_missing"] is True
-
-        assert song_setup.main(["--check"]) == 1
-        assert "Metal runtime is not installed" in capsys.readouterr().err
-        metal_setup.parent.mkdir(parents=True)
-        metal_setup.touch(mode=0o755)
-        assert song_setup.main(["--check"]) == 1
-        assert "Could not read Apple Silicon or Metal resources. test vm_stat failure." in capsys.readouterr().err
-
-        def broken_sysctl(*_):
-            raise OSError("test sysctl failure")
-
-        monkeypatch.setattr(songs, "_read_command", broken_sysctl)
-        result = client.get("/api/status").json()["songs"]
-        assert "hw.memsize): test sysctl failure" in result["preflight_error"]
-        assert result["runtime_problem"] is None
-        assert song_setup.main(["--check"]) == 1
-        assert "hw.memsize): test sysctl failure" in capsys.readouterr().err
+        assert result["installed_modes"]["auto"]
 
 
-def test_auto_uses_installed_profiles_duration_budget_and_current_resources():
+def test_auto_uses_installed_profiles_duration_budget_and_current_resources(tmp_path, monkeypatch):
+    monkeypatch.setenv("AUDIO_STUDIO_HOME", str(tmp_path))
     policy = songs.Policy()
     assert REQUEST.duration_seconds == 180
     choice = songs.select(policy, MAC, ALL, REQUEST)
@@ -124,14 +104,18 @@ def test_auto_uses_installed_profiles_duration_budget_and_current_resources():
     loaded = songs.Resources(32, 12, 24, 1, "Apple M6")
     choice = songs.select(songs.Policy(wait_budget_seconds=300), loaded, ALL, REQUEST)
     assert choice.profile.id == "metal-q4" and "available RAM" in choice.reasons[0]
-    with pytest.raises(songs.SongRuntimeError, match="available RAM"):
-        songs.select(policy, loaded, ALL, REQUEST.model_copy(update={"mode": "quality"}))
+    quality = songs.select(policy, loaded, ALL, REQUEST.model_copy(update={"mode": "quality"}))
+    assert quality.profile.id == "metal-q8" and "available RAM" in quality.reasons[0]
     with pytest.raises(songs.SongRuntimeError, match="180s Auto budget"):
         songs.select(policy, MAC, ALL, REQUEST.model_copy(update={"wait_budget_seconds": 180}))
     with pytest.raises(songs.SongRuntimeError, match="weights are not installed"):
         songs.select(policy, MAC, {"metal-q4"}, REQUEST, pinned="metal-q8")
-    with pytest.raises(songs.SongMemoryError, match="pressure"):
-        songs.select(policy, songs.Resources(32, 16, 24, 2, "Apple M6"), ALL, REQUEST)
+    stressed = songs.Resources(16, 2, 3, 4, "Apple M1")
+    auto = songs.select(policy, stressed, ALL, REQUEST)
+    assert auto.profile.id == "metal-q4" and any("critical" in reason for reason in auto.reasons)
+    only_q8 = songs.select(policy, stressed, {"metal-q8"},
+                           REQUEST.model_copy(update={"wait_budget_seconds": 300}))
+    assert only_q8.profile.id == "metal-q8" and any("headroom" in reason for reason in only_q8.reasons)
     long = songs.SongRequest(seed=1234, duration_seconds=240)
     with pytest.raises(songs.SongRuntimeError, match="301s exceeds the 240s Auto budget"):
         songs.select(policy, MAC, ALL, long)
@@ -144,6 +128,7 @@ def test_lease_serializes_separate_processes(tmp_path):
     program = """
 import sys
 from pathlib import Path
+from types import SimpleNamespace
 from audio_studio_mcp.gpu import file_lease
 lock, waiting, entered = map(Path, sys.argv[1:])
 waiting.touch()
@@ -199,11 +184,17 @@ def test_oom_reselects_only_for_auto(native, monkeypatch, tmp_path):
             raise songs.SongMemoryError("allocation failed")
         return finish_cli(*args, **kwargs)
 
+    def probe(_):
+        # An allocation failure can refresh the resource estimate below every threshold.
+        return songs.Resources(16, 1, 2, 4, MAC.device) if events else MAC
+
     monkeypatch.setattr(songs, "_run_cli", fail_q8)
+    monkeypatch.setattr(songs, "probe_metal", probe)
     request = REQUEST.model_copy(update={"wait_budget_seconds": 300})
     _, meta = songs.generate(request, tmp_path, threading.Event(), lambda *args: None)
     assert events == ["metal-q8", "metal-q4"]
-    assert meta["selection"]["reasons"] == ["Q8_0 ran out of memory."]
+    assert meta["selection"]["reasons"][0] == "Q8_0 ran out of memory."
+    assert any("available RAM" in reason for reason in meta["selection"]["reasons"])
     second = tmp_path / "manual"
     second.mkdir()
     with pytest.raises(songs.SongMemoryError):
@@ -403,22 +394,52 @@ def test_generate_records_speed_for_the_actual_length_after_early_eos(native, mo
     assert meta["selection"]["eta_seconds"] == math.ceil(55.1 * meta["selection"]["speed_factor"])
 
 
-@pytest.mark.parametrize("levels, stops_at", [
-    ([1, 2, 2, 1, 2, 1], None),            # brief warn spikes while the model loads
-    ([2] * 10, 8),                          # warn for 15 s or more
-    ([1, 4], 1),                            # critical stops at once
-])
-def test_metal_pressure_guard_tolerates_brief_warn(monkeypatch, levels, stops_at):
-    readings = iter(levels)
+@pytest.mark.parametrize("backend", ["metal", "cuda"])
+def test_running_low_memory_only_warns_and_recovers(monkeypatch, tmp_path, backend):
+    class FinishUnderPressure:
+        def __init__(self, *args, stdout, **kwargs):
+            self.polls = 0
+            stdout.write(b"yue2.nar.weights.buffer_name Metal\n"
+                         b"yue2.semantic.truncated 0\n")
+            stdout.flush()
+
+        returncode = 0
+
+        def poll(self):
+            self.polls += 1
+            return 0 if self.polls >= 5 else None
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *_):
+            pass
+
+    class NoWait(threading.Event):
+        def wait(self, timeout=None):
+            return self.is_set()
+
+    readings = iter([2, 4, 4, 1] if backend == "metal" else [0, 0, 0, songs.GIB])
+    clock = iter(range(0, 120, 20))
+    monkeypatch.setattr(songs, "time", SimpleNamespace(monotonic=lambda: next(clock)))
+    monkeypatch.setattr(songs.subprocess, "Popen", FinishUnderPressure)
     monkeypatch.setattr(songs, "memory_pressure", lambda: next(readings))
-    state = {}
-    for i in range(len(levels)):
-        if stops_at == i:
-            with pytest.raises(songs.SongMemoryError, match="critical" if levels[i] == 4 else "stayed elevated"):
-                songs._check_memory_during_run("metal", state, i * 2.0)
-            return
-        songs._check_memory_during_run("metal", state, i * 2.0)
-    assert stops_at is None
+    monkeypatch.setattr(songs.song_cuda, "memory_status", lambda: (16 * songs.GIB, next(readings)))
+    monkeypatch.setattr(songs.song_cuda, "process_options", lambda: {})
+    _, fast = songs.profiles(songs.Policy(), backend)
+    selection = songs.Selection(fast, 100, ())
+    updates = []
+
+    _, truncated = songs._run_cli(Path("audio.cpp"), tmp_path, REQUEST, fast, tmp_path,
+                                  NoWait(), lambda *args: updates.append(args),
+                                  backend=backend, device=0, selection=selection)
+
+    assert not truncated
+    assert updates[0] == ("synthesis",)
+    warnings = [view["reasons"][-1] for _, view in updates[1:-1]]
+    assert "You can cancel this song." in warnings[0]
+    assert ("critical" if backend == "metal" else "below 1 GiB") in warnings[-1]
+    assert updates[-1] == ("synthesis", selection.view())
 
 
 @pytest.mark.skipif(sys.platform == "win32", reason="needs a POSIX shell and SIGKILL")

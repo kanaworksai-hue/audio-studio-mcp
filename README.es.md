@@ -168,7 +168,7 @@ Los archivos generados se guardan en `~/AudioStudio` (define `AUDIO_STUDIO_OUTPU
 
 ### Opcional: habilitar canciones con voz
 
-Audio Studio MCP 1.3.0 o posterior permite instalar YuE2 por separado de Stable Audio 3. Los pesos Q4_0 y Q8_0 se rigen por las condiciones de uso de YuE2. La configuración predeterminada de macOS requiere Apple Silicon, al menos 32 GiB de memoria unificada y Xcode con el compilador de Metal. En Windows necesitas una GPU NVIDIA compatible con CUDA que tenga al menos 6 GiB de VRAM libre, además de 32 GB de RAM del sistema. Consulta los controladores compatibles, las condiciones de uso del modelo y los tamaños de descarga en la [guía de instalación de YuE2 (en inglés)](docs/song-generation.md#install-when-needed).
+Audio Studio MCP 1.3.0 o posterior permite instalar YuE2 por separado de Stable Audio 3. Los pesos Q4_0 y Q8_0 se rigen por las condiciones de uso de YuE2. En macOS necesitas Apple Silicon y Xcode con el compilador de Metal. En Windows x64 necesitas una GPU NVIDIA compatible con CUDA. Consulta los controladores compatibles, las condiciones de uso del modelo y los tamaños de descarga en la [guía de instalación de YuE2 (en inglés)](docs/song-generation.md#install-when-needed).
 
 ```bash
 # macOS
@@ -337,7 +337,7 @@ claude mcp add --scope user --transport http audio-studio http://127.0.0.1:8765/
 
 ### Canciones con voz
 
-La pestaña **Songs** de la interfaz web y la herramienta MCP `generate_song` generan voz y acompañamiento a partir de una letra con el modelo opcional YuE2, en Macs con Apple Silicon o en Windows x64 con una GPU NVIDIA CUDA. Con la configuración predeterminada, necesitas un Mac con 32 GB de memoria o un PC con Windows con 32 GB de RAM y al menos 6 GB de VRAM libre. Consulta los términos del modelo, los tamaños de descarga y los ajustes del modo Auto en la [guía de instalación y uso de canciones (en inglés)](docs/song-generation.md).
+La pestaña **Songs** de la interfaz web y la herramienta MCP `generate_song` generan voz y acompañamiento a partir de una letra con el modelo opcional YuE2, en Macs con Apple Silicon o en Windows x64 con una GPU NVIDIA CUDA. El modo Auto usa los valores de RAM y VRAM para recomendar un perfil. Puedes probar manualmente cualquiera de los perfiles instalados. Consulta los términos del modelo, los tamaños de descarga y los ajustes del modo Auto en la [guía de instalación y uso de canciones (en inglés)](docs/song-generation.md).
 
 ## 💬 Escucha en el chat
 

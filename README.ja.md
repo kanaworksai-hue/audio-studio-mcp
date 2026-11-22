@@ -168,7 +168,7 @@ tool_timeout_sec = 900
 
 ### オプション：歌入りの曲を生成する
 
-Audio Studio MCP 1.3.0 以降では、Stable Audio 3 とは別に YuE2 をセットアップできます。Q4_0 と Q8_0 の重みには YuE2 の利用条件が適用されます。macOS のデフォルト構成では Apple Silicon、32 GiB 以上のユニファイドメモリ、Metal コンパイラ付きの Xcode が必要です。Windows では、対応する NVIDIA CUDA GPU（空き VRAM 6 GiB 以上）と 32 GB のシステムメモリが必要です。対応ドライバー、モデルの利用条件、ダウンロードサイズについては [YuE2 のセットアップガイド（英語）](docs/song-generation.md#install-when-needed) をご覧ください。
+Audio Studio MCP 1.3.0 以降では、Stable Audio 3 とは別に YuE2 をセットアップできます。Q4_0 と Q8_0 の重みには YuE2 の利用条件が適用されます。macOS では Apple Silicon と Metal コンパイラ付きの Xcode、Windows x64 では対応する NVIDIA CUDA GPU が必要です。対応ドライバー、モデルの利用条件、ダウンロードサイズについては [YuE2 のセットアップガイド（英語）](docs/song-generation.md#install-when-needed) をご覧ください。
 
 ```bash
 # macOS
@@ -344,7 +344,7 @@ claude mcp add --scope user --transport http audio-studio http://127.0.0.1:8765/
 
 ### 歌入りの楽曲
 
-Web UI の **楽曲** タブと MCP ツール `generate_song` では、オプションの YuE2 モデルで歌詞から歌声と伴奏を生成できます。対応環境は Apple Silicon 搭載の Mac と、NVIDIA CUDA GPU を搭載した Windows x64 です。既定では、Mac はメモリ 32 GB、Windows は RAM 32 GB と 6 GB 以上の空き VRAM が必要です。モデルの利用条件、ダウンロードサイズ、Auto の設定は[楽曲のセットアップと使い方（英語）](docs/song-generation.md)をご覧ください。
+Web UI の **楽曲** タブと MCP ツール `generate_song` では、オプションの YuE2 モデルで歌詞から歌声と伴奏を生成できます。対応環境は Apple Silicon 搭載の Mac と、NVIDIA CUDA GPU を搭載した Windows x64 です。メモリと VRAM の計測値は Auto の推奨に使います。どちらのプロファイルも、インストール済みなら手動で試せます。モデルの利用条件、ダウンロードサイズ、Auto の設定は[楽曲のセットアップと使い方（英語）](docs/song-generation.md)をご覧ください。
 
 ## 💬 チャットで聴く
 

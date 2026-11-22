@@ -11,7 +11,8 @@ import pytest
 from audio_studio_mcp import song_cuda, song_setup, songs
 
 
-def test_cuda_auto_uses_live_vram_and_keeps_manual_quality_strict():
+def test_cuda_auto_uses_live_vram_without_blocking_manual_quality(tmp_path, monkeypatch):
+    monkeypatch.setenv("AUDIO_STUDIO_HOME", str(tmp_path))
     cfg = songs.CudaPolicy()
     request = songs.SongRequest(seed=1234)
     installed = {"cuda-q4", "cuda-q8"}
@@ -27,14 +28,14 @@ def test_cuda_auto_uses_live_vram_and_keeps_manual_quality_strict():
     assert "8.2 GiB free NVIDIA VRAM" in fallback.reasons[0]
     assert choose(10, ram=9).profile.id == "cuda-q4"
     assert choose(10, excluded={"cuda-q8"}).reasons == ("Q8_0 ran out of memory.",)
-    with pytest.raises(songs.SongRuntimeError, match="free NVIDIA VRAM"):
-        choose(5.9)
-    with pytest.raises(songs.SongRuntimeError, match="available RAM"):
-        choose(10, ram=7.9)
-    with pytest.raises(songs.SongRuntimeError, match="free NVIDIA VRAM"):
-        choose(6.5, req=request.model_copy(update={"mode": "quality"}))
-    with pytest.raises(songs.SongRuntimeError, match="free NVIDIA VRAM"):
-        choose(6.5, pinned="cuda-q8")
+    low_vram = choose(2.4)
+    assert low_vram.profile.id == "cuda-q4" and "6 GiB free NVIDIA VRAM" in low_vram.reasons[-1]
+    low_ram = choose(10, ram=0.7)
+    assert low_ram.profile.id == "cuda-q4" and "8 GiB available RAM" in low_ram.reasons[-1]
+    quality = choose(2.4, req=request.model_copy(update={"mode": "quality"}))
+    assert quality.profile.id == "cuda-q8" and "8.2 GiB free NVIDIA VRAM" in quality.reasons[0]
+    replay = choose(2.4, pinned="cuda-q8")
+    assert replay.profile.id == "cuda-q8" and "8.2 GiB free NVIDIA VRAM" in replay.reasons[0]
     long = songs.SongRequest(seed=1234, duration_seconds=240)
     with pytest.raises(songs.SongRuntimeError, match="220s exceeds the 180s Auto budget"):
         choose(10, req=long)

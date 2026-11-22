@@ -168,7 +168,7 @@ Os arquivos gerados vão para `~/AudioStudio` (defina `AUDIO_STUDIO_OUTPUT_DIR` 
 
 ### Opcional: habilitar a geração de músicas com voz
 
-Com o Audio Studio MCP 1.3.0 ou mais recente, você pode instalar o YuE2 separadamente do Stable Audio 3. Os pesos Q4_0 e Q8_0 seguem os termos de uso do YuE2. A configuração padrão no macOS requer Apple Silicon, pelo menos 32 GiB de memória unificada e Xcode com o compilador Metal. No Windows, use uma GPU NVIDIA CUDA compatível com pelo menos 6 GiB de VRAM livre e 32 GB de RAM no computador. Veja os drivers compatíveis, os termos de uso do modelo e os tamanhos de download no [guia de instalação do YuE2 (em inglês)](docs/song-generation.md#install-when-needed).
+Com o Audio Studio MCP 1.3.0 ou mais recente, você pode instalar o YuE2 separadamente do Stable Audio 3. Os pesos Q4_0 e Q8_0 seguem os termos de uso do YuE2. No macOS, é necessário ter Apple Silicon e Xcode com o compilador do Metal. No Windows x64, use uma GPU NVIDIA compatível com CUDA. Veja os drivers compatíveis, os termos de uso do modelo e os tamanhos de download no [guia de instalação do YuE2 (em inglês)](docs/song-generation.md#install-when-needed).
 
 ```bash
 # macOS
@@ -337,7 +337,7 @@ claude mcp add --scope user --transport http audio-studio http://127.0.0.1:8765/
 
 ### Músicas com voz
 
-A aba **Songs** da interface web e a ferramenta MCP `generate_song` geram voz e acompanhamento a partir de uma letra com o modelo opcional YuE2, em Macs com Apple Silicon ou no Windows x64 com GPU NVIDIA CUDA. Com as configurações padrão, é preciso um Mac com 32 GB de memória ou um PC Windows com 32 GB de RAM e pelo menos 6 GB de VRAM livre. Veja os termos do modelo, os tamanhos de download e as configurações do modo Auto no [guia de instalação e uso de músicas (em inglês)](docs/song-generation.md).
+A aba **Songs** da interface web e a ferramenta MCP `generate_song` geram voz e acompanhamento a partir de uma letra com o modelo opcional YuE2, em Macs com Apple Silicon ou no Windows x64 com GPU NVIDIA CUDA. O modo Auto usa as leituras de RAM e VRAM para recomendar um perfil. Você pode experimentar manualmente qualquer perfil instalado. Veja os termos do modelo, os tamanhos de download e as configurações do modo Auto no [guia de instalação e uso de músicas (em inglês)](docs/song-generation.md).
 
 ## 💬 Ouça no chat
 

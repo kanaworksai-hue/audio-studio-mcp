@@ -168,7 +168,7 @@ Generated files go to `~/AudioStudio` (set `AUDIO_STUDIO_OUTPUT_DIR` to change i
 
 ### Optional: enable vocal songs
 
-Audio Studio MCP 1.3.0 or later can set up YuE2 independently of Stable Audio 3. The Q4_0 and Q8_0 weights follow the YuE2 model terms. The default macOS setup needs Apple Silicon, at least 32 GiB of unified memory, and Xcode with the Metal compiler. On Windows, use a supported NVIDIA CUDA GPU with at least 6 GiB of free VRAM and a PC with 32 GB of system RAM. See the [YuE2 setup guide](docs/song-generation.md#install-when-needed) for compatible drivers, model terms, and download sizes.
+Audio Studio MCP 1.3.0 or later can set up YuE2 independently of Stable Audio 3. The Q4_0 and Q8_0 weights follow the YuE2 model terms. On macOS, use Apple Silicon and Xcode with the Metal compiler. On Windows x64, use a supported NVIDIA CUDA GPU. See the [YuE2 setup guide](docs/song-generation.md#install-when-needed) for compatible drivers, model terms, and download sizes.
 
 ```bash
 # macOS
@@ -337,7 +337,7 @@ claude mcp add --scope user --transport http audio-studio http://127.0.0.1:8765/
 
 ### Songs with vocals
 
-The **Songs** tab and the `generate_song` MCP tool can generate vocals and accompaniment from lyrics using the optional YuE2 model on Apple Silicon or Windows x64 with an NVIDIA CUDA GPU. The default settings need a Mac with 32 GB of memory, or a Windows PC with 32 GB of RAM and at least 6 GB of free VRAM. See the [song setup and usage guide](docs/song-generation.md) for the model terms, download sizes, and Auto settings.
+The **Songs** tab and the `generate_song` MCP tool can generate vocals and accompaniment from lyrics using the optional YuE2 model on Apple Silicon or Windows x64 with an NVIDIA CUDA GPU. Memory and VRAM readings inform Auto recommendations. You can still try generating with either installed profile. See the [song setup and usage guide](docs/song-generation.md) for the model terms, download sizes, and Auto settings.
 
 ## 💬 Listen in the chat
 

@@ -24,6 +24,8 @@
 
 **Audio Studio MCP**는 내 Mac이나 Windows PC에서 돌아가는 사운드 스튜디오를 Claude Code, Claude Desktop, Cursor 등 어떤 [MCP](https://modelcontextprotocol.io) 클라이언트에서든 쓸 수 있게 해 줍니다. 배경 음악이나 효과음을 평소 말하듯이 요청하면 [Stable Audio 3](https://github.com/Stability-AI/stable-audio-3) 모델이 로컬에서 생성합니다. 만든 소리는 루프로 다듬고 라우드니스를 맞춘 뒤 게임 엔진이나 영상 편집 툴에 맞게 내보낼 수도 있습니다. 클라우드도 API 키도 필요 없고, 아무리 생성해도 비용이 들지 않습니다.
 
+보컬이 들어간 곡을 만들려면 선택 사항인 YuE2 모델에 가사와 곡 스타일을 입력하세요. 보컬과 반주는 사용 중인 컴퓨터에서 생성됩니다.
+
 <p align="center">
   <img src="docs/assets/demo-en.png" alt="실제 Claude Code 세션: 요청 한 번으로 lo-fi BGM 후보 두 개와 Godot용 심리스 루프 OGG를 만듭니다" width="820">
   <br><sub>실제 세션(영어, 일부 생략). Claude가 루프 길이를 정확히 11마디로 맞춰서 반복해도 박자가 어긋나지 않습니다.</sub>
@@ -47,7 +49,14 @@
 
 ## 🎧 들어 보기
 
-모두 M1 Mac에서 이 서버로 생성했고, 따로 손대지 않았습니다. **[샘플 페이지 열기 →](https://kanaworksai-hue.github.io/audio-studio-mcp/)**
+### 보컬이 들어간 곡 샘플
+
+- [영어 보컬 · Porch Light at Dawn](https://kanaworksai-hue.github.io/audio-studio-mcp/#porch_light_at_dawn)
+- [일본어 보컬 · 雨上がりの坂道](https://kanaworksai-hue.github.io/audio-studio-mcp/#ameagari_no_sakamichi)
+
+### 연주곡과 효과음
+
+아래 표의 연주곡과 효과음은 M1 Mac에서 Stable Audio 3로 생성했으며 수동 편집을 거치지 않았습니다. **[샘플 페이지 열기 →](https://kanaworksai-hue.github.io/audio-studio-mcp/)**
 
 | | 샘플 | 프롬프트 |
 |---|---|---|
@@ -65,14 +74,18 @@ MP3 파일은 [`docs/samples/`](docs/samples)에, 프롬프트와 시드는 [`sa
 ```mermaid
 flowchart LR
     U["사용자<br/>“아늑한 카페 BGM 만들어 줘”"] --> C["Claude Code · Desktop<br/>Cursor · 모든 MCP 클라이언트"]
-    C -- "MCP" --> S["audio-studio-mcp<br/>생성 · 편집 · 마무리"]
+    C -- "MCP" --> S["audio-studio-mcp<br/>생성 · 편집 · 마무리 · generate_song"]
     S --> M["Stable Audio 3<br/>Apple Silicon에서는 MLX<br/>NVIDIA GPU에서는 PyTorch"]
+    S --> Y["YuE2<br/>Metal / CUDA"]
     M --> F["WAV / OGG / FLAC + .json<br/>게임·영상에 바로 사용"]
+    Y --> F
 ```
 
 ## 🚀 빠른 시작
 
 [uv](https://docs.astral.sh/uv/) 0.9.20 이상과 [ffmpeg](https://ffmpeg.org)가 필요합니다. 저장소를 클론할 필요는 없습니다. `uvx`가 배포된 패키지를 내려받아 실행합니다.
+
+아래 단계는 연주곡과 효과음에 쓰는 Stable Audio 3를 설치합니다. 보컬이 들어간 곡을 만들려면 [YuE2 설치 가이드(영어)](docs/song-generation.md#install-when-needed)에 따라 `song-setup`을 실행하세요.
 
 | | macOS | Windows |
 |---|---|---|
@@ -250,6 +263,9 @@ macOS에서는 로그인 없이 익명으로 다운로드합니다. `hf auth log
 | 도구 | 기능 |
 |---|---|
 | `generate_audio` | 텍스트로 BGM, 악기 루프/스템, 효과음 생성. 한 번에 후보 1–4개, `bpm`, 구조화된 효과음 필드 지원 |
+| `generate_song` | YuE2로 가사와 곡 스타일을 바탕으로 보컬과 반주 생성 |
+| `song_status` | 노래 생성 작업의 진행 상황 및 결과 확인 |
+| `cancel_song` | 대기 중이거나 실행 중인 노래 생성 작업 취소 |
 | `edit_audio` | `variation`(클립 전체 스타일 변경), `inpaint`(특정 구간 재생성), `continue`(연장). 후보 1–4개 |
 | `process_audio` | 자르기 → 무음 제거 → 모노 변환 → 리샘플링 / 라우드니스 → 심리스 루프 → 페이드 → 피크 노멀라이즈 또는 상한 → WAV / OGG / FLAC. 원본 파일은 건드리지 않습니다 |
 | `unload_models` | 모델이 쓰는 메모리를 즉시 해제 |
@@ -430,13 +446,13 @@ Rosetta로 실행되는 x86_64 Python(예: `/usr/local` 아래의 오래된 Inte
 <details>
 <summary><b>보컬이 들어간 노래도 만들 수 있나요?</b></summary>
 
-아니요. Stable Audio 3는 연주곡과 효과음만 만들 수 있고, 알아들을 수 있는 노래나 가사는 생성하지 못합니다.
+네. 선택 사항인 YuE2를 설치한 뒤 웹 UI의 Songs 탭이나 `generate_song`에서 가사와 곡 스타일을 입력하면 보컬과 반주를 만들 수 있습니다. 연주곡과 효과음에는 Stable Audio 3를 사용합니다. [YuE2 설치 가이드(영어)](docs/song-generation.md)를 참고하세요.
 </details>
 
 <details>
 <summary><b>생성한 오디오를 상업적으로 사용할 수 있나요?</b></summary>
 
-이 저장소의 코드는 MIT 라이선스입니다. 모델 가중치에는 [Stability AI Community License](https://huggingface.co/stabilityai/stable-audio-3-optimized)가 적용되며, 모델과 생성물의 이용 조건도 이 라이선스를 따릅니다. 상업적으로 사용하기 전에 꼭 읽어 보세요. 이 글을 쓰는 시점 기준으로, 연간 총매출이 미화 100만 달러 미만인 개인과 조직은 상업적으로 사용할 수 있습니다.
+프로젝트 코드는 MIT 라이선스입니다. 상업적으로 이용하기 전에 생성에 사용한 모델의 약관을 확인하세요. [Stable Audio 3](https://huggingface.co/stabilityai/stable-audio-3-optimized) / [YuE2(영어)](docs/song-generation.md#install-when-needed).
 </details>
 
 <details>
@@ -458,6 +474,7 @@ Rosetta로 실행되는 x86_64 Python(예: `/usr/local` 아래의 오래된 Inte
 - [x] 로컬 웹 UI(`--web`)
 - [x] `uvx` 명령 하나로 설치
 - [x] 채팅에서 바로 듣기(MCP Apps 플레이어)
+- [x] 가사로 보컬이 들어간 곡을 로컬에서 생성(YuE2, macOS Metal 및 Windows CUDA)
 - [ ] LoRA 지원(업스트림 런타임은 이미 지원)
 
 이슈와 PR은 언제든 환영합니다.
@@ -504,7 +521,8 @@ src/audio_studio_mcp/
 
 - **이 프로젝트:** [MIT](LICENSE).
 - **Stable Audio 3 런타임:** `setup`이 고정된 커밋으로 받아 옵니다(설치 스크립트는 `vendor/`에 받음). © Stability AI, MIT 라이선스입니다.
-- **모델 가중치:** [Stability AI Community License](https://huggingface.co/stabilityai/stable-audio-3-optimized)가 적용됩니다. Hugging Face에서 다운로드되며(macOS: `stable-audio-3-optimized`, Windows: `stable-audio-3-medium`과 소형 모델), 이 저장소에는 포함되지 않습니다.
+- **Stable Audio 3 모델 가중치:** [Stability AI Community License](https://huggingface.co/stabilityai/stable-audio-3-optimized)가 적용됩니다. Hugging Face에서 다운로드되며(macOS: `stable-audio-3-optimized`, Windows: `stable-audio-3-medium`과 소형 모델), 이 저장소에는 포함되지 않습니다.
+- YuE2 모델 가중치와 실행 환경은 필요할 때 설치합니다. [이용 조건과 설치 가이드(영어)](docs/song-generation.md#install-when-needed)를 참고하세요.
 - **브랜드:** KanaWorks_AI 이름, 로고, Kana 캐릭터는 © 東京AI映像合同会社(Tokyo AI Visuals LLC)이며 MIT 라이선스 대상이 **아닙니다**. [docs/brand](docs/brand/README.md)를 참고하세요.
 - **글꼴:** 웹 UI에는 IBM Plex Sans(© IBM Corp., SIL Open Font License 1.1)가 포함되어 있습니다([`OFL.txt`](src/audio_studio_mcp/static/fonts/OFL.txt)). 웹 UI의 Kana 이미지([`static/brand`](src/audio_studio_mcp/static/brand/README.md))에는 위의 브랜드 항목이 적용됩니다.
 - **기반 기술:** [Stable Audio 3](https://github.com/Stability-AI/stable-audio-3), [MLX](https://github.com/ml-explore/mlx), [PyTorch](https://pytorch.org), [Model Context Protocol](https://modelcontextprotocol.io).

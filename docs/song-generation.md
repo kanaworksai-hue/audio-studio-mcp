@@ -4,12 +4,17 @@ YuE2 generates vocals and accompaniment from lyrics and a style description. The
 
 ## Install when needed
 
-Use the same Audio Studio environment and data directory you use for generation.
+Use the same Audio Studio environment and data directory you use for generation. If you installed Audio Studio with `uvx`, run the matching command.
 
-~~~sh
-uv run audio-studio-mcp song-setup
-uv run audio-studio-mcp song-setup --profile quality
-~~~
+```sh
+# macOS
+uvx --python 3.11 audio-studio-mcp song-setup
+
+# Windows
+uvx --python 3.11 --torch-backend cu126 audio-studio-mcp song-setup
+```
+
+From the source checkout, run `uv run audio-studio-mcp song-setup`. Add `--profile quality` to install Q8_0, or `--profile both` to let Auto choose between the two profiles.
 
 On Apple Silicon, setup checks installed memory against the song policy before prompting for the license or looking for build tools. Setup then builds the pinned audio.cpp CLI using Git, CMake and Xcode with the Metal compiler installed. Set DEVELOPER_DIR to the full Xcode Developer directory when Xcode lives outside its standard location. Both song-setup --check and the Songs tab report when installed memory is below the policy minimum or the Metal runtime needs installation.
 

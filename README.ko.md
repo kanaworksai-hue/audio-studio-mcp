@@ -1,6 +1,6 @@
 <div align="center">
 
-<img src="docs/assets/banner-ko.jpg" alt="Audio Studio MCP: 로컬 AI로 만드는 음악과 효과음, Claude Code와 모든 MCP 클라이언트에서" width="820">
+<img src="docs/assets/banner-ko.jpg" alt="Audio Studio MCP: MCP 클라이언트에서 보컬 곡, BGM과 효과음을 로컬로 생성" width="820">
 
 <p>
   <a href="LICENSE"><img alt="License: MIT" src="https://img.shields.io/badge/license-MIT-6b4dff?style=flat-square"></a>
@@ -166,14 +166,33 @@ tool_timeout_sec = 900
 
 생성된 파일은 `~/AudioStudio`에 저장됩니다(바꾸려면 `AUDIO_STUDIO_OUTPUT_DIR` 환경 변수를 설정하세요). uvx는 한 번 설치한 버전을 계속 씁니다. 업데이트하려면 `uv cache clean audio-studio-mcp`로 캐시를 비운 뒤 setup을 다시 실행하세요.
 
+### 선택 사항: 보컬이 들어간 곡 생성 활성화
+
+Audio Studio MCP 1.3.0부터 Stable Audio 3와 별도로 YuE2를 설치할 수 있습니다. Q4_0과 Q8_0 가중치에는 YuE2 이용 조건이 적용됩니다. macOS 기본 구성에는 Apple Silicon, 통합 메모리 32 GiB 이상, Metal 컴파일러가 포함된 Xcode가 필요합니다. Windows에서는 지원되는 NVIDIA CUDA GPU(여유 VRAM 6 GiB 이상)와 시스템 RAM 32 GB가 필요합니다. 지원 드라이버와 모델 이용 조건, 다운로드 용량은 [YuE2 설치 가이드(영어)](docs/song-generation.md#install-when-needed)를 참고하세요.
+
+```bash
+# macOS
+uvx --python 3.11 audio-studio-mcp song-setup
+```
+
+```powershell
+# Windows
+uvx --python 3.11 --torch-backend cu126 audio-studio-mcp song-setup
+```
+
+운영체제에 맞는 명령을 실행하고 화면에 표시되는 모델 이용 조건을 확인하세요. 같은 명령 끝에 `--check`를 붙이면 다운로드 없이 실행 환경, 가중치와 기기 상태를 확인할 수 있습니다. MCP 서버를 한 번만 등록하면 두 모델을 모두 사용할 수 있습니다.
+
 > [!TIP]
 > **에이전트에게 설치를 맡기세요.** Claude Code에 다음 문장을 붙여 넣으세요:
 > *"Audio Studio MCP 서버(https://github.com/kanaworksai-hue/audio-studio-mcp) 설치해 줘. README대로 하되 AI 에이전트용 참고 사항도 꼭 따라 줘."*
 >
+> 보컬이 들어간 곡도 필요하면 요청에 함께 적어 주세요.
+>
 > **AI 에이전트용 참고 사항:**
-> - 사용자 OS에 맞는 setup 명령에 `-y`를 붙여 직접 실행하고, 타임아웃을 길게 잡으세요. macOS에서는 약 7 GB, Windows에서는 약 13 GB(모델과 PyTorch)를 다운로드합니다. 중간에 끊기면 다시 실행하세요. 이미 받은 파일은 그대로 남습니다. 그런 다음 위에 나온 대로 서버를 등록하세요.
-> - Windows에서는 모델 가중치에 접근 제한(gated)이 걸려 있어 사용자 본인의 Hugging Face 로그인이 필요합니다. setup이 로그인 절차를 출력하고 멈추면 그 내용을 사용자에게 전달하고, 사용자가 완료했다고 말할 때까지 기다린 뒤 setup을 다시 실행하세요. 사용자에게 토큰을 채팅에 붙여 넣으라고 절대 요청하지 마세요.
-> - setup이 끝나기 전에도 서버는 시작되지만, 어떤 도구를 호출하든 실행해야 할 setup 명령만 응답으로 돌려줍니다.
+> - 사용자가 연주곡이나 효과음을 원하면 운영체제에 맞는 `setup -y` 명령으로 Stable Audio 3를 설치하세요. 모델 다운로드에 충분한 시간을 두세요.
+> - Windows에서는 접근이 제한된 Stable Audio 3 가중치를 받으려면 사용자가 자신의 Hugging Face 계정으로 로그인해야 합니다. setup이 로그인 절차를 출력하고 멈추면 그 내용을 사용자에게 전달하고, 사용자가 완료했다고 말할 때까지 기다린 뒤 setup을 다시 실행하세요. 사용자에게 토큰을 채팅에 붙여 넣으라고 절대 요청하지 마세요.
+> - 보컬이 들어간 곡이 필요하면 먼저 해당 플랫폼의 `song-setup` 명령에 `--check`를 붙여 실행하세요. YuE2 설치가 필요하면 사용자에게 모델 이용 조건과 다운로드 용량을 알려 주세요. 비대화형 설치에서는 사용자가 YuE2 이용 조건에 동의한 뒤에만 `--accept-license`를 추가하세요. 설치 후 `--check`를 다시 실행하세요.
+> - 두 설치 방식 모두 MCP 서버 등록은 한 번이면 됩니다. BGM과 효과음에는 `generate_audio`를 사용하세요. 보컬이 들어간 곡에는 원래 가사와 곡 스타일을 `generate_song`에 넘기고, 반환된 작업 ID로 `song_status`를 조회해 `done`, `error` 또는 `cancelled` 상태가 될 때까지 확인하세요. `done`이면 WAV 파일을 받을 수 있습니다.
 
 ### 다른 방법: 소스에서 설치
 

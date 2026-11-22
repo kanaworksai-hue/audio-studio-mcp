@@ -1,6 +1,6 @@
 <div align="center">
 
-<img src="docs/assets/banner-es.jpg" alt="Audio Studio MCP: música y efectos de sonido con IA local para Claude Code y cualquier cliente MCP" width="820">
+<img src="docs/assets/banner-es.jpg" alt="Audio Studio MCP: generación local de canciones con voz, BGM y efectos de sonido para clientes MCP" width="820">
 
 <p>
   <a href="LICENSE"><img alt="License: MIT" src="https://img.shields.io/badge/license-MIT-6b4dff?style=flat-square"></a>
@@ -166,14 +166,33 @@ tool_timeout_sec = 900
 
 Los archivos generados se guardan en `~/AudioStudio` (define `AUDIO_STUDIO_OUTPUT_DIR` para cambiarlo). uvx se queda con la versión que instaló; para actualizar, ejecuta `uv cache clean audio-studio-mcp` y luego corre setup de nuevo.
 
+### Opcional: habilitar canciones con voz
+
+Audio Studio MCP 1.3.0 o posterior permite instalar YuE2 por separado de Stable Audio 3. Los pesos Q4_0 y Q8_0 se rigen por las condiciones de uso de YuE2. La configuración predeterminada de macOS requiere Apple Silicon, al menos 32 GiB de memoria unificada y Xcode con el compilador de Metal. En Windows necesitas una GPU NVIDIA compatible con CUDA que tenga al menos 6 GiB de VRAM libre, además de 32 GB de RAM del sistema. Consulta los controladores compatibles, las condiciones de uso del modelo y los tamaños de descarga en la [guía de instalación de YuE2 (en inglés)](docs/song-generation.md#install-when-needed).
+
+```bash
+# macOS
+uvx --python 3.11 audio-studio-mcp song-setup
+```
+
+```powershell
+# Windows
+uvx --python 3.11 --torch-backend cu126 audio-studio-mcp song-setup
+```
+
+Ejecuta el comando de tu plataforma y revisa las condiciones de uso del modelo cuando aparezcan. Agrega `--check` al mismo comando para verificar el entorno de ejecución, los pesos y el dispositivo sin descargar archivos. Basta con registrar el servidor MCP una sola vez para usar ambos modelos.
+
 > [!TIP]
 > **Deja que tu agente lo instale.** Pega esto en Claude Code:
 > *"Instala Audio Studio MCP (https://github.com/kanaworksai-hue/audio-studio-mcp) siguiendo las instrucciones de su README, incluidas las notas para agentes de IA."*
 >
+> Si también quieres canciones con voz, indícalo en tu solicitud.
+>
 > **Notas para agentes de IA:**
-> - Ejecuta tú mismo el comando de setup que corresponda al sistema operativo del usuario, con `-y`, y ponle un timeout largo: descarga unos 7 GB en macOS y unos 13 GB en Windows (modelo y PyTorch). Si se interrumpe, vuelve a ejecutarlo; los archivos ya descargados se conservan. Después registra el servidor como se muestra arriba.
-> - En Windows, los pesos del modelo tienen acceso restringido y requieren que el usuario inicie sesión con su propia cuenta de Hugging Face. Si setup se detiene y muestra los pasos para iniciar sesión, pásaselos al usuario y espera a que te confirme que terminó; luego vuelve a ejecutar setup. Nunca le pidas al usuario que pegue su token en el chat.
-> - Mientras setup no haya terminado, el servidor arranca igual, pero cada llamada a una herramienta devuelve el comando de setup que falta ejecutar.
+> - Si el usuario necesita BGM instrumental o efectos de sonido, instala Stable Audio 3 con el comando `setup -y` de su sistema operativo. Deja tiempo suficiente para la descarga.
+> - En Windows, los pesos de Stable Audio 3 tienen acceso restringido y requieren que el usuario inicie sesión con su propia cuenta de Hugging Face. Si setup se detiene y muestra los pasos para iniciar sesión, pásaselos al usuario y espera a que te confirme que terminó; luego vuelve a ejecutar setup. Nunca le pidas al usuario que pegue su token en el chat.
+> - Para canciones con voz, ejecuta primero el comando `song-setup` de la plataforma con `--check`. Si hay que instalar YuE2, muestra al usuario las condiciones de uso del modelo y el tamaño de la descarga. En una sesión no interactiva, agrega `--accept-license` solo después de que el usuario acepte las condiciones de YuE2. Vuelve a ejecutar `--check` al terminar.
+> - Registra el servidor MCP una sola vez para cualquiera de estas opciones. Usa `generate_audio` para BGM y efectos. Para canciones con voz, pasa la letra original y el estilo a `generate_song` y consulta `song_status` con el ID devuelto hasta que indique `done`, `error` o `cancelled`. El WAV está disponible en `done`.
 
 ### Alternativa: instalar desde el código fuente
 

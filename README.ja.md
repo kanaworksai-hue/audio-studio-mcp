@@ -1,6 +1,6 @@
 <div align="center">
 
-<img src="docs/assets/banner-ja.jpg" alt="Audio Studio MCP：ローカル AI で BGM と効果音を、Claude Code とすべての MCP クライアントへ" width="820">
+<img src="docs/assets/banner-ja.jpg" alt="Audio Studio MCP：MCP クライアントで歌入りの曲・BGM・効果音をローカル生成" width="820">
 
 <p>
   <a href="LICENSE"><img alt="License: MIT" src="https://img.shields.io/badge/license-MIT-6b4dff?style=flat-square"></a>
@@ -166,14 +166,33 @@ tool_timeout_sec = 900
 
 生成したファイルは `~/AudioStudio` に保存されます（変えるには `AUDIO_STUDIO_OUTPUT_DIR` を設定）。uvx は最初に入れたバージョンを使い続けます。更新するには `uv cache clean audio-studio-mcp` を実行してから、もう一度 setup を実行してください。
 
+### オプション：歌入りの曲を生成する
+
+Audio Studio MCP 1.3.0 以降では、Stable Audio 3 とは別に YuE2 をセットアップできます。Q4_0 と Q8_0 の重みには YuE2 の利用条件が適用されます。macOS のデフォルト構成では Apple Silicon、32 GiB 以上のユニファイドメモリ、Metal コンパイラ付きの Xcode が必要です。Windows では、対応する NVIDIA CUDA GPU（空き VRAM 6 GiB 以上）と 32 GB のシステムメモリが必要です。対応ドライバー、モデルの利用条件、ダウンロードサイズについては [YuE2 のセットアップガイド（英語）](docs/song-generation.md#install-when-needed) をご覧ください。
+
+```bash
+# macOS
+uvx --python 3.11 audio-studio-mcp song-setup
+```
+
+```powershell
+# Windows
+uvx --python 3.11 --torch-backend cu126 audio-studio-mcp song-setup
+```
+
+OS に合うコマンドを実行し、表示されたモデルの利用条件を確認してください。同じコマンドに `--check` を付けると、ダウンロードなしで実行環境、モデルの重み、デバイスの状態を確認できます。MCP サーバーは一度登録すれば、どちらのモデルでも使えます。
+
 > [!TIP]
 > **エージェントにインストールを任せる。** Claude Code に次の文を貼り付けてください：
 > *「Audio Studio MCP サーバー（https://github.com/kanaworksai-hue/audio-studio-mcp）を、README（AI エージェント向けの注意も含めて）に従ってインストールして。」*
 >
+> 歌入りの曲も作りたい場合は、その旨を依頼に加えてください。
+>
 > **AI エージェント向けの注意：**
-> - ユーザーの OS に合った setup コマンドに `-y` を付けて、エージェント自身が実行してください。macOS で約 7 GB、Windows で約 13 GB（モデルと PyTorch）をダウンロードするので、タイムアウトは長めにします。途中で切れたらもう一度実行すれば、ダウンロード済みのファイルはそのまま使われます。そのあと、上の手順でサーバーを登録します。
-> - Windows では、モデルの重みはユーザー本人の Hugging Face ログインが必要です。setup がログイン手順を表示して止まったら、その手順をユーザーに伝え、終わったと言われてから setup を再実行してください。トークンをチャットに貼るようユーザーに頼まないでください。
-> - setup が終わるまでも、サーバーは起動します。ただし、どのツールを呼んでも、実行すべき setup コマンドが返ってきます。
+> - ユーザーがインスト曲や効果音を必要としている場合は、OS に合った `setup -y` で Stable Audio 3 をインストールします。モデルのダウンロードには時間がかかるため、タイムアウトは長めに設定してください。
+> - Windows では、Stable Audio 3 の重みをダウンロードするにはユーザー自身の Hugging Face アカウントでログインする必要があります。setup がログイン手順を表示して止まったら、その手順をユーザーに伝え、終わったと言われてから setup を再実行してください。トークンをチャットに貼るようユーザーに頼まないでください。
+> - 歌入りの曲を作る場合は、OS に合った `song-setup` コマンドにまず `--check` を付けて実行します。YuE2 のインストールが必要なら、モデルの利用条件とダウンロード容量をユーザーに伝えてください。非対話形式でインストールする場合は、ユーザーが YuE2 の利用条件に同意した場合に限り `--accept-license` を付けます。インストール後にもう一度 `--check` を実行してください。
+> - どちらのセットアップでも、MCP サーバーは一度だけ登録してください。 BGM や効果音には `generate_audio` を使います。歌入りの曲には元の歌詞と曲調を渡して `generate_song` を使い、返されたジョブ ID で `song_status` を確認し、`done`、`error`、または `cancelled` になったら確認を終了します。`done` で WAV を取得できます。
 
 ### 別の方法：ソースからインストール
 

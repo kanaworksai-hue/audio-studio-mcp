@@ -1,6 +1,6 @@
 <div align="center">
 
-<img src="docs/assets/banner-pt-BR.jpg" alt="Audio Studio MCP: música e efeitos sonoros com IA local para o Claude Code e qualquer cliente MCP" width="820">
+<img src="docs/assets/banner-pt-BR.jpg" alt="Audio Studio MCP: geração local de músicas com voz, BGM e efeitos sonoros para clientes MCP" width="820">
 
 <p>
   <a href="LICENSE"><img alt="License: MIT" src="https://img.shields.io/badge/license-MIT-6b4dff?style=flat-square"></a>
@@ -166,14 +166,33 @@ tool_timeout_sec = 900
 
 Os arquivos gerados vão para `~/AudioStudio` (defina `AUDIO_STUDIO_OUTPUT_DIR` para mudar). O uvx continua usando a versão que já instalou; para atualizar, rode `uv cache clean audio-studio-mcp` e depois o setup de novo.
 
+### Opcional: habilitar a geração de músicas com voz
+
+Com o Audio Studio MCP 1.3.0 ou mais recente, você pode instalar o YuE2 separadamente do Stable Audio 3. Os pesos Q4_0 e Q8_0 seguem os termos de uso do YuE2. A configuração padrão no macOS requer Apple Silicon, pelo menos 32 GiB de memória unificada e Xcode com o compilador Metal. No Windows, use uma GPU NVIDIA CUDA compatível com pelo menos 6 GiB de VRAM livre e 32 GB de RAM no computador. Veja os drivers compatíveis, os termos de uso do modelo e os tamanhos de download no [guia de instalação do YuE2 (em inglês)](docs/song-generation.md#install-when-needed).
+
+```bash
+# macOS
+uvx --python 3.11 audio-studio-mcp song-setup
+```
+
+```powershell
+# Windows
+uvx --python 3.11 --torch-backend cu126 audio-studio-mcp song-setup
+```
+
+Execute o comando da sua plataforma e leia os termos de uso do modelo quando forem exibidos. Adicione `--check` ao mesmo comando para verificar o ambiente de execução, os pesos e o dispositivo sem fazer downloads. Basta registrar o servidor MCP uma vez para usar os dois modelos.
+
 > [!TIP]
 > **Deixe o agente instalar para você.** Cole isto no Claude Code:
 > *"Instale o Audio Studio MCP (https://github.com/kanaworksai-hue/audio-studio-mcp) seguindo as instruções do README, inclusive as notas para agentes de IA."*
 >
+> Se você também quiser músicas com voz, inclua isso no pedido.
+>
 > **Notas para agentes de IA:**
-> - Rode você mesmo o comando de setup do sistema operacional do usuário, com `-y` e um timeout longo: ele baixa cerca de 7 GB no macOS e cerca de 13 GB no Windows (modelo e PyTorch). Se for interrompido, rode de novo; o que já foi baixado é mantido. Depois, registre o servidor como mostrado acima.
-> - No Windows, os pesos do modelo têm acesso restrito e exigem que o próprio usuário faça login no Hugging Face. Se o setup parar e mostrar os passos de login, repasse-os ao usuário, espere ele avisar que terminou e rode o setup de novo. Nunca peça para o usuário colar o token no chat.
-> - Enquanto o setup não terminar, o servidor até inicia, mas toda chamada de ferramenta só responde com o comando de setup que falta rodar.
+> - Quando o usuário precisar de BGM instrumental ou efeitos sonoros, instale o Stable Audio 3 com o comando `setup -y` correspondente ao sistema operacional do usuário. Dê tempo suficiente para o download.
+> - No Windows, os pesos do Stable Audio 3 têm acesso restrito e exigem que o próprio usuário faça login no Hugging Face. Se o setup parar e mostrar os passos de login, repasse-os ao usuário, espere ele avisar que terminou e rode o setup de novo. Nunca peça para o usuário colar o token no chat.
+> - Para músicas com voz, execute primeiro o comando `song-setup` da plataforma com `--check`. Se for preciso instalar o YuE2, mostre ao usuário os termos de uso do modelo e o tamanho do download. Em uma sessão não interativa, adicione `--accept-license` somente depois que o usuário aceitar os termos do YuE2. Execute `--check` novamente após a instalação.
+> - Registre o servidor MCP uma vez para qualquer uma das opções de instalação. Use `generate_audio` para BGM e efeitos. Para músicas com voz, envie a letra original e o estilo para `generate_song` e consulte `song_status` com o ID retornado até indicar `done`, `error` ou `cancelled`. O WAV fica disponível em `done`.
 
 ### Alternativa: instalar a partir do código-fonte
 
